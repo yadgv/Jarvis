@@ -50,6 +50,16 @@ Wake word → Whisper → Claude → Piper voice. Runs on Windows now and on a R
 - Say **"remember that..."** and he saves it for good; he may also save personal details you mention.
   Say **"forget that..."** to remove one. Facts live in `memory/facts.json`, which you can edit by hand.
 
+## Skills
+Jarvis can use tools (all free, no extra API keys):
+- **Timers and alarms**: "set a 10 minute tea timer", "wake me at 7:30", "how long left?", "cancel the timer".
+- **Weather** (Open-Meteo): "what's the weather?", "will it rain this week?". Set `HOME_CITY` in `config.py`.
+- **Web search** (DuckDuckGo): "who won the match last night?".
+- **Memory**: "remember that…", "forget that…".
+
+Skills live in `skills/`, one file each, written in a provider-neutral way so another LLM
+provider can use them too (`skills.openai_tools()` gives the OpenAI/Groq format).
+
 ## Raspberry Pi port (later)
 ```
 sudo apt install python3-venv portaudio19-dev espeak-ng
@@ -68,4 +78,5 @@ config.py      all settings
 audio/         recorder, wake word, speech-to-text, text-to-speech
 brain/llm.py   Claude, conversation memory and tools
 brain/memory.py  saving history and facts in memory/
+skills/        tools Jarvis can use (timers, weather, web search, memory)
 ```

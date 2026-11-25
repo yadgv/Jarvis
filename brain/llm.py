@@ -1,4 +1,4 @@
-"""The brain: Claude, conversation memory, and tools."""
+"""The brain: Claude, conversation memory, and tools (see skills/)."""
 import re
 from datetime import datetime
 
@@ -6,6 +6,7 @@ import anthropic
 
 import config
 from brain import memory
+import skills
 
 _client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
 
@@ -19,47 +20,7 @@ if _history:
 # Needing the space keeps numbers like "3.5" together.
 _SENTENCE_END = re.compile(r"[.!?]+[\"')\]]*\s+")
 
-MAX_TOOL_ROUNDS = 3
-
-TOOLS = [
-    {
-        "name": "remember",
-        "description": (
-            "Save a lasting fact about the user so you know it in future conversations, "
-            "e.g. names of people, preferences, routines, birthdays. Use it when the user "
-            "asks you to remember something, or tells you a personal detail worth keeping. "
-            "Write the fact as a short standalone sentence about the user."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {"fact": {"type": "string"}},
-            "required": ["fact"],
-        },
-    },
-    {
-        "name": "forget",
-        "description": (
-            "Delete saved facts that contain the given words, when the user asks you to "
-            "forget something or says a saved fact is wrong."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {"about": {"type": "string", "description": "Words the fact contains"}},
-            "required": ["about"],
-        },
-    },
-]
-
-
-def _run_tool(name: str, args: dict) -> str:
-    try:
-        if name == "remember":
-            return memory.add_fact(args.get("fact", ""))
-        if name == "forget":
-            return memory.remove_facts(args.get("about", ""))
-        return f"Unknown tool {name}."
-    except Exception as e:
-        return f"Tool failed: {e}"
+MAX_TOOL_ROUNDS = 4
 
 
 def _system_prompt() -> str:
@@ -100,7 +61,7 @@ def think_stream(user_text: str):
                 max_tokens=300,
                 system=_system_prompt(),
                 messages=messages,
-                tools=TOOLS,
+                tools=skills.anthropic_tools(),
             ) as stream:
                 for delta in stream.text_stream:
                     buf += delta
@@ -122,7 +83,7 @@ def think_stream(user_text: str):
             messages.append({
                 "role": "user",
                 "content": [
-                    {"type": "tool_result", "tool_use_id": b.id, "content": _run_tool(b.name, b.input)}
+                    {"type": "tool_result", "tool_use_id": b.id, "content": skills.run(b.name, b.input)}
                     for b in tool_uses
                 ],
             })
