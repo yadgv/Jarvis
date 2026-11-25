@@ -181,6 +181,7 @@ def think_stream(user_text: str, followup: bool = False, note: str = ""):
     backup model on OpenRouter answers instead."""
     global _claude_off_until, last_ignored
     last_ignored = False
+    skills.new_turn()
     _trim()
     asked = (FOLLOWUP_NOTE if followup else "") + note + user_text
     # Overheard chatter must never be able to switch him off.

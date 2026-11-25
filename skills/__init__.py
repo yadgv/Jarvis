@@ -41,6 +41,16 @@ MODULES = [
     computer,
     system,
 ]
+# Counts conversation turns, so a tool can tell "he said yes" (a later turn)
+# from the model confirming its own draft in the same turn.
+turn = 0
+
+
+def new_turn():
+    global turn
+    turn += 1
+
+
 SKILLS = [skill for module in MODULES for skill in module.SKILLS]
 _BY_NAME = {s["name"]: s for s in SKILLS}
 
