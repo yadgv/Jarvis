@@ -89,6 +89,15 @@ Jarvis can use tools (all free, no extra API keys):
   `CALENDAR_ICS_URLS=https://calendar.google.com/calendar/ical/.../basic.ics`
   (several calendars: separate the links with spaces). iCloud `webcal://` links work as-is.
   `config.py` has a default link built in; `.env` overrides it.
+- **Add calendar events** (iCloud): "put dentist on Thursday at 3:30", "add Mum's birthday on the 25th".
+  Apple needs an app-specific password: go to appleid.apple.com > *Sign-In and Security* >
+  *App-Specific Passwords*, click **+**, name it "Jarvis" and copy the password. Add to `.env`:
+  ```
+  ICLOUD_USERNAME=you@icloud.com
+  ICLOUD_APP_PASSWORD=abcd-efgh-ijkl-mnop
+  ICLOUD_CALENDAR=Home
+  ```
+  (`ICLOUD_CALENDAR` is optional: the calendar's name as shown in the Calendar app; default is the first one.)
 - **Share prices** (Yahoo Finance): "what is Nvidia trading at?".
 - **PC control**: "open Spotify", "volume up", "set the volume to 30", "mute", "pause the music", "next song", "lock the PC".
   Apps come from the Start menu or the `APPS` list in `config.py`.
