@@ -50,7 +50,7 @@ def get_weather(a):
     c = data["current"]
     lines = [f"{label}. Now: {round(c['temperature_2m'])}°{deg} "
              f"(feels like {round(c['apparent_temperature'])}°{deg}), "
-             f"{CODES.get(c['weather_code'], 'unknown conditions')}, wind {round(c["wind_speed_10m"])} km/h"]
+             f"{CODES.get(c['weather_code'], 'unknown conditions')}, wind {round(c['wind_speed_10m'])} km/h"]
     d = data["daily"]
     for i, day in enumerate(d["time"]):
         rain = d["precipitation_probability_max"][i]
