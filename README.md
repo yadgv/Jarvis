@@ -118,6 +118,10 @@ Jarvis can use tools (all free, no extra API keys):
   ICLOUD_CALENDAR=Home
   ```
   (`ICLOUD_CALENDAR` is optional: the calendar's name as shown in the Calendar app; default is the first one.)
+- **What's the buzz** (idea from [last30days-skill](https://github.com/mvanhorn/last30days-skill), MIT):
+  "what's the buzz on Claude Code?", "what are people saying about the Raptors?". Checks Reddit, Hacker News,
+  Polymarket odds and news from the last 30 days and sums it up in a few sentences; the full brief with links
+  goes to your phone if the Telegram bot is set up.
 - **Share prices** (Yahoo Finance): "what is Nvidia trading at?".
 - **PC control**: "open Spotify", "volume up", "set the volume to 30", "mute", "pause the music", "next song", "lock the PC".
   Apps come from the Start menu or the `APPS` list in `config.py`.

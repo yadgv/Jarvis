@@ -48,6 +48,17 @@ def send(chat_id, text):
         _call("sendMessage", chat_id=chat_id, text=text[i:i + 4000] or "…")
 
 
+def notify(text) -> bool:
+    """Send a message to every allowed Telegram user (e.g. a long brief that's
+    too much to read aloud). False if the bot isn't set up."""
+    ids = _allowed()
+    if not _token() or not ids:
+        return False
+    for chat_id in ids:
+        send(chat_id, text)
+    return True
+
+
 def _voice_to_text(file_id):
     path = _call("getFile", file_id=file_id)["file_path"]
     r = _session.get(f"{API}/file/bot{_token()}/{path}", timeout=30)
