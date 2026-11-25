@@ -35,8 +35,11 @@ def _allowed():
     return {int(x) for x in str(ids).replace(",", " ").split() if x.strip().lstrip("-").isdigit()}
 
 
-def _call(method, timeout=15, **params):
-    r = _session.post(f"{API}/bot{_token()}/{method}", json=params, timeout=timeout)
+def _call(method, http_timeout=15, **params):
+    # http_timeout is how long we wait for Telegram; a "timeout" in params is
+    # Telegram's own long-poll wait (getUpdates). Both being called "timeout"
+    # crashed every poll with "got multiple values for keyword argument".
+    r = _session.post(f"{API}/bot{_token()}/{method}", json=params, timeout=http_timeout)
     data = r.json()
     if not data.get("ok"):
         raise RuntimeError(f"Telegram {method}: {data.get('description', r.status_code)}")
@@ -140,7 +143,7 @@ def _loop():
             params = {"timeout": 30, "allowed_updates": ["message"]}
             if offset is not None:
                 params["offset"] = offset
-            updates = _call("getUpdates", timeout=40, **params)
+            updates = _call("getUpdates", http_timeout=40, **params)
             failures = 0
             for u in updates:
                 offset = u["update_id"] + 1

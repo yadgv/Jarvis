@@ -79,3 +79,20 @@ def test_long_replies_are_split(bot):
 def test_not_started_without_token(monkeypatch):
     monkeypatch.setattr(config, "TELEGRAM_BOT_TOKEN", None)
     assert telegram_bot.start() is False
+
+
+def test_long_poll_timeout_does_not_clash(monkeypatch):
+    """getUpdates sends Telegram a 'timeout' while we also set our own HTTP timeout."""
+    import telegram_bot
+    seen = {}
+
+    class R:
+        def json(self):
+            return {"ok": True, "result": []}
+
+    def post(url, json=None, timeout=None):
+        seen.update(json=json, timeout=timeout)
+        return R()
+    monkeypatch.setattr(telegram_bot._session, "post", post)
+    assert telegram_bot._call("getUpdates", http_timeout=40, timeout=30) == []
+    assert seen == {"json": {"timeout": 30}, "timeout": 40}

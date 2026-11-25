@@ -21,6 +21,7 @@ import config
 ROOT = "https://caldav.icloud.com/"
 NS = {"d": "DAV:", "c": "urn:ietf:params:xml:ns:caldav"}
 _calendar_url = None  # found once per run
+_calendar_name = ""
 
 
 def _auth():
@@ -67,10 +68,14 @@ def find_calendar():
         calendars.append((name, urljoin(home, resp.findtext("d:href", "", NS).strip())))
     if not calendars:
         raise RuntimeError("no calendars found on iCloud")
+    global _calendar_name
     wanted = (config.ICLOUD_CALENDAR or "").strip().lower()
-    match = [url for name, url in calendars if name.lower() == wanted]
-    _calendar_url = match[0] if match else calendars[0][1]
-    print(f"[calendar] adding events to {next(n for n, u in calendars if u == _calendar_url) or 'calendar'}")
+    match = [(n, u) for n, u in calendars if n.lower() == wanted]
+    if not match:  # no name set: a general calendar beats "the first one" (was a class calendar)
+        match = [(n, u) for n, u in calendars if n.lower() in ("home", "calendar", "personal")]
+    _calendar_name, _calendar_url = match[0] if match else calendars[0]
+    print(f"[calendar] adding events to {_calendar_name or 'calendar'} "
+          f"(calendars: {', '.join(n or '?' for n, _ in calendars)}; set ICLOUD_CALENDAR in .env to pick)")
     return _calendar_url
 
 
@@ -146,7 +151,8 @@ def add_event(a):
         calendar_events._cache.clear()
     except Exception:
         pass
-    return f"Added '{title}' on {_say(start, all_day)}."
+    where = f" to the '{_calendar_name}' calendar" if _calendar_name else ""
+    return f"Added '{title}'{where} on {_say(start, all_day)}."
 
 
 SKILLS = [

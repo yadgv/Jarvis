@@ -51,7 +51,7 @@ def icloud(monkeypatch):
 
 def test_adds_timed_event_to_named_calendar(icloud):
     out = ic.add_event({"title": "Dentist, checkup", "start": "2026-12-03T15:30", "location": "Main St"})
-    assert out.startswith("Added 'Dentist, checkup' on Thursday 03 December at 3:30 PM")
+    assert out.startswith("Added 'Dentist, checkup' to the 'Work' calendar on Thursday 03 December at 3:30 PM")
     method, url, kw = icloud[-1]
     assert method == "PUT"
     assert url.startswith("https://p176-caldav.icloud.com:443/123/calendars/work/") and url.endswith(".ics")
