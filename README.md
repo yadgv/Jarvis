@@ -61,6 +61,11 @@ Jarvis appears as a small orb of particles in the top-right corner, on top of yo
 "Hey Jarvis" still works. `python main.py` still runs him without the widget.
 If it doesn't appear, the terminal prints why (lines starting with `[gui]`).
 
+**Start with Windows:** right-click the orb and tick **Start with Windows**, say "Jarvis, start
+when I log in", or run `python autostart.py on`. The widget then starts at every login with no
+console window (its output goes to `jarvis.log`). To stop: untick it, run `python autostart.py off`,
+or switch off "Jarvis" in Task Manager > Startup apps.
+
 ## Tuning
 - Jarvis tells speech from noise with a voice detector (webrtcvad), so quiet talking counts.
 - It says "no speech detected" when you did talk → lower `MIN_SPEECH_LEVEL` (the log shows how loud you were).

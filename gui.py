@@ -170,6 +170,11 @@ class JarvisWidget:
                             activeforeground=TEXT, bd=0)
         self.menu.add_command(label="Type a message", command=self.open_typing)
         self.menu.add_command(label="Move back to the corner", command=self.to_corner)
+        if IS_WINDOWS:
+            import autostart
+            self.autostart = tk.BooleanVar(value=autostart.is_on())
+            self.menu.add_checkbutton(label="Start with Windows", variable=self.autostart,
+                                      command=lambda: print("[gui] " + autostart.set_on(self.autostart.get())))
         self.menu.add_separator()
         self.menu.add_command(label="Quit Jarvis", command=lambda: os._exit(0))
 
@@ -395,8 +400,11 @@ class JarvisWidget:
 def run_voice_loop():
     try:
         import main  # loads the speech models; the widget is already showing
-        if config.LOG_FILE and not hasattr(sys.stdout, "file"):
+        if config.LOG_FILE and not hasattr(sys.stdout, "file") and \
+                getattr(sys.stdout, "name", None) != config.LOG_FILE:
             sys.stdout = main._Tee(sys.stdout, config.LOG_FILE)
+            if sys.stderr is None:  # started with pythonw: send errors to the log too
+                sys.stderr = sys.stdout
         main.main()
     except Exception as e:
         traceback.print_exc()
@@ -423,6 +431,9 @@ def start():
 
 
 def launch():
+    if sys.stdout is None and config.LOG_FILE:
+        # Started at login with pythonw (no console): keep everything in jarvis.log.
+        sys.stdout = sys.stderr = open(config.LOG_FILE, "a", encoding="utf-8", buffering=1)
     print("[gui] starting the JARVIS widget...")
     try:
         start()
@@ -431,7 +442,7 @@ def launch():
         print("\n[gui] The widget couldn't start. Please send the error above.")
         try:
             input("Press Enter to close.")
-        except EOFError:
+        except (EOFError, RuntimeError):  # no console (started at login with pythonw)
             pass
 
 
