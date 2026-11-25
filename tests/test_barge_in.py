@@ -29,6 +29,7 @@ def setup(monkeypatch, played, n=10):
     monkeypatch.setattr(config, "BARGE_IN", True)
     monkeypatch.setattr(main, "think_stream", fake_think(n))
     monkeypatch.setattr(main.tts, "synthesize", lambda s: (s, 1))
+    monkeypatch.setattr(main, "clip_last_reply", lambda spoken: None)
     monkeypatch.setattr(main.tts, "play", lambda clip: (played.append(clip[0]), time.sleep(0.05)))
 
 

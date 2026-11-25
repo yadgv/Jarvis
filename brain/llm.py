@@ -38,12 +38,13 @@ LLM_EFFORT = getattr(config, "LLM_EFFORT", "low")
 # saying "Apple Music is open" with no tool call and "corrects" itself.
 _HISTORY_NOTE = (
     "\nEarlier turns are stored as plain text; any tools you used then are noted "
-    "in [square brackets] at the end of your reply. Never read those notes aloud, "
+    "in [square brackets] at the end of your reply; [interrupted] means he cut you "
+    "off there and didn't hear the rest. Never read those notes aloud, "
     "and don't apologise for or correct earlier replies unless he says something was wrong."
 )
 
 
-def _system_prompt() -> str:
+def _system_prompt(about: str = "") -> str:
     """The configured prompt plus the current local date and time, so Jarvis
     can answer "what time is it?", plus everything he's been asked to remember."""
     now = datetime.now().astimezone()
@@ -51,6 +52,9 @@ def _system_prompt() -> str:
     stamp = now.strftime(f"%A %d %B %Y, {hour}:%M %p")
     prompt = f"{config.SYSTEM_PROMPT} {settings.prompt_lines()}{_HISTORY_NOTE}\nCurrent local date and time: {stamp} ({now.tzname()})."
     facts = memory.load_facts()
+    # Many facts: only the ones that matter for what he just said (and the last reply).
+    recent = _history[-1]["content"] if _history else ""
+    facts = memory.relevant_facts(facts, f"{about} {recent}", config.FACTS_IN_PROMPT)
     if facts:
         prompt += "\nThings you know about the user:\n" + "\n".join(f"- {f}" for f in facts)
     return prompt
@@ -177,6 +181,32 @@ IGNORE = "[ignore]"
 # One conversation at a time: the mic and the Telegram bot share the history.
 _turn_lock = threading.Lock()
 
+# Barge-in: the voice side reports how much of the reply was actually heard,
+# so the history doesn't claim he said sentences that were cut (idea from
+# GLaDOS, github.com/dnhkng/GLaDOS, MIT). The turn may still be finishing
+# when that arrives, so it's either applied now or kept for the turn's end.
+_clip_lock = threading.Lock()
+_turn_running = False
+_pending_clip = None
+INTERRUPTED = "[interrupted]"
+
+
+def _clipped(spoken: str) -> str:
+    return f"{spoken} {INTERRUPTED}".strip()
+
+
+def clip_last_reply(spoken: str):
+    """Replace the last reply in the history with only the part he heard."""
+    global _pending_clip
+    with _clip_lock:
+        if _turn_running:
+            _pending_clip = spoken
+            return
+        if _history and _history[-1]["role"] == "assistant":
+            tools = re.search(r" \[tools used: .*\]$", _history[-1]["content"])
+            _history[-1]["content"] = _clipped(spoken) + (tools.group(0) if tools else "")
+            memory.save_history(_history)
+
 
 def think_stream(user_text: str, followup: bool = False, note: str = "", exclude_tools=()):
     """See _think_stream. Waits if another turn (say, from his phone) is running."""
@@ -190,8 +220,10 @@ def _think_stream(user_text: str, followup: bool = False, note: str = "", exclud
     If Claude uses a tool (remember/forget), runs it and carries on.
     If Claude is out of credits (or the key or rate limit fails), the free
     backup model on OpenRouter answers instead."""
-    global _claude_off_until, last_ignored
+    global _claude_off_until, last_ignored, _turn_running, _pending_clip
     last_ignored = False
+    with _clip_lock:
+        _turn_running, _pending_clip = True, None
     skills.new_turn()
     _trim()
     asked = (FOLLOWUP_NOTE if followup else "") + note + user_text
@@ -200,7 +232,7 @@ def _think_stream(user_text: str, followup: bool = False, note: str = "", exclud
     # Build the system prompt once per turn: Claude's thinking blocks are tied
     # to it, so if the clock ticked over to a new minute between tool rounds the
     # API rejected the second round ("Invalid signature in thinking block").
-    system = _system_prompt()
+    system = _system_prompt(user_text)
     said, tools_used = [], []
 
     def turn():
@@ -230,7 +262,9 @@ def _think_stream(user_text: str, followup: bool = False, note: str = "", exclud
             yield sentence
     finally:
         gen.close()
-        reply = " ".join(said)
+        with _clip_lock:
+            reply = " ".join(said) if _pending_clip is None else _clipped(_pending_clip)
+            _turn_running, _pending_clip = False, None
         if reply and not last_ignored:
             if tools_used:
                 reply += " [tools used: " + "; ".join(tools_used) + "]"
