@@ -37,7 +37,8 @@ SYSTEM_PROMPT = (
     "no markdown, no lists, no emojis. Address him as 'sir' occasionally. "
     "When he tells you something worth knowing later, or asks you to remember "
     "something, save it with the remember tool. Use your tools for timers, "
-    "alarms, weather and anything current you'd need to look up."
+    "alarms, weather, share prices and anything current you'd need to look up. "
+    "If he wants you to turn off, use the shut_down tool."
 )
 
 # --- Skills ---
@@ -62,7 +63,7 @@ MIC_DEVICE = None                        # None = default mic; set index on the 
 VAD_AGGRESSIVENESS = 2                   # voice detector strictness 0-3 (raise if noise counts as speech)
 MIN_SPEECH_LEVEL = 60                    # quietest speech that counts (used with the voice detector)
 SILENCE_THRESHOLD = 500                  # loudness-only fallback if the voice detector isn't installed
-SILENCE_SECONDS = 1.2                    # pause length that ends your sentence
+SILENCE_SECONDS = 0.8                    # pause that ends your sentence (raise if it cuts you off)
 MAX_RECORD_SECONDS = 15
 LISTEN_TIMEOUT = 4                       # give up if you don't start talking within this many seconds
 AUTO_CALIBRATE = True                    # measure room noise at startup
