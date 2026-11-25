@@ -55,6 +55,11 @@ def _ask(image_b64: str, question: str):
             {"type": "text", "text": question},
         ]}],
     )
+    return create(**request)
+
+
+def create(**request):
+    """messages.create with the server-side refusal fallback turned on."""
     client = _get_client()
     try:
         # If the model declines, the API retries on a fallback model in the same call.

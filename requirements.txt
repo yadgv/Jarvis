@@ -11,3 +11,4 @@ ddgs
 icalendar
 recurring-ical-events
 pillow
+pyautogui
