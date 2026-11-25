@@ -40,11 +40,11 @@ Wake word → Whisper → Claude → Piper voice. Runs on Windows now and on a R
 ```
 python gui.py          (or: python main.py --gui)
 ```
-Jarvis appears as a small orb of particles in the bottom-right corner, on top of your other windows.
+Jarvis appears as a small orb of particles in the top-right corner, on top of your other windows.
 - **Click** the orb to talk (no wake word needed). Click again while he's speaking to stop him.
 - **Drag** it to move it. **Right-click** it to type a message, move it back to the corner, or quit.
-- While you talk to him a panel slides out with what you said, his reply and a box to type in,
-  then tucks away after a few seconds.
+- While you talk to him a panel slides out with what you said and his reply, then tucks away
+  after a few seconds. Click the panel (or right-click > Type a message) to open the text box; Esc closes it.
 - The orb is silver when standing by, green while listening, amber while thinking, blue while speaking.
 
 "Hey Jarvis" still works. `python main.py` still runs him without the widget.
