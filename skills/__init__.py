@@ -8,6 +8,7 @@ format Claude or an OpenAI-style API (Groq, OpenAI, Ollama...) expects.
 # One module per line, so adding a skill doesn't clash with other changes.
 from skills import arduino  # noqa: E402
 from skills import briefing  # noqa: E402
+from skills import buzz  # noqa: E402
 from skills import calendar_events  # noqa: E402
 from skills import computer  # noqa: E402
 from skills import email_reader  # noqa: E402
@@ -35,6 +36,7 @@ MODULES = [
     weather,
     news,
     web_search,
+    buzz,
     calendar_events,
     email_reader,
     icloud_calendar,
