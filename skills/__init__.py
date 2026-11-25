@@ -5,12 +5,41 @@ Each skill module exposes SKILLS: a list of dicts with
 That's provider-neutral: anthropic_tools() and openai_tools() turn it into the
 format Claude or an OpenAI-style API (Groq, OpenAI, Ollama...) expects.
 """
-from skills import (calendar_events, computer, icloud_calendar, memory_tools, music, news, pc_control, reminders, screen,
-                    stocks, system, timers, weather, web_search)
+# One module per line, so adding a skill doesn't clash with other changes.
+from skills import briefing  # noqa: E402
+from skills import calendar_events  # noqa: E402
+from skills import computer  # noqa: E402
+from skills import icloud_calendar  # noqa: E402
+from skills import memory_tools  # noqa: E402
+from skills import music  # noqa: E402
+from skills import news  # noqa: E402
+from skills import pc_control  # noqa: E402
+from skills import reminders  # noqa: E402
+from skills import screen  # noqa: E402
+from skills import stocks  # noqa: E402
+from skills import system  # noqa: E402
+from skills import timers  # noqa: E402
+from skills import weather  # noqa: E402
+from skills import web_search  # noqa: E402
 
-SKILLS = [*memory_tools.SKILLS, *timers.SKILLS, *reminders.SKILLS, *weather.SKILLS, *news.SKILLS, *web_search.SKILLS,
-          *calendar_events.SKILLS, *icloud_calendar.SKILLS, *stocks.SKILLS, *pc_control.SKILLS, *music.SKILLS, *screen.SKILLS,
-          *computer.SKILLS, *system.SKILLS]
+MODULES = [
+    briefing,
+    memory_tools,
+    timers,
+    reminders,
+    weather,
+    news,
+    web_search,
+    calendar_events,
+    icloud_calendar,
+    stocks,
+    pc_control,
+    music,
+    screen,
+    computer,
+    system,
+]
+SKILLS = [skill for module in MODULES for skill in module.SKILLS]
 _BY_NAME = {s["name"]: s for s in SKILLS}
 
 

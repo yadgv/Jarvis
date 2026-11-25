@@ -89,6 +89,8 @@ Jarvis can use tools (all free, no extra API keys):
 - **Weather** (Open-Meteo): "what's the weather?", "will it rain this week?". Set `HOME_CITY` in `config.py`.
 - **Web search** (DuckDuckGo): "who won the match last night?".
 - **News** (Google News): "what's in the news?", "any tech news?", "news about the Leafs". Change `NEWS_REGION` in `config.py` for another country.
+- **Morning briefing**: your first hello of the day ("good morning, Jarvis") gets the weather, today's calendar,
+  reminders and a few headlines. Ask "brief me" any time. Turn off with `MORNING_BRIEFING = False` in `config.py`.
 - **Reminders**: "remind me to call mum on Friday at 6", "remind me in 20 minutes to check the oven", "what reminders do I have?".
   They're saved in `memory/reminders.json`, so they survive a restart; any that came due while Jarvis was off are read out when he starts.
 - **Calendar** (read-only): "what's on today?", "am I free tomorrow afternoon?", "what's my week look like?".
