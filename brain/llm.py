@@ -1,30 +1,82 @@
-"""The brain. Keeps short-term conversation memory. Tools get added here in Phase 2."""
+"""The brain: Claude, conversation memory, and tools."""
 import re
 from datetime import datetime
 
 import anthropic
 
 import config
+from brain import memory
 
 _client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
-_history = []  # always whole user/assistant pairs, oldest first
+
+# Whole user/assistant text pairs, oldest first. Loaded from disk so the
+# conversation survives a restart.
+_history = memory.load_history()
+if _history:
+    print(f"[memory] picked up the last conversation ({len(_history) // 2} turns)")
 
 # End of a sentence: . ! or ? (plus closing quotes/brackets) followed by a space.
 # Needing the space keeps numbers like "3.5" together.
 _SENTENCE_END = re.compile(r"[.!?]+[\"')\]]*\s+")
 
+MAX_TOOL_ROUNDS = 3
+
+TOOLS = [
+    {
+        "name": "remember",
+        "description": (
+            "Save a lasting fact about the user so you know it in future conversations, "
+            "e.g. names of people, preferences, routines, birthdays. Use it when the user "
+            "asks you to remember something, or tells you a personal detail worth keeping. "
+            "Write the fact as a short standalone sentence about the user."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {"fact": {"type": "string"}},
+            "required": ["fact"],
+        },
+    },
+    {
+        "name": "forget",
+        "description": (
+            "Delete saved facts that contain the given words, when the user asks you to "
+            "forget something or says a saved fact is wrong."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {"about": {"type": "string", "description": "Words the fact contains"}},
+            "required": ["about"],
+        },
+    },
+]
+
+
+def _run_tool(name: str, args: dict) -> str:
+    try:
+        if name == "remember":
+            return memory.add_fact(args.get("fact", ""))
+        if name == "forget":
+            return memory.remove_facts(args.get("about", ""))
+        return f"Unknown tool {name}."
+    except Exception as e:
+        return f"Tool failed: {e}"
+
 
 def _system_prompt() -> str:
     """The configured prompt plus the current local date and time, so Jarvis
-    can answer "what time is it?" and reason about today/tomorrow."""
+    can answer "what time is it?", plus everything he's been asked to remember."""
     now = datetime.now().astimezone()
     hour = now.strftime("%I").lstrip("0") or "12"
     stamp = now.strftime(f"%A %d %B %Y, {hour}:%M %p")
-    return f"{config.SYSTEM_PROMPT}\nCurrent local date and time: {stamp} ({now.tzname()})."
+    prompt = f"{config.SYSTEM_PROMPT}\nCurrent local date and time: {stamp} ({now.tzname()})."
+    facts = memory.load_facts()
+    if facts:
+        prompt += "\nThings you know about the user:\n" + "\n".join(f"- {f}" for f in facts)
+    return prompt
 
 
 def _trim():
-    # Trim in whole pairs *before* adding the new turn, so the history
+    # Trim in whole pairs before adding the new turn, so the history
     # always starts with a user message.
     keep = max(0, (config.MAX_HISTORY_TURNS - 1) * 2)
     if len(_history) > keep:
@@ -33,37 +85,53 @@ def _trim():
 
 def think_stream(user_text: str):
     """Yields the reply one sentence at a time while Claude is still writing,
-    so Jarvis can start speaking the first sentence straight away."""
+    so Jarvis can start speaking the first sentence straight away.
+    If Claude uses a tool (remember/forget), runs it and carries on."""
     _trim()
-    _history.append({"role": "user", "content": user_text})
+    # Tool calls live only in this turn's working copy; the saved history
+    # keeps just what was said, so it stays simple user/assistant pairs.
+    messages = _history + [{"role": "user", "content": user_text}]
     said = []
     try:
-        buf = ""
-        with _client.messages.stream(
-            model=config.LLM_MODEL,
-            max_tokens=300,
-            system=_system_prompt(),
-            messages=_history,
-        ) as stream:
-            for delta in stream.text_stream:
-                buf += delta
-                while (m := _SENTENCE_END.search(buf)):
-                    sentence = buf[: m.end()].strip()
-                    buf = buf[m.end():]
-                    if sentence:
-                        said.append(sentence)
-                        yield sentence
-        if buf.strip():
-            said.append(buf.strip())
-            yield buf.strip()
+        for _ in range(MAX_TOOL_ROUNDS + 1):
+            buf = ""
+            with _client.messages.stream(
+                model=config.LLM_MODEL,
+                max_tokens=300,
+                system=_system_prompt(),
+                messages=messages,
+                tools=TOOLS,
+            ) as stream:
+                for delta in stream.text_stream:
+                    buf += delta
+                    while (m := _SENTENCE_END.search(buf)):
+                        sentence = buf[: m.end()].strip()
+                        buf = buf[m.end():]
+                        if sentence:
+                            said.append(sentence)
+                            yield sentence
+                final = stream.get_final_message()
+            if buf.strip():
+                said.append(buf.strip())
+                yield buf.strip()
+
+            tool_uses = [b for b in final.content if b.type == "tool_use"]
+            if final.stop_reason != "tool_use" or not tool_uses:
+                break
+            messages.append({"role": "assistant", "content": final.content})
+            messages.append({
+                "role": "user",
+                "content": [
+                    {"type": "tool_result", "tool_use_id": b.id, "content": _run_tool(b.name, b.input)}
+                    for b in tool_uses
+                ],
+            })
     finally:
-        # Remember what was actually said; if nothing was, drop the
-        # unanswered user turn so the history stays in pairs.
         reply = " ".join(said)
         if reply:
+            _history.append({"role": "user", "content": user_text})
             _history.append({"role": "assistant", "content": reply})
-        else:
-            _history.pop()
+            memory.save_history(_history)
 
 
 def think(user_text: str) -> str:
@@ -72,4 +140,6 @@ def think(user_text: str) -> str:
 
 
 def reset():
+    """Start a fresh conversation (saved facts are kept)."""
     _history.clear()
+    memory.save_history(_history)

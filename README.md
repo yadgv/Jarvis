@@ -44,6 +44,12 @@ Wake word → Whisper → Claude → Piper voice. Runs on Windows now and on a R
 - Wake word misfires → raise `WAKE_THRESHOLD` (e.g. 0.6).
 - To test without the wake word, set `MODE = "enter"`.
 
+## Memory
+- Jarvis remembers the conversation across restarts (if it was less than `HISTORY_MAX_AGE_HOURS` ago).
+  Say **"new conversation"** to start fresh.
+- Say **"remember that..."** and he saves it for good; he may also save personal details you mention.
+  Say **"forget that..."** to remove one. Facts live in `memory/facts.json`, which you can edit by hand.
+
 ## Raspberry Pi port (later)
 ```
 sudo apt install python3-venv portaudio19-dev espeak-ng
@@ -60,5 +66,6 @@ Use a Pi 4 (4 GB) or Pi 5 with a USB mic and a speaker.
 main.py        main loop
 config.py      all settings
 audio/         recorder, wake word, speech-to-text, text-to-speech
-brain/llm.py   Claude + conversation memory (tools go here in Phase 2)
+brain/llm.py   Claude, conversation memory and tools
+brain/memory.py  saving history and facts in memory/
 ```
