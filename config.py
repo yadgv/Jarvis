@@ -76,6 +76,8 @@ WAKE_THRESHOLD = 0.5
 WAKE_CONSECUTIVE_FRAMES = 2              # frames in a row above threshold (raise if it misfires)
 WAKE_CHIME = True                        # beep when Jarvis starts listening
 WAKE_DEBUG = False                       # print wake-word scores to help tuning
+BARGE_IN = True                          # say "Hey Jarvis" while he's talking to cut him off
+BARGE_IN_THRESHOLD = 0.6                 # stricter than WAKE_THRESHOLD (the mic hears his voice too)
 FOLLOWUP_SECONDS = 5                     # after a reply, listen this long without the wake word (0 = off)
 
 # --- Audio ---

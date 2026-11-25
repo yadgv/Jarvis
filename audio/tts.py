@@ -109,6 +109,14 @@ def synthesize(text: str):
     return _synth_piper(text)
 
 
+def stop():
+    """Cut off whatever is playing right now (used when you interrupt Jarvis)."""
+    try:
+        sd.stop()
+    except Exception:
+        pass
+
+
 def play(clip):
     audio, rate = clip
     with _speaking:
