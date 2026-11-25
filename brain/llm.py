@@ -1,5 +1,6 @@
 """The brain: Claude, conversation memory, and tools (see skills/)."""
 import re
+import threading
 import time
 from datetime import datetime
 
@@ -173,7 +174,17 @@ FOLLOWUP_NOTE = (
 IGNORE = "[ignore]"
 
 
-def think_stream(user_text: str, followup: bool = False, note: str = ""):
+# One conversation at a time: the mic and the Telegram bot share the history.
+_turn_lock = threading.Lock()
+
+
+def think_stream(user_text: str, followup: bool = False, note: str = "", exclude_tools=()):
+    """See _think_stream. Waits if another turn (say, from his phone) is running."""
+    with _turn_lock:
+        yield from _think_stream(user_text, followup, note, exclude_tools)
+
+
+def _think_stream(user_text: str, followup: bool = False, note: str = "", exclude_tools=()):
     """Yields the reply one sentence at a time while Claude is still writing,
     so Jarvis can start speaking the first sentence straight away.
     If Claude uses a tool (remember/forget), runs it and carries on.
@@ -185,7 +196,7 @@ def think_stream(user_text: str, followup: bool = False, note: str = ""):
     _trim()
     asked = (FOLLOWUP_NOTE if followup else "") + note + user_text
     # Overheard chatter must never be able to switch him off.
-    exclude = ("shut_down",) if followup else ()
+    exclude = tuple(exclude_tools) + (("shut_down",) if followup else ())
     # Build the system prompt once per turn: Claude's thinking blocks are tied
     # to it, so if the clock ticked over to a new minute between tool rounds the
     # API rejected the second round ("Invalid signature in thinking block").

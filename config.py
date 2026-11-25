@@ -97,6 +97,10 @@ ICLOUD_APP_PASSWORD = os.getenv("ICLOUD_APP_PASSWORD")
 ICLOUD_CALENDAR = os.getenv("ICLOUD_CALENDAR", "")   # calendar name to add to; empty = the first one
 # Reading Gmail (read-only): app password from myaccount.google.com/apppasswords. Put in .env:
 # GMAIL_ADDRESS=you@gmail.com and GMAIL_APP_PASSWORD=abcd efgh ijkl mnop
+# Talk to Jarvis from your phone with a private Telegram bot (see telegram_bot.py):
+# TELEGRAM_BOT_TOKEN from @BotFather; TELEGRAM_ALLOWED_IDS = your Telegram user ID(s).
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_ALLOWED_IDS = os.getenv("TELEGRAM_ALLOWED_IDS", "")
 GMAIL_ADDRESS = os.getenv("GMAIL_ADDRESS")
 GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
 # Playing songs by name: Jarvis opens this app and uses screen control to search and press play.

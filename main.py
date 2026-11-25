@@ -39,6 +39,7 @@ from audio.stt import transcribe
 from audio.tts import speak
 from brain.llm import reset, think_stream
 from skills import briefing, reminders, system, timers
+import telegram_bot  # noqa: E402
 
 watch_for_interrupt = None
 if config.MODE == "wake":
@@ -220,6 +221,7 @@ def wait_for_trigger(stream):
 def main():
     timers.announce = say
     reminders.start()  # also reads out any that came due while he was off
+    telegram_bot.start()  # phone chat, if TELEGRAM_BOT_TOKEN is set
     print("JARVIS online.")
     say("Jarvis online. At your service, sir.")
 
