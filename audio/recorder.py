@@ -5,10 +5,21 @@ import sounddevice as sd
 import config
 
 CHUNK = 1280  # 80 ms at 16 kHz (also what openWakeWord expects)
+VAD_FRAME = 320  # 20 ms frames for webrtcvad (4 per chunk)
 
-# Loudness that counts as speech. Starts at the config value and can be
-# raised by calibrate() if the room is noisy.
-_threshold = config.SILENCE_THRESHOLD
+# Voice activity detector: tells speech apart from noise, so quiet talking
+# still counts and fans or clicks don't. Falls back to loudness only.
+try:
+    import webrtcvad
+    _vad = webrtcvad.Vad(config.VAD_AGGRESSIVENESS)
+except Exception as e:  # not installed / failed to load
+    print(f"[mic] voice detector unavailable ({e}); using loudness only.")
+    _vad = None
+
+# Minimum loudness for a chunk to count as speech. calibrate() raises it in
+# a noisy room. With the voice detector this can be low; without it we use
+# the old SILENCE_THRESHOLD.
+_threshold = config.MIN_SPEECH_LEVEL if _vad else config.SILENCE_THRESHOLD
 
 
 def open_stream():
@@ -31,9 +42,23 @@ def calibrate(stream, seconds: float = 1.0) -> float:
         data, _ = stream.read(CHUNK)
         levels.append(float(np.abs(data[:, 0]).mean()))
     noise = float(np.median(levels))
-    _threshold = max(config.SILENCE_THRESHOLD, noise * config.NOISE_MULTIPLIER)
+    base = config.MIN_SPEECH_LEVEL if _vad else config.SILENCE_THRESHOLD
+    _threshold = max(base, noise * config.NOISE_MULTIPLIER)
     print(f"[mic] background noise {noise:.0f}, speech threshold {_threshold:.0f}")
     return _threshold
+
+
+def is_speech(chunk) -> bool:
+    """True if this 80 ms chunk sounds like someone talking."""
+    if np.abs(chunk).mean() <= _threshold:
+        return False
+    if _vad is None:
+        return True
+    voiced = 0
+    for i in range(0, len(chunk) - VAD_FRAME + 1, VAD_FRAME):
+        if _vad.is_speech(chunk[i:i + VAD_FRAME].tobytes(), config.SAMPLE_RATE):
+            voiced += 1
+    return voiced >= 2  # at least 40 ms of the 80 ms chunk is voice
 
 
 def record_until_silence(stream, start_timeout: float = None) -> np.ndarray:
@@ -55,9 +80,7 @@ def record_until_silence(stream, start_timeout: float = None) -> np.ndarray:
             print("[mic] input overflow (audio dropped)")
         chunk = data[:, 0]
         frames.append(chunk)
-        loud = np.abs(chunk).mean() > _threshold
-
-        if loud:
+        if is_speech(chunk):
             heard_speech = True
             silent_chunks = 0
         else:
@@ -66,6 +89,8 @@ def record_until_silence(stream, start_timeout: float = None) -> np.ndarray:
         if heard_speech and silent_chunks > max_silent:
             break
         if not heard_speech and i > startup_limit:
+            peak = max(float(np.abs(f).mean()) for f in frames)
+            print(f"[mic] no speech detected (loudest {peak:.0f}, needed {_threshold:.0f})")
             return np.array([], dtype=np.float32)
 
     audio = np.concatenate(frames).astype(np.float32) / 32768.0

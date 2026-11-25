@@ -25,7 +25,9 @@ FOLLOWUP_SECONDS = 5                     # after a reply, listen this long witho
 # --- Audio ---
 SAMPLE_RATE = 16000
 MIC_DEVICE = None                        # None = default mic; set index on the Pi
-SILENCE_THRESHOLD = 500                  # minimum speech loudness; raise if it never stops listening
+VAD_AGGRESSIVENESS = 2                   # voice detector strictness 0-3 (raise if noise counts as speech)
+MIN_SPEECH_LEVEL = 60                    # quietest speech that counts (used with the voice detector)
+SILENCE_THRESHOLD = 500                  # loudness-only fallback if the voice detector isn't installed
 SILENCE_SECONDS = 1.2                    # pause length that ends your sentence
 MAX_RECORD_SECONDS = 15
 LISTEN_TIMEOUT = 4                       # give up if you don't start talking within this many seconds
