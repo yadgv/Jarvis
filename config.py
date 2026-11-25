@@ -74,6 +74,12 @@ CALENDAR_ICS_URLS = os.getenv(
     "CALENDAR_ICS_URLS",
     "webcal://p176-caldav.icloud.com/published/2/MTcxOTk5NzcwMDgxNzE5OaZmraEpYkLTlOLxNgWQzDEesl3gCEFrjfHZ6SWrN8Rf",
 ).split()
+# Adding events to iCloud needs a sign-in with an app-specific password
+# (appleid.apple.com > Sign-In and Security > App-Specific Passwords). Put in .env:
+# ICLOUD_USERNAME=you@icloud.com and ICLOUD_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx
+ICLOUD_USERNAME = os.getenv("ICLOUD_USERNAME")
+ICLOUD_APP_PASSWORD = os.getenv("ICLOUD_APP_PASSWORD")
+ICLOUD_CALENDAR = os.getenv("ICLOUD_CALENDAR", "")   # calendar name to add to; empty = the first one
 # Apps Jarvis can open by name. Anything in the Windows Start menu works too
 # ("open Spotify"), so only add ones it can't find. Values are run as-is.
 APPS = {
