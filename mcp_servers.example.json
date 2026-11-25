@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "files": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "C:/Users/YOU/Documents"]
+    },
+    "home_assistant": {
+      "url": "http://homeassistant.local:8123/api/mcp",
+      "headers": {"Authorization": "Bearer YOUR_LONG_LIVED_TOKEN"},
+      "disabled": true
+    }
+  }
+}

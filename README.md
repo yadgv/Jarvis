@@ -179,6 +179,14 @@ Jarvis can use tools (all free, no extra API keys):
 Skills live in `skills/`, one file each, written in a provider-neutral way so another LLM
 provider can use them too (`skills.openai_tools()` gives the OpenAI/Groq format).
 
+## Plug in MCP servers (more tools without new code)
+Any [MCP server](https://modelcontextprotocol.io/examples) can give Jarvis new tools: files, a browser,
+Home Assistant, Spotify, GitHub and many more.
+1. `pip install mcp` (already in `requirements.txt`). Servers started with `npx` need [Node.js](https://nodejs.org).
+2. Copy `mcp_servers.example.json` to `mcp_servers.json` and edit it. It's the same format as Claude Desktop's
+   `claude_desktop_config.json`, so you can paste examples straight in. Add `"disabled": true` to switch one off.
+3. Restart Jarvis. The log shows `[mcp] files: 11 tools`. The tools are named `server__tool`.
+
 ## Talk to Jarvis from your phone (Telegram)
 Message Jarvis from anywhere, by text or voice note. The PC (or Pi) must be running Jarvis.
 1. In Telegram, message **@BotFather**, send `/newbot`, choose a name and a username, and copy the token.

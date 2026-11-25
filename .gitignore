@@ -5,3 +5,4 @@ memory/
 *.log
 venv/
 voices/
+mcp_servers.json
