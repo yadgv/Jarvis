@@ -63,6 +63,7 @@ SCREEN_EFFORT = "low"                    # low = quickest answer; raise to mediu
 # Clicking and typing for you (emergency stop: move the mouse into a screen corner).
 COMPUTER_EFFORT = "medium"
 COMPUTER_MAX_STEPS = 25                  # rounds of look-and-act before giving up
+NEWS_REGION = ("en-CA", "CA", "CA:en")   # Google News language, country, edition
 HOME_CITY = "Courtice, Ontario"          # "Place, Region/Country"; used when you ask for the weather without a city
 HOME_COORDS = (43.91, -78.79)            # lat, lon of HOME_CITY; skips the lookup (None to look it up)
 TEMPERATURE_UNIT = "celsius"             # or "fahrenheit"
