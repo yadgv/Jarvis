@@ -1,5 +1,6 @@
 """All settings in one place. Change these when porting to the Raspberry Pi."""
 import os
+import platform
 
 
 def _load_env_file():
@@ -19,6 +20,9 @@ def _load_env_file():
 
 
 _load_env_file()
+
+ON_PI = platform.machine().lower() in ("aarch64", "armv7l", "arm64") and platform.system() == "Linux"
+LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "jarvis.log")  # None to turn off
 
 # --- Brain ---
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
@@ -71,7 +75,7 @@ NOISE_MULTIPLIER = 3.0                   # speech must be this many times louder
 
 # --- Speech-to-text ---
 # Windows: "small.en" is fine. Pi 4/5: use "tiny.en" or "base.en".
-WHISPER_MODEL = "base.en"
+WHISPER_MODEL = "tiny.en" if ON_PI else "base.en"
 WHISPER_DEVICE = "cpu"                   # "cuda" if you have an NVIDIA GPU
 WHISPER_COMPUTE = "int8"
 
