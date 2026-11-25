@@ -97,6 +97,7 @@ def record_until_silence(stream, start_timeout: float = None, ignore_seconds: fl
         smart_first = max(1, int(config.SMART_TURN_SILENCE * chunks_per_sec))
         smart_every = max(1, int(0.4 * chunks_per_sec))
         max_silent = int(config.SMART_TURN_MAX_SILENCE * chunks_per_sec)
+        smart_min_speech = max(1, int(getattr(config, "SMART_TURN_MIN_SPEECH", 0.5) * chunks_per_sec))
     ended = "time limit"
 
     for i in range(max_chunks):
@@ -123,7 +124,10 @@ def record_until_silence(stream, start_timeout: float = None, ignore_seconds: fl
         if heard_speech and silent_chunks > max_silent:
             ended = "pause"
             break
-        if (smart and heard_speech and silent_chunks >= smart_first
+        # Smart Turn may only end the turn after real speech (~0.5 s): on a
+        # blip (the end of the beep, a tap) it says "finished" at once, which
+        # cut recordings off at 1 s before he'd started talking.
+        if (smart and speech_chunks >= smart_min_speech and silent_chunks >= smart_first
                 and (silent_chunks - smart_first) % smart_every == 0):
             audio = np.concatenate(frames).astype(np.float32) / 32768.0
             finished = smart_turn.is_finished(audio)

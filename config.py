@@ -177,6 +177,7 @@ SILENCE_SECONDS = 0.6                    # pause that ends your sentence (raise 
 SMART_TURN = True
 SMART_TURN_SILENCE = 0.3
 SMART_TURN_MAX_SILENCE = 2.0
+SMART_TURN_MIN_SPEECH = 0.5                # seconds of speech before Smart Turn may end the turn
 SMART_TURN_MODEL_URL = "https://huggingface.co/pipecat-ai/smart-turn-v3/resolve/main/smart-turn-v3.2-cpu.onnx"
 SPEAKER_DROP = 0.35                      # sound quieter than this share of your voice is background (raise if chatter keeps him listening)
 MAX_RECORD_SECONDS = 10
