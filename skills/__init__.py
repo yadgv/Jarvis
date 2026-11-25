@@ -65,6 +65,14 @@ SKILLS = [skill for module in MODULES for skill in module.SKILLS]
 _BY_NAME = {s["name"]: s for s in SKILLS}
 
 
+def register(new_skills):
+    """Add tools found at runtime (e.g. from MCP servers). Names already taken are skipped."""
+    for s in new_skills:
+        if s["name"] not in _BY_NAME:
+            SKILLS.append(s)
+            _BY_NAME[s["name"]] = s
+
+
 def anthropic_tools(exclude=()):
     return [
         {"name": s["name"], "description": s["description"], "input_schema": s["parameters"]}
