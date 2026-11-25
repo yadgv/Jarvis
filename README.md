@@ -52,6 +52,8 @@ If the window doesn't appear, the terminal prints why (lines starting with `[gui
 - Jarvis tells speech from noise with a voice detector (webrtcvad), so quiet talking counts.
 - It says "no speech detected" when you did talk → lower `MIN_SPEECH_LEVEL` (the log shows how loud you were).
 - It never stops listening → raise `VAD_AGGRESSIVENESS` (max 3) or `MIN_SPEECH_LEVEL`.
+- People talking in the background keep him listening → raise `SPEAKER_DROP` (e.g. 0.5). The log line `[mic] recorded ...` shows how loud you were and what was ignored.
+- It cuts you off mid-sentence → raise `SILENCE_SECONDS` (default 0.6) or lower `SPEAKER_DROP`.
 - It cuts you off → raise `SILENCE_SECONDS`.
 - Wake word misfires → raise `WAKE_THRESHOLD` (e.g. 0.6).
 - To test without the wake word, set `MODE = "enter"`.
