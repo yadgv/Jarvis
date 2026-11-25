@@ -1,5 +1,6 @@
 """The brain. Keeps short-term conversation memory. Tools get added here in Phase 2."""
 import re
+from datetime import datetime
 
 import anthropic
 
@@ -11,6 +12,15 @@ _history = []  # always whole user/assistant pairs, oldest first
 # End of a sentence: . ! or ? (plus closing quotes/brackets) followed by a space.
 # Needing the space keeps numbers like "3.5" together.
 _SENTENCE_END = re.compile(r"[.!?]+[\"')\]]*\s+")
+
+
+def _system_prompt() -> str:
+    """The configured prompt plus the current local date and time, so Jarvis
+    can answer "what time is it?" and reason about today/tomorrow."""
+    now = datetime.now().astimezone()
+    hour = now.strftime("%I").lstrip("0") or "12"
+    stamp = now.strftime(f"%A %d %B %Y, {hour}:%M %p")
+    return f"{config.SYSTEM_PROMPT}\nCurrent local date and time: {stamp} ({now.tzname()})."
 
 
 def _trim():
@@ -32,7 +42,7 @@ def think_stream(user_text: str):
         with _client.messages.stream(
             model=config.LLM_MODEL,
             max_tokens=300,
-            system=config.SYSTEM_PROMPT,
+            system=_system_prompt(),
             messages=_history,
         ) as stream:
             for delta in stream.text_stream:
