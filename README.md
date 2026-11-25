@@ -146,6 +146,10 @@ Jarvis can use tools (all free, no extra API keys):
   Serial Monitor (it holds the port). Jarvis finds the board by itself (or set `ARDUINO_PORT`, e.g. `COM5`).
   Name what's wired up in `config.py`: `ARDUINO_DEVICES = {"desk lamp": 7}`, `ARDUINO_SENSORS = {"light sensor": "A0"}`.
   The same works on the Pi (`/dev/ttyACM0`). Add your own commands in the sketch's `handle()`; Jarvis can send them too.
+- **Personality and voice**: "be more casual", "keep it brief", "call me Ziad", "talk a bit faster",
+  "what are your settings?", "reset your personality". Styles: butler (default), casual, brief, formal, playful;
+  reply length short/normal/long; speed 0.7-1.5. Saved in `memory/settings.json`; defaults are in `config.py`.
+  To add a Fish Audio voice, copy its ID from fish.audio into `VOICES` in `config.py`, then say "use the deep voice".
 - **Interrupt**: say "Hey Jarvis" while he's talking to cut him off and ask something else (`BARGE_IN` in `config.py`).
 - **Shut down**: "okay, shut down", or just tell him you're done for the day.
 - **Memory**: "remember that…", "forget that…".
