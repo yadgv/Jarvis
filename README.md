@@ -119,6 +119,9 @@ Jarvis can use tools (all free, no extra API keys):
   GMAIL_APP_PASSWORD=abcd efgh ijkl mnop
   ```
   Mail is opened read-only, so nothing gets marked as read. New email is also part of the morning briefing.
+- **Reply to email**: "reply to Sam and say Sunday works". Jarvis finds the email, reads the draft back and
+  asks "Shall I send it?". It goes out (from your Gmail, same app password) only after you say yes;
+  "change it to..." rewrites it and "no" or "cancel" drops it.
 - **Play music**: "play Blinding Lights", "play some Drake", "put on my workout playlist". Jarvis opens Apple Music
   and uses screen control to search and press play (takes several seconds and needs Claude). Pause/next use the media keys.
 - **Look at the screen**: "what's on my screen?", "read me that error", "what does this email say?".

@@ -30,6 +30,8 @@ class FakeImap:
 
     def search(self, charset, *crit):
         self.queries.append(crit)
+        if "from:mona" in crit[-1]:
+            return "OK", [b"1"]
         return "OK", [b" ".join(str(i + 1).encode() for i in range(len(self.msgs)))]
 
     def fetch(self, num, what):
@@ -78,3 +80,47 @@ def test_bad_password(gmail, monkeypatch):
         raise imaplib.IMAP4.error("AUTHENTICATIONFAILED")
     monkeypatch.setattr(email_reader, "_connect", refuse)
     assert "refused the sign-in" in email_reader.check_email({})
+
+
+@pytest.fixture
+def outbox(gmail, monkeypatch):
+    import skills
+    sent = []
+    monkeypatch.setattr(email_reader, "_send", lambda msg: sent.append(msg))
+    monkeypatch.setattr(email_reader, "_draft", None)
+    monkeypatch.setattr(skills, "turn", 5)
+    return sent
+
+
+def test_reply_needs_a_yes_in_a_later_turn(outbox, monkeypatch):
+    import skills
+    out = email_reader.reply_email({"search": "from:mona", "body": "Yes, Sunday at 6 works."})
+    assert out.startswith("DRAFT") and "Mona" in out and "Re: " in out and not outbox
+    # The model can't confirm its own draft in the same turn.
+    assert "Not sent" in email_reader.reply_email({"confirmed": True}) and not outbox
+    monkeypatch.setattr(skills, "turn", 6)
+    assert email_reader.reply_email({"confirmed": True}).startswith("Sent to")
+    msg = outbox[0]
+    assert msg["From"] == "z@gmail.com" and msg["Subject"].startswith("Re: ")
+    assert "Sunday at 6 works" in msg.get_content()
+    assert "There's no draft" in email_reader.reply_email({"confirmed": True})
+
+
+def test_reply_cancel_and_missing(outbox, monkeypatch):
+    import skills
+    email_reader.reply_email({"search": "from:mona", "body": "hi"})
+    assert "discarded" in email_reader.reply_email({"cancel": True})
+    monkeypatch.setattr(skills, "turn", 6)
+    assert "no draft" in email_reader.reply_email({"confirmed": True}) and not outbox
+    gmail = email_reader._connect()
+    gmail.msgs.clear()
+    assert "Couldn't find" in email_reader.reply_email({"search": "from:nobody", "body": "hi"})
+
+
+def test_old_draft_not_sent(outbox, monkeypatch):
+    import skills
+    email_reader.reply_email({"search": "from:mona", "body": "hi"})
+    msg, turn, made = email_reader._draft
+    monkeypatch.setattr(email_reader, "_draft", (msg, turn, made - 3600))
+    monkeypatch.setattr(skills, "turn", 6)
+    assert "too old" in email_reader.reply_email({"confirmed": True}) and not outbox

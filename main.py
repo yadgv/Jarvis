@@ -61,7 +61,13 @@ ACKNOWLEDGEMENTS = {
     "thanks", "thank you", "alright", "yeah", "yes", "no", "mm", "hmm", "uh huh", "right",
     "sure", "fine", "perfect", "good", "awesome", "oh", "ah", "wow", "lol", "same", "true",
 }
+# Short replies that answer his question rather than end the conversation.
+ANSWERS = {"yes", "no", "yeah", "yep", "nope", "sure", "ok", "okay", "do it", "go ahead", "send it",
+           "yes please", "no thanks", "yes send it", "please do", "alright", "fine", "right"}
 last_ignored = False  # the last follow-up wasn't meant for Jarvis
+# His last spoken sentence was a question ("Shall I send it?"), so a bare
+# "yes" or "no" straight after is an answer, not the end of the chat.
+asked_question = False
 
 
 def is_acknowledgement(said: str) -> bool:
@@ -94,8 +100,9 @@ def respond(text: str, t_heard: float = None, stream=None, followup: bool = Fals
     followup=True: heard without the wake word, so stay quiet if it wasn't
     meant for him (sets last_ignored).
     Returns True if he was interrupted."""
-    global last_ignored
+    global last_ignored, asked_question
     last_ignored = False
+    asked_question = False
     clips = queue.Queue(maxsize=3)
     interrupted = threading.Event()
     ui_events.stop_speaking.clear()
@@ -168,6 +175,7 @@ def respond(text: str, t_heard: float = None, stream=None, followup: bool = Fals
             # Show each sentence as he starts saying it, so text and voice line up.
             print(f"JARVIS: {sentence}")
             ui_events.emit("jarvis", sentence)
+            asked_question = sentence.rstrip().rstrip("\"')]").endswith("?")
             if clip is not None:
                 tts.play(clip)
             else:
@@ -259,7 +267,8 @@ def main():
 
             said = normalize(text)
             followup = not need_wake and typed is None
-            if followup and (is_acknowledgement(said) or (is_exit(said) and "jarvis" not in said)):
+            answering = followup and asked_question and said in ANSWERS
+            if followup and not answering and (is_acknowledgement(said) or (is_exit(said) and "jarvis" not in said)):
                 # "I understand", "bye" etc. without his name: end the chat quietly.
                 print("[follow-up ignored: sounded like the end of the conversation]")
                 need_wake = True

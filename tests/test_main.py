@@ -44,3 +44,16 @@ def test_ignored_followup_says_nothing(monkeypatch):
     # A normal (woken) turn with no reply still apologises.
     main.respond("hello")
     assert not main.last_ignored and played
+
+
+def test_question_marks_answer_window(monkeypatch):
+    """A bare "yes" after "Shall I send it?" is an answer, not the end of the chat."""
+    monkeypatch.setattr(main.tts, "synthesize", lambda s: (s, 1))
+    monkeypatch.setattr(main.tts, "play", lambda clip: None)
+    monkeypatch.setattr(main.ui_events, "emit", lambda k, t: None)
+    monkeypatch.setattr(main, "think_stream", lambda text, **k: iter(["Here's the draft.", "Shall I send it?"]))
+    main.respond("reply to Sam")
+    assert main.asked_question and "yes" in main.ANSWERS
+    monkeypatch.setattr(main, "think_stream", lambda text, **k: iter(["Sent, sir."]))
+    main.respond("yes")
+    assert not main.asked_question
