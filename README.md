@@ -157,6 +157,16 @@ Jarvis can use tools (all free, no extra API keys):
 Skills live in `skills/`, one file each, written in a provider-neutral way so another LLM
 provider can use them too (`skills.openai_tools()` gives the OpenAI/Groq format).
 
+## Talk to Jarvis from your phone (Telegram)
+Message Jarvis from anywhere, by text or voice note. The PC (or Pi) must be running Jarvis.
+1. In Telegram, message **@BotFather**, send `/newbot`, choose a name and a username, and copy the token.
+2. Add it to `.env`: `TELEGRAM_BOT_TOKEN=123456:ABC...`
+3. Start Jarvis and send your bot any message. It replies with your Telegram ID.
+4. Add that to `.env`: `TELEGRAM_ALLOWED_IDS=123456789` and restart Jarvis.
+
+Only IDs in `TELEGRAM_ALLOWED_IDS` get answers; anyone else is ignored. Phone chats share the same
+conversation and memory as the mic. Everything works from the phone except shutting Jarvis down.
+
 ## Raspberry Pi
 Use a Pi 4 (4 GB) or Pi 5 with Raspberry Pi OS 64-bit, a USB mic and a speaker.
 ```
@@ -176,6 +186,7 @@ Jarvis to start on boot (and restart if he crashes). On a Pi, Jarvis uses the fa
 main.py        main loop
 gui.py         corner widget (python gui.py)
 ui_events.py   connects the window to the voice loop
+telegram_bot.py  phone chat over Telegram
 tests/         automated tests
 deploy/        Raspberry Pi setup script and service
 config.py      all settings
