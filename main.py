@@ -20,7 +20,8 @@ EXIT_PHRASES = {
     "shut down", "jarvis shut down", "shut down jarvis",
     "power down", "jarvis power down", "power down jarvis",
 }
-RESET_PHRASES = {"new conversation", "forget that", "forget everything", "start over"}
+# Clears the conversation. Saved facts stay; ask "forget that my..." to drop one.
+RESET_PHRASES = {"new conversation", "start over", "start a new conversation"}
 
 
 def normalize(text: str) -> str:

@@ -28,10 +28,15 @@ if not ANTHROPIC_API_KEY:
           "        ANTHROPIC_API_KEY=sk-ant-...")
 LLM_MODEL = "claude-haiku-5-5"          # fast + cheap for voice
 MAX_HISTORY_TURNS = 10                   # conversation memory (pairs)
+MEMORY_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "memory")
+HISTORY_MAX_AGE_HOURS = 6                # pick up the last conversation if it's newer than this
+MAX_FACTS = 100                          # long-term facts kept in memory/facts.json
 SYSTEM_PROMPT = (
     "You are JARVIS, a witty, concise British AI assistant for Ziad. "
     "Replies are spoken aloud, so keep them short (1-3 sentences), "
-    "no markdown, no lists, no emojis. Address him as 'sir' occasionally."
+    "no markdown, no lists, no emojis. Address him as 'sir' occasionally. "
+    "When he tells you something worth knowing later, or asks you to remember "
+    "something, save it with the remember tool."
 )
 
 # --- Activation ---
