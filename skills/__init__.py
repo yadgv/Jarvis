@@ -5,6 +5,8 @@ Each skill module exposes SKILLS: a list of dicts with
 That's provider-neutral: anthropic_tools() and openai_tools() turn it into the
 format Claude or an OpenAI-style API (Groq, OpenAI, Ollama...) expects.
 """
+import threading
+
 # One module per line, so adding a skill doesn't clash with other changes.
 from skills import arduino  # noqa: E402
 from skills import briefing  # noqa: E402
@@ -92,10 +94,55 @@ def openai_tools(exclude=()):
     ]
 
 
+# ---------- spoken progress ----------
+# Long tools shouldn't leave him in silence (idea from OpenLive's narrated
+# progress). main.py sets a handler for the thread running a spoken turn; a
+# tool that runs longer than PROGRESS_AFTER gets a short filler line, and any
+# tool can narrate its own steps with skills.progress("Opening Chrome now.").
+PROGRESS_AFTER = 4.0
+PROGRESS_EVERY = 25.0
+FILLERS = {
+    "use_computer": "Working on it, sir.",
+    "look_at_screen": "Having a look, sir.",
+    "whats_the_buzz": "Seeing what people are saying, sir.",
+    "web_search": "Searching now, sir.",
+    "check_email": "Checking your email, sir.",
+    "daily_briefing": "Pulling that together, sir.",
+}
+_local = threading.local()
+
+
+def set_progress_handler(handler):
+    """handler(text) speaks a short line now; None turns it off (for this thread)."""
+    _local.handler = handler
+
+
+def progress(text: str):
+    """Say a short progress line, if this turn is being spoken."""
+    handler = getattr(_local, "handler", None)
+    if handler and text:
+        try:
+            handler(text)
+        except Exception as e:
+            print(f"[progress] {e}")
+
+
+def _watch_progress(name, done, handler):
+    if done.wait(PROGRESS_AFTER):
+        return
+    handler(FILLERS.get(name, "One moment, sir."))
+    while not done.wait(PROGRESS_EVERY):
+        handler("Still working on it, sir.")
+
+
 def run(name: str, args: dict) -> str:
     skill = _BY_NAME.get(name)
     if skill is None:
         return f"Unknown tool {name}."
+    done = threading.Event()
+    handler = getattr(_local, "handler", None)
+    if handler:
+        threading.Thread(target=_watch_progress, args=(name, done, handler), daemon=True).start()
     try:
         print(f"[tool] {name} {args}")
         result = str(skill["run"](args or {}))
@@ -104,3 +151,5 @@ def run(name: str, args: dict) -> str:
     except Exception as e:
         print(f"[tool] {name} failed: {e}")
         return f"The {name} tool failed: {e}"
+    finally:
+        done.set()

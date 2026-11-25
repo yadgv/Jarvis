@@ -40,6 +40,7 @@ from audio.tts import speak
 from audio import ducking, smart_turn
 from brain.llm import clip_last_reply, reset, think_stream
 from skills import briefing, mcp_tools, reminders, system, timers
+import skills  # noqa: E402
 import telegram_bot  # noqa: E402
 import dictation  # noqa: E402
 
@@ -121,6 +122,8 @@ def respond(text: str, t_heard: float = None, stream=None, followup: bool = Fals
 
     def produce():
         count = 0
+        # Long tools get short spoken updates ("Working on it, sir.") in between.
+        skills.set_progress_handler(lambda line: put((line, tts.synthesize(line), "progress")))
         try:
             extra = {k: v for k, v in (("followup", followup), ("note", note)) if v}
             for sentence in think_stream(text, **extra):
@@ -142,6 +145,7 @@ def respond(text: str, t_heard: float = None, stream=None, followup: bool = Fals
                 msg = "I'm having trouble reaching my servers, sir."
                 put((msg, tts.synthesize(msg)))
         finally:
+            skills.set_progress_handler(None)
             put(None)
 
     # Listen for "Hey Jarvis" while he talks.
@@ -166,7 +170,8 @@ def respond(text: str, t_heard: float = None, stream=None, followup: bool = Fals
                 continue
             if item is None:
                 break
-            sentence, clip = item
+            sentence, clip = item[0], item[1]
+            is_progress = len(item) > 2  # "One moment, sir." etc.: not part of the reply
             if first:
                 ui_events.emit("status", "speaking")
             if first and t_heard is not None:
@@ -179,7 +184,8 @@ def respond(text: str, t_heard: float = None, stream=None, followup: bool = Fals
             # Show each sentence as he starts saying it, so text and voice line up.
             print(f"JARVIS: {sentence}")
             ui_events.emit("jarvis", sentence)
-            asked_question = sentence.rstrip().rstrip("\"')]").endswith("?")
+            if not is_progress:
+                asked_question = sentence.rstrip().rstrip("\"')]").endswith("?")
             started = time.perf_counter()
             if clip is not None:
                 tts.play(clip)
@@ -187,8 +193,9 @@ def respond(text: str, t_heard: float = None, stream=None, followup: bool = Fals
                 tts.speak_system(sentence)
             if ui_events.stop_speaking.is_set():
                 interrupted.set()
-            spoken.append(heard_part(sentence, time.perf_counter() - started)
-                          if interrupted.is_set() else sentence)
+            if not is_progress:
+                spoken.append(heard_part(sentence, time.perf_counter() - started)
+                              if interrupted.is_set() else sentence)
     finally:
         if watcher is not None:
             stop_watch.set()
