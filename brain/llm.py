@@ -107,10 +107,10 @@ def _sentences(pieces, said):
         yield buf.strip()
 
 
-def _claude_turn(user_text, system, said, tools_used, exclude=()):
+def _claude_turn(user_text, system, said, tools_used, exclude=(), history=None):
     # Tool calls live only in this turn's working copy; the saved history
     # keeps just what was said, so it stays simple user/assistant pairs.
-    messages = _history + [{"role": "user", "content": user_text}]
+    messages = (_history if history is None else history) + [{"role": "user", "content": user_text}]
     stop_reason = None
     for _ in range(MAX_TOOL_ROUNDS + 1):
         with _client.messages.stream(
@@ -139,9 +139,9 @@ def _claude_turn(user_text, system, said, tools_used, exclude=()):
         print(f"[brain] Claude finished without saying anything (stop: {stop_reason})")
 
 
-def _backup_turn(user_text, system, said, tools_used, exclude=()):
+def _backup_turn(user_text, system, said, tools_used, exclude=(), history=None):
     """The same turn on the free OpenRouter model (OpenAI message format)."""
-    messages = ([{"role": "system", "content": system}] + list(_history)
+    messages = ([{"role": "system", "content": system}] + list(_history if history is None else history)
                 + [{"role": "user", "content": user_text}])
     t0 = time.perf_counter()
     model = None
@@ -271,6 +271,31 @@ def _think_stream(user_text: str, followup: bool = False, note: str = "", exclud
             _history.append({"role": "user", "content": user_text})
             _history.append({"role": "assistant", "content": reply})
             memory.save_history(_history)
+
+
+def run_job(prompt: str, exclude_tools=()) -> str:
+    """A one-off turn for a scheduled job: no conversation history, nothing
+    saved, and only the tools not in exclude_tools. Returns the whole reply."""
+    system = _system_prompt(prompt) + (
+        "\nThis is a scheduled job running in the background, not a live conversation: "
+        "do it and report the result briefly, as it will be read aloud or sent to his phone.")
+    said, used = [], []
+    exclude = tuple(exclude_tools) + ("shut_down",)
+    try:
+        if not _use_claude():
+            raise RuntimeError("Claude is off")
+        for _ in _claude_turn(prompt, system, said, used, exclude, history=[]):
+            pass
+    except Exception as e:
+        if said:
+            pass  # keep what came back before it failed
+        elif not backup.available():
+            raise
+        else:
+            print(f"[jobs] Claude failed ({e}); trying the backup model")
+            for _ in _backup_turn(prompt, system, said, used, exclude, history=[]):
+                pass
+    return " ".join(said).strip()
 
 
 def think(user_text: str) -> str:

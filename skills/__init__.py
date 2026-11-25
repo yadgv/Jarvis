@@ -15,6 +15,7 @@ from skills import computer  # noqa: E402
 from skills import edit_text  # noqa: E402
 from skills import email_reader  # noqa: E402
 from skills import icloud_calendar  # noqa: E402
+from skills import jobs  # noqa: E402
 from skills import memory_tools  # noqa: E402
 from skills import music  # noqa: E402
 from skills import news  # noqa: E402
@@ -35,6 +36,7 @@ MODULES = [
     memory_tools,
     timers,
     reminders,
+    jobs,
     weather,
     news,
     web_search,
