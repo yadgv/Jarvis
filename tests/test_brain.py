@@ -82,3 +82,43 @@ def test_tool_call_round_trip(llm, monkeypatch):
 def test_system_prompt_has_date(llm):
     from datetime import datetime
     assert str(datetime.now().year) in llm._system_prompt()
+
+
+def test_system_prompt_fixed_within_a_turn(llm, monkeypatch):
+    """Thinking blocks are bound to the system prompt, so every tool round in
+    one turn must send exactly the same one."""
+    systems = []
+    calls = iter(["a", "b"])
+    monkeypatch.setattr(llm, "_system_prompt", lambda: next(calls))
+
+    def stream(**kw):
+        systems.append(kw["system"])
+        return FakeStream(plan, kw)
+
+    def plan(m):
+        if isinstance(m[-1]["content"], list):
+            return end(["Done."])
+        return [], NS(stop_reason="tool_use", content=[
+            NS(type="tool_use", id="t1", name="remember", input={"fact": "x"})])
+    monkeypatch.setattr(llm, "_client", NS(messages=NS(stream=stream)))
+    llm.think("remember x")
+    assert systems == ["a", "a"]
+
+
+def test_history_notes_tools_used(llm, monkeypatch):
+    def plan(m):
+        if isinstance(m[-1]["content"], list):
+            return end(["Saved, sir."])
+        return [], NS(stop_reason="tool_use", content=[
+            NS(type="tool_use", id="t1", name="remember", input={"fact": "Ziad likes tea"})])
+    use_plan(llm, monkeypatch, plan)
+    assert llm.think("remember I like tea") == "Saved, sir."
+    saved = llm._history[-1]["content"]
+    assert saved.startswith("Saved, sir.") and "[tools used: remember" in saved
+
+
+def test_empty_reply_not_saved(llm, monkeypatch, capsys):
+    use_plan(llm, monkeypatch, lambda m: ([], NS(stop_reason="max_tokens", content=[])))
+    assert llm.think("hmm") == ""
+    assert llm._history == []
+    assert "max_tokens" in capsys.readouterr().out
