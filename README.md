@@ -111,6 +111,14 @@ Jarvis can use tools (all free, no extra API keys):
 - **Share prices** (Yahoo Finance): "what is Nvidia trading at?".
 - **PC control**: "open Spotify", "volume up", "set the volume to 30", "mute", "pause the music", "next song", "lock the PC".
   Apps come from the Start menu or the `APPS` list in `config.py`.
+- **Email** (Gmail, read-only): "any new emails?", "did Amazon email me?". Gmail needs an app password:
+  turn on 2-Step Verification (myaccount.google.com > Security), then make one at
+  myaccount.google.com/apppasswords. Add to `.env`:
+  ```
+  GMAIL_ADDRESS=you@gmail.com
+  GMAIL_APP_PASSWORD=abcd efgh ijkl mnop
+  ```
+  Mail is opened read-only, so nothing gets marked as read. New email is also part of the morning briefing.
 - **Look at the screen**: "what's on my screen?", "read me that error", "what does this email say?".
   Takes a screenshot only when you ask, scales it down and sends it to `SCREEN_MODEL` (Claude Opus 5.5,
   a bigger model than the chat one, so this costs a bit more per question). Nothing is saved.
