@@ -17,6 +17,7 @@ import requests
 import sounddevice as sd
 
 import config
+from brain import settings
 
 # Only one thing talks at a time (e.g. a timer going off while Jarvis is mid-sentence).
 _speaking = threading.RLock()
@@ -38,10 +39,11 @@ def _fish_request(text: str, stream: bool):
             },
             json={
                 "text": text,
-                "reference_id": config.FISH_VOICE_ID,
+                "reference_id": settings.voice_id(),
                 "format": "pcm",
                 "sample_rate": FISH_RATE,
                 "latency": "balanced",
+                "prosody": {"speed": settings.speed(), "volume": 0},
             },
             timeout=20,
             stream=stream,
@@ -77,13 +79,24 @@ if os.path.exists(config.PIPER_VOICE):
         print(f"[tts] Piper failed to load ({e}).")
 
 
+def _piper_options():
+    speed = settings.speed()
+    if speed == 1.0:
+        return {}
+    try:
+        from piper import SynthesisConfig
+        return {"syn_config": SynthesisConfig(length_scale=1.0 / speed)}
+    except Exception:
+        return {}
+
+
 def _synth_piper(text: str):
     if _piper is None:
         return None
     try:
         buf = io.BytesIO()
         with wave.open(buf, "wb") as wf:
-            _piper.synthesize_wav(text, wf)
+            _piper.synthesize_wav(text, wf, **_piper_options())
         buf.seek(0)
         with wave.open(buf, "rb") as wf:
             rate = wf.getframerate()
@@ -103,7 +116,7 @@ def speak_system(text: str):
     if _fallback is None:
         import pyttsx3
         _fallback = pyttsx3.init()
-        _fallback.setProperty("rate", 175)
+        _fallback.setProperty("rate", int(175 * settings.speed()))
     with _speaking:
         _fallback.say(text)
         _fallback.runAndWait()
