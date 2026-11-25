@@ -8,7 +8,9 @@
 Both live in the memory/ folder, which git ignores.
 """
 import json
+import math
 import os
+import re
 import time
 
 import config
@@ -92,3 +94,54 @@ def remove_facts(about: str) -> str:
         print(f"[memory] forgot {removed} fact(s) about: {about}")
         return f"Removed {removed} fact(s)."
     return "No saved fact matched."
+
+
+# ---------- picking the facts that matter ----------
+# Once there are lots of saved facts, sending them all on every request costs
+# tokens and buries the useful ones. Word lists and terms() are from GLaDOS's
+# memory_recall.py (github.com/dnhkng/GLaDOS, MIT License, Copyright (c) 2022
+# David Ng); the scoring is a simplified version of its rarity-weighted match.
+_STOP = set(
+    "a an the and or of to in on for with from by is are was were be been being "
+    "i me my mine we our you your it its this that these those they them their "
+    "what which who when where why how do does did have has had can could would "
+    "should will may about at as not no yes please tell say know remember recall "
+    "fact facts memory stored saved again also then now any some all much many".split()
+)
+_ALIASES = {
+    word: canonical
+    for canonical, words in {
+        "gpu": "gpu gpus vram graphics",
+        "ram": "ram",
+        "prefer": "prefer prefers preferred preference preferences",
+        "food": "food foods meal meals dinner lunch supper dish dishes",
+        "name": "name names named",
+    }.items()
+    for word in words.split()
+}
+
+
+def terms(text: str) -> set:
+    return {_ALIASES.get(word, word) for word in re.findall(r"[^\W_]+", text.casefold()) if word not in _STOP}
+
+
+def relevant_facts(facts: list, about: str, limit: int, newest: int = 5) -> list:
+    """Up to `limit` facts, in their saved order: the `newest` most recent
+    ones (likely still being talked about) plus the best word matches for
+    `about`, rare words counting more than common ones."""
+    if len(facts) <= limit:
+        return facts
+    fact_terms = [terms(f) for f in facts]
+    df = {}
+    for ts in fact_terms:
+        for t in ts:
+            df[t] = df.get(t, 0) + 1
+    query = terms(about)
+    scores = [sum(math.log(1 + len(facts) / df[t]) for t in ts & query) for ts in fact_terms]
+    keep = set(range(len(facts) - newest, len(facts)))
+    for i in sorted(range(len(facts)), key=lambda i: (-scores[i], -i)):
+        if len(keep) >= limit:
+            break
+        if scores[i] > 0:
+            keep.add(i)
+    return [f for i, f in enumerate(facts) if i in keep]

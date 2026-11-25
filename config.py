@@ -45,6 +45,7 @@ MAX_HISTORY_TURNS = 10                   # conversation memory (pairs)
 MEMORY_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "memory")
 HISTORY_MAX_AGE_HOURS = 6                # pick up the last conversation if it's newer than this
 MAX_FACTS = 100                          # long-term facts kept in memory/facts.json
+FACTS_IN_PROMPT = 25                     # past this many saved facts, only the most relevant ones go to Claude
 SYSTEM_PROMPT = (
     "You are JARVIS, a British AI assistant for Ziad. "
     "Replies are spoken aloud, so no markdown, no lists, no emojis. "
@@ -144,6 +145,11 @@ WAKE_DEBUG = False                       # print wake-word scores to help tuning
 BARGE_IN = True                          # say "Hey Jarvis" while he's talking to cut him off
 BARGE_IN_THRESHOLD = 0.6                 # stricter than WAKE_THRESHOLD (the mic hears his voice too)
 FOLLOWUP_SECONDS = 5                     # after a reply, listen this long without the wake word (0 = off)
+WAKE_VAD_THRESHOLD = 0.5                 # wake only if a voice detector also hears speech (0 = off; cuts TV/music wakes)
+WAKE_NOISE_SUPPRESSION = ON_PI           # Speex noise suppression for the wake word (Linux only: pip install speexdsp-ns)
+# Your-voice check for "Hey Jarvis", made by running: python train_my_voice.py
+WAKE_VERIFIER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "memory", "my_voice_verifier.pkl")
+WAKE_VERIFIER_THRESHOLD = 0.3            # wake score above which your-voice check runs
 
 # --- Audio ---
 SAMPLE_RATE = 16000
@@ -152,11 +158,22 @@ VAD_AGGRESSIVENESS = 2                   # voice detector strictness 0-3 (raise 
 MIN_SPEECH_LEVEL = 60                    # quietest speech that counts (used with the voice detector)
 SILENCE_THRESHOLD = 500                  # loudness-only fallback if the voice detector isn't installed
 SILENCE_SECONDS = 0.6                    # pause that ends your sentence (raise if it cuts you off)
+# Smart Turn (github.com/pipecat-ai/smart-turn) listens to *how* you stopped:
+# a finished sentence ends after SMART_TURN_SILENCE, a mid-thought pause
+# ("I want to... um") waits up to SMART_TURN_MAX_SILENCE. Off = SILENCE_SECONDS only.
+SMART_TURN = True
+SMART_TURN_SILENCE = 0.3
+SMART_TURN_MAX_SILENCE = 2.0
+SMART_TURN_MODEL_URL = "https://huggingface.co/pipecat-ai/smart-turn-v3/resolve/main/smart-turn-v3.2-cpu.onnx"
 SPEAKER_DROP = 0.35                      # sound quieter than this share of your voice is background (raise if chatter keeps him listening)
 MAX_RECORD_SECONDS = 10
 LISTEN_TIMEOUT = 4                       # give up if you don't start talking within this many seconds
 AUTO_CALIBRATE = True                    # measure room noise at startup
 NOISE_MULTIPLIER = 3.0                   # speech must be this many times louder than room noise
+
+# Turn other apps down while Jarvis listens and talks (Windows; needs: pip install pycaw)
+DUCK_APPS = ["AppleMusic.exe", "iTunes.exe", "Spotify.exe"]   # process names; [] = off
+DUCK_VOLUME = 0.2                        # their volume while ducked (0-1 of what it was)
 
 # --- Speech-to-text ---
 # Windows: "small.en" is fine. Pi 4/5: use "tiny.en" or "base.en".

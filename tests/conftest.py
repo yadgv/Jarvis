@@ -32,6 +32,8 @@ _stub("anthropic", Anthropic=lambda **k: None)
 import config  # noqa: E402
 
 config.MODE = "enter"  # main.py then skips loading the wake-word model
+config.SMART_TURN = False  # tests that want it patch audio.smart_turn
+config.DUCK_APPS = []
 
 
 import pytest  # noqa: E402

@@ -37,7 +37,8 @@ from audio import tts
 from audio.recorder import calibrate, chime, open_stream, record_until_silence
 from audio.stt import transcribe
 from audio.tts import speak
-from brain.llm import reset, think_stream
+from audio import ducking, smart_turn
+from brain.llm import clip_last_reply, reset, think_stream
 from skills import briefing, reminders, system, timers
 import telegram_bot  # noqa: E402
 
@@ -155,6 +156,7 @@ def respond(text: str, t_heard: float = None, stream=None, followup: bool = Fals
 
     threading.Thread(target=produce, daemon=True).start()
     first = True
+    spoken = []  # what he actually got to say, for the history if he's cut off
     try:
         while not interrupted.is_set():
             try:
@@ -177,12 +179,15 @@ def respond(text: str, t_heard: float = None, stream=None, followup: bool = Fals
             print(f"JARVIS: {sentence}")
             ui_events.emit("jarvis", sentence)
             asked_question = sentence.rstrip().rstrip("\"')]").endswith("?")
+            started = time.perf_counter()
             if clip is not None:
                 tts.play(clip)
             else:
                 tts.speak_system(sentence)
             if ui_events.stop_speaking.is_set():
                 interrupted.set()
+            spoken.append(heard_part(sentence, time.perf_counter() - started)
+                          if interrupted.is_set() else sentence)
     finally:
         if watcher is not None:
             stop_watch.set()
@@ -190,7 +195,20 @@ def respond(text: str, t_heard: float = None, stream=None, followup: bool = Fals
             stream.stop()
     if interrupted.is_set():
         print("[interrupted]")
+        clip_last_reply(" ".join(p for p in spoken if p))
     return interrupted.is_set()
+
+
+WORDS_PER_SECOND = 2.6  # roughly how fast he talks
+
+
+def heard_part(sentence: str, seconds: float) -> str:
+    """The words of a sentence he got through before being cut off, guessed
+    from how long it played (GLaDOS's clip_interrupted_sentence, MIT, does
+    the same with the share of audio played)."""
+    words = sentence.split()
+    share = max(0.0, min(1.0, seconds * WORDS_PER_SECOND / max(1, len(words))))
+    return " ".join(words[: round(share * len(words))])
 
 
 def say(text: str):
@@ -205,6 +223,7 @@ def wait_for_trigger(stream):
     """Block until you say "Hey Jarvis", press Talk, or type a message.
     Returns ("wake", None), ("talk", None) or ("text", message)."""
     ui_events.emit("status", "idle")
+    ducking.restore()  # conversation over: music back up
     if config.MODE == "wake":
         print("\n[waiting for 'Hey Jarvis'...]")
         return wait_for_wake_word(stream, poll=ui_events.poll) or ("wake", None)
@@ -228,6 +247,7 @@ def main():
     with open_stream() as stream:
         if config.AUTO_CALIBRATE:
             calibrate(stream)
+        smart_turn.load()  # downloads the end-of-sentence model the first time
 
         need_wake = True
         already_woken = False  # you said "Hey Jarvis" (or pressed Stop) to interrupt him
@@ -240,10 +260,11 @@ def main():
                 else:
                     kind, typed = wait_for_trigger(stream)
                 if kind != "text":
-                    chime(stream)
+                    ducking.duck()  # music down while he listens and talks
+                    beep = chime(stream)
                     print("[listening]")
                     ui_events.emit("status", "listening")
-                    audio = record_until_silence(stream)
+                    audio = record_until_silence(stream, ignore_seconds=beep or 0)
             else:
                 print("[listening for a follow-up...]")
                 ui_events.emit("status", "listening")
@@ -302,6 +323,7 @@ def main():
             else:
                 # Keep listening briefly so you can reply without the wake word.
                 need_wake = config.FOLLOWUP_SECONDS <= 0
+    ducking.restore()
     ui_events.emit("status", "off")
 
 

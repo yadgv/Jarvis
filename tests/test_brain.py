@@ -89,7 +89,7 @@ def test_system_prompt_fixed_within_a_turn(llm, monkeypatch):
     one turn must send exactly the same one."""
     systems = []
     calls = iter(["a", "b"])
-    monkeypatch.setattr(llm, "_system_prompt", lambda: next(calls))
+    monkeypatch.setattr(llm, "_system_prompt", lambda about="": next(calls))
 
     def stream(**kw):
         systems.append(kw["system"])
