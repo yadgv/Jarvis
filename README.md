@@ -127,6 +127,11 @@ Jarvis can use tools (all free, no extra API keys):
   by default) and he tells you when it's done, with the full reply on Telegram. "Is Claude Code done?" checks.
   Needs [Claude Code](https://docs.claude.com/claude-code) installed and signed in. `CLAUDE_CODE_PERMISSION_MODE`
   is `acceptEdits`: it can edit files but skips anything needing more permission.
+- **Standing jobs and watches** (idea from [GAIA](https://github.com/theexperiencecompany/gaia)):
+  "every weekday at 8, tell me the weather and my first meeting", "every Monday at 9 send my phone a summary of
+  my unread email", "check every 15 minutes and tell me when Mom emails" (a watch only speaks up when something
+  is new). "What jobs do I have?", "cancel the email job". Jobs can only look things up, never send or click.
+  Saved in `memory/jobs.json`.
 - **Share prices** (Yahoo Finance): "what is Nvidia trading at?".
 - **PC control**: "open Spotify", "volume up", "set the volume to 30", "mute", "pause the music", "next song", "lock the PC".
   Apps come from the Start menu or the `APPS` list in `config.py`.
