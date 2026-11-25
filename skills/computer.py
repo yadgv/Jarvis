@@ -91,21 +91,24 @@ class Screen:
         return img
 
     @staticmethod
-    def _png(img):
+    def _jpeg(img):
+        # JPEG, not PNG: every screenshot of the task is sent again on each
+        # step, and PNGs of a busy desktop are several times bigger, so each
+        # step got slower than the last.
         buf = io.BytesIO()
-        img.save(buf, "PNG")
-        return {"type": "image", "source": {"type": "base64", "media_type": "image/png",
+        img.save(buf, "JPEG", quality=75)
+        return {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
                                             "data": base64.standard_b64encode(buf.getvalue()).decode("ascii")}}
 
     def screenshot(self):
-        return self._png(self._grab().resize((self.w, self.h)))
+        return self._jpeg(self._grab().resize((self.w, self.h)))
 
     def zoom(self, region):
         x0, y0 = self.real(region[0], region[1])
         x1, y1 = self.real(region[2], region[3])
         img = self._grab().crop((min(x0, x1), min(y0, y1), max(x0, x1) + 1, max(y0, y1) + 1))
         img.thumbnail((self.w, self.h))
-        return self._png(img)
+        return self._jpeg(img)
 
     def real(self, x, y):
         return (round(x * self.real_w / self.w), round(y * self.real_h / self.h))
@@ -220,8 +223,10 @@ def _run_batch(gui, scr, uses):
 def _loop(gui, scr, messages):
     global _pending
     for step in range(config.COMPUTER_MAX_STEPS):
+        t0 = time.perf_counter()
         response = screen.create(model=config.SCREEN_MODEL, max_tokens=16000, system=SYSTEM, tools=[TOOLSET],
                                  output_config={"effort": config.COMPUTER_EFFORT}, messages=messages)
+        print(f"[computer] step {step + 1}: model took {time.perf_counter() - t0:.1f}s")
         messages.append({"role": "assistant", "content": response.content})
         if response.stop_reason == "refusal":
             return "The computer-use model declined this task."

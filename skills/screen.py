@@ -31,7 +31,8 @@ def _get_client():
     global _client
     if _client is None:
         import anthropic
-        _client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+        # Fail after a minute instead of the SDK's 10 minutes x 3 tries.
+        _client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY, timeout=60.0, max_retries=1)
     return _client
 
 
