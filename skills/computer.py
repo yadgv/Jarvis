@@ -264,6 +264,13 @@ def use_computer(a):
     except Stopped:
         _pending = None
         return "Stopped: the user moved the mouse to a corner (emergency stop)."
+    except Exception as e:
+        from brain import backup
+        if backup.claude_unavailable(e):
+            _pending = None
+            print(f"[computer] Claude unavailable: {e}")
+            return backup.NEEDS_CLAUDE
+        raise
     finally:
         print(f"[computer] finished in {time.perf_counter() - t0:.1f}s")
 

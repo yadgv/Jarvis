@@ -26,11 +26,21 @@ LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "jarvis.log"
 
 # --- Brain ---
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-if not ANTHROPIC_API_KEY:
+if not ANTHROPIC_API_KEY and not os.getenv("OPENROUTER_API_KEY"):
     print("[setup] ANTHROPIC_API_KEY is not set, so Jarvis can't think.\n"
           "        Put this line in a file called .env in the jarvis folder:\n"
           "        ANTHROPIC_API_KEY=sk-ant-...")
 LLM_MODEL = "claude-haiku-5-5"          # fast + cheap for voice
+# Backup brain for when Claude credits run out: free models on OpenRouter
+# (key from openrouter.ai/keys, put OPENROUTER_API_KEY=sk-or-... in .env).
+# Tried in order; "openrouter/free" picks any free model that supports tools.
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_MODELS = [
+    "nvidia/nemotron-3.5-super-vl:free",   # fastest free model with good tool use
+    "cohere/north-mini-code:free",         # backup choice
+    "openrouter/free",                     # last resort: whichever free model is up
+]
+BACKUP_MINUTES = 15                      # after Claude fails, use the backup this long before retrying Claude
 MAX_HISTORY_TURNS = 10                   # conversation memory (pairs)
 MEMORY_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "memory")
 HISTORY_MAX_AGE_HOURS = 6                # pick up the last conversation if it's newer than this

@@ -78,7 +78,14 @@ def look_at_screen(a):
         image = capture()
     except Exception as e:
         return f"Couldn't take a screenshot: {e}"
-    response = _ask(image, question)
+    try:
+        response = _ask(image, question)
+    except Exception as e:
+        from brain import backup
+        if backup.claude_unavailable(e):
+            print(f"[screen] Claude unavailable: {e}")
+            return backup.NEEDS_CLAUDE
+        raise
     print(f"[screen] answered in {time.perf_counter() - t0:.1f}s")
     if response.stop_reason == "refusal":
         return "The screen model declined to describe this screen."

@@ -30,6 +30,17 @@ Wake word → Whisper → Claude → Piper voice. Runs on Windows now and on a R
    Close and reopen the terminal afterwards.
    If Fish Audio fails (no key, no internet, no credits), Jarvis falls back to the
    local Piper "Alan" voice, then to the Windows system voice.
+   Optional backup brain for when Claude credits run out: make a free account at
+   openrouter.ai, create a key at openrouter.ai/keys, and add it to the same `.env`:
+   ```
+   OPENROUTER_API_KEY=sk-or-...
+   ```
+   If Claude fails with a credit, key or rate-limit error, Jarvis switches to a free
+   OpenRouter model for 15 minutes (`BACKUP_MINUTES`), then tries Claude again. The
+   models are tried in the order in `OPENROUTER_MODELS` in `config.py`. Free models
+   allow 20 requests a minute and 50 a day (1000 a day once you've bought $10 of
+   OpenRouter credit, ever); a reply that uses a tool costs two requests.
+   Looking at and using the screen still need Claude.
 5. Run:
    ```
    python main.py
