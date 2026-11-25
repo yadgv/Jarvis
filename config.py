@@ -41,7 +41,8 @@ SYSTEM_PROMPT = (
 )
 
 # --- Skills ---
-HOME_CITY = ""                           # e.g. "Toronto"; used when you ask for the weather without a city
+HOME_CITY = "Courtice, Ontario"          # "Place, Region/Country"; used when you ask for the weather without a city
+HOME_COORDS = (43.91, -78.79)            # lat, lon of HOME_CITY; skips the lookup (None to look it up)
 TEMPERATURE_UNIT = "celsius"             # or "fahrenheit"
 
 # --- Activation ---
