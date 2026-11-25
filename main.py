@@ -95,20 +95,16 @@ def respond(text: str, t_heard: float = None, stream=None) -> bool:
                 if interrupted.is_set():
                     break
                 count += 1
-                print(f"JARVIS: {sentence}")
-                ui_events.emit("jarvis", sentence)
+                # Start the voice now; the text is shown when it starts playing.
                 put((sentence, tts.synthesize(sentence)))
             if count == 0 and not interrupted.is_set():
                 # Never leave him hanging in silence.
                 msg = "Sorry, sir, I lost my train of thought. Could you say that again?"
-                print(f"JARVIS: {msg}")
-                ui_events.emit("jarvis", msg)
                 put((msg, tts.synthesize(msg)))
         except Exception as e:
             print(f"[brain error] {e}")
             if count == 0:
                 msg = "I'm having trouble reaching my servers, sir."
-                ui_events.emit("jarvis", msg)
                 put((msg, tts.synthesize(msg)))
         finally:
             put(None)
@@ -144,6 +140,9 @@ def respond(text: str, t_heard: float = None, stream=None) -> bool:
                 interrupted.set()
             if interrupted.is_set():
                 break
+            # Show each sentence as he starts saying it, so text and voice line up.
+            print(f"JARVIS: {sentence}")
+            ui_events.emit("jarvis", sentence)
             if clip is not None:
                 tts.play(clip)
             else:

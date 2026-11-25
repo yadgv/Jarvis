@@ -1,6 +1,10 @@
 """Text-to-speech.
 Order: Fish Audio voice (online) -> Piper 'Alan' (local) -> pyttsx3 (system voice).
 If Fish Audio fails (no internet, bad key, out of credits) it drops to the next one.
+
+Fish Audio is streamed: synthesize() starts downloading straight away in the
+background, and play() starts the speakers on the first few hundred
+milliseconds of audio instead of waiting for the whole sentence.
 """
 import io
 import os
@@ -24,10 +28,8 @@ _http = requests.Session()  # reuses the connection: saves a TLS handshake per s
 _fish_ok = bool(config.FISH_API_KEY and config.FISH_VOICE_ID)
 
 
-def _synth_fish(text: str):
-    global _fish_ok
-    try:
-        r = _http.post(
+def _fish_request(text: str, stream: bool):
+    return _http.post(
             FISH_URL,
             headers={
                 "Authorization": f"Bearer {config.FISH_API_KEY}",
@@ -42,7 +44,14 @@ def _synth_fish(text: str):
                 "latency": "balanced",
             },
             timeout=20,
+            stream=stream,
         )
+
+
+def _synth_fish(text: str):
+    global _fish_ok
+    try:
+        r = _fish_request(text, stream=False)
         if r.status_code in (401, 402):
             # Bad key or no credits: stop trying for this session
             print(f"[tts] Fish Audio {r.status_code}: {r.text[:120]} -> using fallback.")
@@ -100,18 +109,91 @@ def speak_system(text: str):
         _fallback.runAndWait()
 
 
+class StreamClip:
+    """Audio that is still arriving. Starts downloading the moment it's made,
+    so the next sentence loads while the current one plays. If Fish Audio
+    fails before sending any audio, it quietly switches to Piper."""
+
+    def __init__(self, text: str):
+        self.text = text
+        self.rate = FISH_RATE
+        self.chunks = []              # int16 arrays, in order
+        self.done = threading.Event()
+        self.arrived = threading.Condition()
+        self.failed = False           # nothing playable at all (use the system voice)
+        self.created = time.perf_counter()
+        threading.Thread(target=self._fetch, daemon=True).start()
+
+    def _add(self, samples):
+        with self.arrived:
+            self.chunks.append(samples)
+            self.arrived.notify_all()
+
+    def _fetch(self):
+        global _fish_ok
+        got_audio = False
+        try:
+            r = _fish_request(self.text, stream=True)
+            if r.status_code in (401, 402):
+                print(f"[tts] Fish Audio {r.status_code}: {r.text[:120]} -> using fallback.")
+                _fish_ok = False
+                raise RuntimeError("no Fish Audio")
+            r.raise_for_status()
+            spare = b""
+            for data in r.iter_content(chunk_size=4096):
+                data = spare + data
+                cut = len(data) - len(data) % 2      # whole 16-bit samples only
+                spare = data[cut:]
+                if cut:
+                    got_audio = True
+                    self._add(np.frombuffer(data[:cut], dtype=np.int16))
+        except Exception as e:
+            if not got_audio:
+                if str(e) != "no Fish Audio":
+                    print(f"[tts] Fish Audio failed ({e}) -> using fallback.")
+                clip = _synth_piper(self.text)
+                if clip is None:
+                    self.failed = True
+                else:
+                    self.rate = clip[1]
+                    self._add(clip[0])
+            else:
+                print(f"[tts] Fish Audio stream cut off ({e}).")
+        finally:
+            if not got_audio and not self.chunks:
+                self.failed = True
+            with self.arrived:
+                self.done.set()
+                self.arrived.notify_all()
+
+    def wait_start(self, timeout=20) -> bool:
+        """Wait until the first audio (or the end) arrives. False = no audio."""
+        with self.arrived:
+            self.arrived.wait_for(lambda: self.chunks or self.done.is_set(), timeout)
+        return bool(self.chunks)
+
+    def next_chunk(self, i):
+        """Chunk number i, waiting for it if it hasn't arrived yet; None at the end."""
+        with self.arrived:
+            self.arrived.wait_for(lambda: len(self.chunks) > i or self.done.is_set(), 20)
+            return self.chunks[i] if len(self.chunks) > i else None
+
+
 def synthesize(text: str):
-    """Turn text into audio without playing it. Returns (samples, rate),
-    or None if only the system voice is left (it can't render to audio)."""
+    """Start turning text into audio without playing it. Returns something
+    play() understands, or None if only the system voice is left (it can't
+    render to audio)."""
     if _fish_ok:
-        clip = _synth_fish(text)
-        if clip is not None:
-            return clip
+        return StreamClip(text)
     return _synth_piper(text)
+
+
+_stop = threading.Event()
 
 
 def stop():
     """Cut off whatever is playing right now (used when you interrupt Jarvis)."""
+    _stop.set()
     try:
         sd.stop()
     except Exception:
@@ -121,8 +203,13 @@ def stop():
 _now_playing = None  # (samples, rate, start time) so the window can animate with his voice
 
 
+_stream_level = None  # loudness of the streamed audio being played, if any
+
+
 def level() -> float:
     """Loudness (0-1) of what Jarvis is saying right now."""
+    if _stream_level is not None:
+        return _stream_level
     playing = _now_playing
     if playing is None:
         return 0.0
@@ -135,8 +222,41 @@ def level() -> float:
     return min(1.0, rms / 6000)
 
 
+def _play_stream(clip: StreamClip) -> bool:
+    """Play audio while it's still downloading. False if there was none."""
+    global _stream_level
+    if not clip.wait_start():
+        return False
+    waited = time.perf_counter() - clip.created
+    block = clip.rate // 40   # 25 ms pieces, so the orb follows the voice
+    with _speaking:
+        _stop.clear()
+        print(f"[time] voice started {waited:.2f}s after the text was ready")
+        try:
+            with sd.OutputStream(samplerate=clip.rate, channels=1, dtype="int16") as out:
+                i = 0
+                while not _stop.is_set():
+                    chunk = clip.next_chunk(i)
+                    if chunk is None:
+                        break
+                    i += 1
+                    for start in range(0, len(chunk), block):
+                        if _stop.is_set():
+                            break
+                        piece = chunk[start:start + block]
+                        _stream_level = min(1.0, float(np.sqrt(np.mean(piece.astype(np.float32) ** 2))) / 6000)
+                        out.write(piece.reshape(-1, 1))
+        finally:
+            _stream_level = None
+    return True
+
+
 def play(clip):
     global _now_playing
+    if isinstance(clip, StreamClip):
+        if not _play_stream(clip) and not _stop.is_set():
+            speak_system(clip.text)
+        return
     audio, rate = clip
     with _speaking:
         sd.play(audio, rate)

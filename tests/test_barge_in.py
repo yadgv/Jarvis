@@ -71,3 +71,15 @@ def test_barge_in_off(monkeypatch):
     assert played == ["Sentence 0.", "Sentence 1."]
     assert not stream.active
     assert threading.active_count() < 20
+
+
+def test_text_shows_when_its_voice_starts(monkeypatch):
+    log = []
+    setup(monkeypatch, [], n=2)
+    monkeypatch.setattr(main.tts, "play", lambda clip: log.append(("play", clip[0])))
+    monkeypatch.setattr(main.ui_events, "emit",
+                        lambda kind, text: log.append(("show", text)) if kind == "jarvis" else None)
+    monkeypatch.setattr(config, "MODE", "enter")
+    main.respond("talk")
+    assert log == [("show", "Sentence 0."), ("play", "Sentence 0."),
+                   ("show", "Sentence 1."), ("play", "Sentence 1.")]
