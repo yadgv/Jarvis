@@ -40,7 +40,7 @@ WHISPER_COMPUTE = "int8"
 
 # --- Text-to-speech ---
 # Main voice: Fish Audio (fish.audio -> API Keys)
-FISH_API_KEY = os.getenv("FISH_API_KEY")
+FISH_API_KEY = os.getenv("FISH_API_KEY", "sk-fish-ynKspRFZMWh1irg4OTYwmm56XBqiouacct7WuzzNwTs")
 FISH_VOICE_ID = "e13fa398a7f445a685316a3de6089ce7"
 FISH_MODEL = "s2.1-pro-free"             # free tier
 
