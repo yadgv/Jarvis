@@ -24,6 +24,7 @@ def test_formats_match_each_provider():
 
 def test_unknown_tool_and_errors_return_text():
     assert "Unknown tool" in skills.run("nope", {})
+    # requests is blocked by the no_network fixture, so the tool errors out
     assert "failed" in skills.run("get_weather", {"location": "x", "days": "abc"})
 
 

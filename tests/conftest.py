@@ -28,3 +28,18 @@ class _Whisper:
 _stub("sounddevice", play=lambda *a, **k: None, wait=lambda: None, InputStream=object)
 _stub("faster_whisper", WhisperModel=_Whisper)
 _stub("anthropic", Anthropic=lambda **k: None)
+
+
+import pytest  # noqa: E402
+import requests  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def no_network(monkeypatch):
+    """Tests must never hit real services; a test that needs a response
+    patches requests itself."""
+    def blocked(*a, **k):
+        raise requests.ConnectionError("network disabled in tests")
+    monkeypatch.setattr(requests, "get", blocked)
+    monkeypatch.setattr(requests, "post", blocked)
+    monkeypatch.setattr(requests.Session, "request", blocked)
