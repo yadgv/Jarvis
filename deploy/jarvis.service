@@ -1,0 +1,20 @@
+# systemd service: starts Jarvis on boot and restarts it if it crashes.
+# install_pi.sh fills in USER and DIR and installs this for you.
+[Unit]
+Description=JARVIS voice assistant
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__DIR__
+ExecStart=__DIR__/venv/bin/python __DIR__/main.py
+Restart=on-failure
+RestartSec=5
+# Let the user's audio session be used for the mic and speaker.
+Environment=XDG_RUNTIME_DIR=/run/user/__UID__
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

@@ -1,10 +1,35 @@
 """JARVIS - Phase 1: wake word -> listen -> think -> speak."""
 import queue
 import re
+import sys
 import threading
 import time
+from datetime import datetime
 
 import config
+
+
+class _Tee:
+    """Copies everything printed to the console into jarvis.log, with times."""
+
+    def __init__(self, stream, path):
+        self.stream, self.file, self.line_start = stream, open(path, "a", encoding="utf-8"), True
+
+    def write(self, text):
+        self.stream.write(text)
+        for part in text.splitlines(keepends=True):
+            if self.line_start and part.strip():
+                self.file.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S  "))
+            self.file.write(part)
+            self.line_start = part.endswith("\n")
+        self.file.flush()
+
+    def flush(self):
+        self.stream.flush()
+
+
+if config.LOG_FILE and __name__ == "__main__":
+    sys.stdout = _Tee(sys.stdout, config.LOG_FILE)
 from audio import tts
 from audio.recorder import calibrate, chime, open_stream, record_until_silence
 from audio.stt import transcribe

@@ -62,20 +62,25 @@ Jarvis can use tools (all free, no extra API keys):
 Skills live in `skills/`, one file each, written in a provider-neutral way so another LLM
 provider can use them too (`skills.openai_tools()` gives the OpenAI/Groq format).
 
-## Raspberry Pi port (later)
+## Raspberry Pi
+Use a Pi 4 (4 GB) or Pi 5 with Raspberry Pi OS 64-bit, a USB mic and a speaker.
 ```
-sudo apt install python3-venv portaudio19-dev espeak-ng
-python3 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-export ANTHROPIC_API_KEY="sk-ant-..."
+git clone https://github.com/yadgv/Jarvis.git jarvis && cd jarvis
+bash deploy/install_pi.sh
 ```
-Then in `config.py`: `WHISPER_MODEL = "tiny.en"`, and set `MIC_DEVICE` to your USB mic
-(find its index with `python -c "import sounddevice; print(sounddevice.query_devices())"`).
-Use a Pi 4 (4 GB) or Pi 5 with a USB mic and a speaker.
+The script installs everything, asks for your API key, lists your microphones, and can set
+Jarvis to start on boot (and restart if he crashes). On a Pi, Jarvis uses the faster
+`tiny.en` speech model automatically. If he doesn't hear you, set `MIC_DEVICE` in `config.py`.
+
+## Logs and tests
+- Everything Jarvis prints also goes to `jarvis.log`, with times, including how long each reply took.
+- `pip install pytest` then `pytest` runs the tests (no mic or API key needed). GitHub runs them on every PR.
 
 ## Structure
 ```
 main.py        main loop
+tests/         automated tests
+deploy/        Raspberry Pi setup script and service
 config.py      all settings
 audio/         recorder, wake word, speech-to-text, text-to-speech
 brain/llm.py   Claude, conversation memory and tools
