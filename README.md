@@ -70,6 +70,7 @@ If it doesn't appear, the terminal prints why (lines starting with `[gui]`).
 - It cuts you off → raise `SILENCE_SECONDS`.
 - Wake word misfires → raise `WAKE_THRESHOLD` (e.g. 0.6).
 - To test without the wake word, set `MODE = "enter"`.
+- After a reply he keeps listening for `FOLLOWUP_SECONDS` (5) so you can carry on without "Hey Jarvis". In that window he only answers things meant for him: "okay", "I understand", "bye" (without his name) or chatter to someone else end the conversation quietly, and he can't be shut down by it. Set `FOLLOWUP_SECONDS = 0` to always need the wake word.
 
 ## Memory
 - Jarvis remembers the conversation across restarts (if it was less than `HISTORY_MAX_AGE_HOURS` ago).

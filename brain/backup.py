@@ -40,12 +40,12 @@ def available() -> bool:
     return bool(config.OPENROUTER_API_KEY)
 
 
-def _post(messages):
+def _post(messages, exclude=()):
     models = list(config.OPENROUTER_MODELS)
     body = {
         "model": models[0],
         "messages": messages,
-        "tools": skills.openai_tools(),
+        "tools": skills.openai_tools(exclude),
         "max_tokens": 1500,
         "stream": True,
     }
@@ -81,10 +81,10 @@ def _events(response):
         yield chunk
 
 
-def stream_round(messages):
+def stream_round(messages, exclude=()):
     """One model call. Yields ("text", piece) while it streams, then
     ("done", (text, tool_calls, model_used)). tool_calls are OpenAI-format dicts."""
-    response = _post(messages)
+    response = _post(messages, exclude)
     text, calls, model = "", {}, None
     for chunk in _events(response):
         model = chunk.get("model") or model

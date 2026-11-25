@@ -19,3 +19,28 @@ import main  # noqa: E402
 ])
 def test_exit_phrases(text, expected):
     assert main.is_exit(main.normalize(text)) is expected
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("I understand.", True),
+    ("Okay.", True),
+    ("Thanks, Jarvis.", True),
+    ("Got it", True),
+    ("What about tomorrow?", False),
+    ("I understand the plan but what time is it", False),
+])
+def test_acknowledgements(text, expected):
+    assert main.is_acknowledgement(main.normalize(text)) is expected
+
+
+def test_ignored_followup_says_nothing(monkeypatch):
+    shown, played = [], []
+    monkeypatch.setattr(main, "think_stream", lambda text, followup=False: iter(()))
+    monkeypatch.setattr(main.tts, "synthesize", lambda s: (s, 1))
+    monkeypatch.setattr(main.tts, "play", lambda clip: played.append(clip[0]))
+    monkeypatch.setattr(main.ui_events, "emit", lambda k, t: shown.append(t) if k == "jarvis" else None)
+    main.respond("so anyway he said", followup=True)
+    assert main.last_ignored and not played and not shown
+    # A normal (woken) turn with no reply still apologises.
+    main.respond("hello")
+    assert not main.last_ignored and played

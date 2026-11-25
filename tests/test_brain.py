@@ -128,3 +128,26 @@ def test_first_reply_starts_at_a_comma(llm, monkeypatch):
     use_plan(llm, monkeypatch, lambda m: end(["Right away sir, the weather in Courtice, ", "is cold. Wrap up, sir. "]))
     assert list(llm.think_stream("weather")) == [
         "Right away sir, the weather in Courtice,", "is cold.", "Wrap up, sir."]
+
+
+def test_followup_can_be_ignored(llm, monkeypatch):
+    seen = {}
+
+    def plan(m):
+        seen["asked"] = m[-1]["content"]
+        return end(["[ignore]"])
+    client = NS(messages=NS(stream=lambda **kw: (seen.__setitem__("tools", [t["name"] for t in kw["tools"]]),
+                                                 FakeStream(plan, kw))[1]))
+    monkeypatch.setattr(llm, "_client", client)
+    assert list(llm.think_stream("so I told her no", followup=True)) == []
+    assert llm.last_ignored
+    assert seen["asked"].startswith(llm.FOLLOWUP_NOTE)
+    assert "shut_down" not in seen["tools"]
+    assert llm._history == []   # overheard chatter isn't saved
+
+
+def test_followup_answered_when_meant_for_him(llm, monkeypatch):
+    use_plan(llm, monkeypatch, lambda m: end(["Tomorrow is sunny, sir."]))
+    assert list(llm.think_stream("and tomorrow?", followup=True)) == ["Tomorrow is sunny, sir."]
+    assert not llm.last_ignored
+    assert llm._history[-2]["content"] == "and tomorrow?"

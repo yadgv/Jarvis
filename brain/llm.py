@@ -67,6 +67,7 @@ def _trim():
 # backup model for this long before trying Claude again.
 BACKUP_MINUTES = getattr(config, "BACKUP_MINUTES", 15)
 _claude_off_until = 0.0
+last_ignored = False  # the last follow-up wasn't meant for Jarvis
 def _use_claude() -> bool:
     if not config.ANTHROPIC_API_KEY and backup.available():
         return False
@@ -101,7 +102,7 @@ def _sentences(pieces, said):
         yield buf.strip()
 
 
-def _claude_turn(user_text, system, said, tools_used):
+def _claude_turn(user_text, system, said, tools_used, exclude=()):
     # Tool calls live only in this turn's working copy; the saved history
     # keeps just what was said, so it stays simple user/assistant pairs.
     messages = _history + [{"role": "user", "content": user_text}]
@@ -113,7 +114,7 @@ def _claude_turn(user_text, system, said, tools_used):
             output_config={"effort": LLM_EFFORT},
             system=system,
             messages=messages,
-            tools=skills.anthropic_tools(),
+            tools=skills.anthropic_tools(exclude),
         ) as stream:
             yield from _sentences(stream.text_stream, said)
             final = stream.get_final_message()
@@ -133,7 +134,7 @@ def _claude_turn(user_text, system, said, tools_used):
         print(f"[brain] Claude finished without saying anything (stop: {stop_reason})")
 
 
-def _backup_turn(user_text, system, said, tools_used):
+def _backup_turn(user_text, system, said, tools_used, exclude=()):
     """The same turn on the free OpenRouter model (OpenAI message format)."""
     messages = ([{"role": "system", "content": system}] + list(_history)
                 + [{"role": "user", "content": user_text}])
@@ -143,7 +144,7 @@ def _backup_turn(user_text, system, said, tools_used):
         result = {}
 
         def pieces():
-            for kind, value in backup.stream_round(messages):
+            for kind, value in backup.stream_round(messages, exclude):
                 if kind == "text":
                     yield value
                 else:
@@ -161,25 +162,42 @@ def _backup_turn(user_text, system, said, tools_used):
     print(f"[brain] backup model {model or '?'} answered in {time.perf_counter() - t0:.1f}s")
 
 
-def think_stream(user_text: str):
+# Added to what was heard when Jarvis keeps listening after a reply (no wake
+# word), so he stays quiet when it's someone else talking in the room.
+FOLLOWUP_NOTE = (
+    "[Heard without the wake word, a few seconds after your last reply. It may be "
+    "someone else in the room, or him talking to someone else. Answer only if it is "
+    "clearly meant for you: a question or request to you, or a direct reply to what "
+    "you just said. Otherwise answer with exactly [ignore] and nothing else.]\n"
+)
+IGNORE = "[ignore]"
+
+
+def think_stream(user_text: str, followup: bool = False):
     """Yields the reply one sentence at a time while Claude is still writing,
     so Jarvis can start speaking the first sentence straight away.
     If Claude uses a tool (remember/forget), runs it and carries on.
     If Claude is out of credits (or the key or rate limit fails), the free
     backup model on OpenRouter answers instead."""
-    global _claude_off_until
+    global _claude_off_until, last_ignored
+    last_ignored = False
     _trim()
+    asked = FOLLOWUP_NOTE + user_text if followup else user_text
+    # Overheard chatter must never be able to switch him off.
+    exclude = ("shut_down",) if followup else ()
     # Build the system prompt once per turn: Claude's thinking blocks are tied
     # to it, so if the clock ticked over to a new minute between tool rounds the
     # API rejected the second round ("Invalid signature in thinking block").
     system = _system_prompt()
     said, tools_used = [], []
-    try:
+
+    def turn():
+        global _claude_off_until
         if not _use_claude():
-            yield from _backup_turn(user_text, system, said, tools_used)
+            yield from _backup_turn(asked, system, said, tools_used, exclude)
             return
         try:
-            yield from _claude_turn(user_text, system, said, tools_used)
+            yield from _claude_turn(asked, system, said, tools_used, exclude)
         except Exception as e:
             # Only switch if nothing was spoken yet, so he never hears a reply twice.
             if said or not backup.available() or not backup.claude_unavailable(e):
@@ -188,10 +206,20 @@ def think_stream(user_text: str):
             print(f"[brain] Claude unavailable ({type(e).__name__}: {str(e)[:150]}), "
                   f"using the backup model for the next {BACKUP_MINUTES} minutes")
             tools_used.clear()
-            yield from _backup_turn(user_text, system, said, tools_used)
+            yield from _backup_turn(asked, system, said, tools_used, exclude)
+
+    gen = turn()
+    try:
+        for sentence in gen:
+            if followup and len(said) == 1 and sentence.lower().startswith(IGNORE[:-1]):
+                last_ignored = True
+                print(f"[brain] ignored (not meant for Jarvis): {user_text}")
+                break
+            yield sentence
     finally:
+        gen.close()
         reply = " ".join(said)
-        if reply:
+        if reply and not last_ignored:
             if tools_used:
                 reply += " [tools used: " + "; ".join(tools_used) + "]"
             _history.append({"role": "user", "content": user_text})
