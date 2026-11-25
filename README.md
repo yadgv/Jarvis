@@ -38,12 +38,15 @@ Wake word → Whisper → Claude → Piper voice. Runs on Windows now and on a R
 
 ## Desktop window
 ```
-python gui.py
+python gui.py          (or: python main.py --gui)
 ```
-Opens a window with the conversation and what Jarvis is doing (listening, thinking, speaking).
+Opens a window with a glowing orb of particles that shows what Jarvis is doing: slow cyan drift
+when standing by, green and rippling with your voice while he listens, swirling amber while he
+thinks, and pulsing with his voice while he speaks. Below it is the conversation.
 Type a message and press Enter, or press **Talk** to speak without the wake word.
 While he's speaking the button becomes **Stop** (or press Esc). "Hey Jarvis" still works.
 Closing the window turns Jarvis off. `python main.py` still runs him without a window.
+If the window doesn't appear, the terminal prints why (lines starting with `[gui]`).
 
 ## Tuning
 - Jarvis tells speech from noise with a voice detector (webrtcvad), so quiet talking counts.

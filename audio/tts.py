@@ -5,6 +5,7 @@ If Fish Audio fails (no internet, bad key, out of credits) it drops to the next 
 import io
 import os
 import threading
+import time
 import wave
 
 import numpy as np
@@ -117,11 +118,33 @@ def stop():
         pass
 
 
+_now_playing = None  # (samples, rate, start time) so the window can animate with his voice
+
+
+def level() -> float:
+    """Loudness (0-1) of what Jarvis is saying right now."""
+    playing = _now_playing
+    if playing is None:
+        return 0.0
+    audio, rate, started = playing
+    i = int((time.perf_counter() - started) * rate)
+    window = audio[max(0, i - rate // 40): i + rate // 40]
+    if window.size == 0:
+        return 0.0
+    rms = float(np.sqrt(np.mean(window.astype(np.float32) ** 2)))
+    return min(1.0, rms / 6000)
+
+
 def play(clip):
+    global _now_playing
     audio, rate = clip
     with _speaking:
         sd.play(audio, rate)
-        sd.wait()
+        _now_playing = (audio, rate, time.perf_counter())
+        try:
+            sd.wait()
+        finally:
+            _now_playing = None
 
 
 def speak(text: str):

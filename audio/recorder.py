@@ -5,6 +5,7 @@ import numpy as np
 import sounddevice as sd
 
 import config
+import ui_events
 
 CHUNK = 1280  # 80 ms at 16 kHz (also what openWakeWord expects)
 VAD_FRAME = 320  # 20 ms frames for webrtcvad (4 per chunk)
@@ -84,6 +85,7 @@ def record_until_silence(stream, start_timeout: float = None) -> np.ndarray:
             print("[mic] input overflow (audio dropped)")
         chunk = data[:, 0]
         frames.append(chunk)
+        ui_events.emit("level", min(1.0, float(np.abs(chunk).mean()) / 1500))
         if is_speech(chunk):
             heard_speech = True
             silent_chunks = 0
