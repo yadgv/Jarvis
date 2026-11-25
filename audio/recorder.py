@@ -68,16 +68,24 @@ def is_speech(chunk) -> bool:
 
 def record_until_silence(stream, start_timeout: float = None) -> np.ndarray:
     """Returns float32 audio in [-1, 1] for Whisper.
-    Gives up (returns empty audio) if no speech starts within start_timeout seconds."""
+    Gives up (returns empty audio) if no speech starts within start_timeout seconds.
+
+    Background voices also sound like speech, so once you've started talking
+    Jarvis learns how loud *you* are. After that, only sound at least
+    SPEAKER_DROP of your level counts as you still talking; quieter chatter
+    in the room is treated as silence, so he stops recording when you stop."""
     if start_timeout is None:
         start_timeout = config.LISTEN_TIMEOUT
     frames = []
     silent_chunks = 0
     heard_speech = False
+    speaker_level = 0.0
+    speech_chunks = 0
     chunks_per_sec = config.SAMPLE_RATE / CHUNK
     max_silent = int(config.SILENCE_SECONDS * chunks_per_sec)
     max_chunks = int(config.MAX_RECORD_SECONDS * chunks_per_sec)
     startup_limit = int(start_timeout * chunks_per_sec)
+    ended = "time limit"
 
     for i in range(max_chunks):
         data, overflowed = stream.read(CHUNK)
@@ -85,14 +93,23 @@ def record_until_silence(stream, start_timeout: float = None) -> np.ndarray:
             print("[mic] input overflow (audio dropped)")
         chunk = data[:, 0]
         frames.append(chunk)
-        ui_events.emit("level", min(1.0, float(np.abs(chunk).mean()) / 1500))
-        if is_speech(chunk):
+        loudness = float(np.abs(chunk).mean())
+        ui_events.emit("level", min(1.0, loudness / 1500))
+
+        talking = is_speech(chunk)
+        if talking and heard_speech and loudness < speaker_level * config.SPEAKER_DROP:
+            talking = False  # someone quieter in the background, not you
+        if talking:
             heard_speech = True
             silent_chunks = 0
+            speech_chunks += 1
+            if speech_chunks <= 15:  # learn your level from your first ~1.2 s of speech
+                speaker_level = max(speaker_level * 0.9, loudness) if speech_chunks > 1 else loudness * 0.8
         else:
             silent_chunks += 1
 
         if heard_speech and silent_chunks > max_silent:
+            ended = "pause"
             break
         if not heard_speech and i > startup_limit:
             peak = max(float(np.abs(f).mean()) for f in frames)
@@ -100,6 +117,8 @@ def record_until_silence(stream, start_timeout: float = None) -> np.ndarray:
             return np.array([], dtype=np.float32)
 
     audio = np.concatenate(frames).astype(np.float32) / 32768.0
+    print(f"[mic] recorded {len(audio) / config.SAMPLE_RATE:.1f}s, ended by {ended} "
+          f"(your level {speaker_level:.0f}, background below {speaker_level * config.SPEAKER_DROP:.0f} ignored)")
     return audio
 
 

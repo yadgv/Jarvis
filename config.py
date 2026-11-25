@@ -93,8 +93,9 @@ MIC_DEVICE = None                        # None = default mic; set index on the 
 VAD_AGGRESSIVENESS = 2                   # voice detector strictness 0-3 (raise if noise counts as speech)
 MIN_SPEECH_LEVEL = 60                    # quietest speech that counts (used with the voice detector)
 SILENCE_THRESHOLD = 500                  # loudness-only fallback if the voice detector isn't installed
-SILENCE_SECONDS = 0.8                    # pause that ends your sentence (raise if it cuts you off)
-MAX_RECORD_SECONDS = 15
+SILENCE_SECONDS = 0.6                    # pause that ends your sentence (raise if it cuts you off)
+SPEAKER_DROP = 0.35                      # sound quieter than this share of your voice is background (raise if chatter keeps him listening)
+MAX_RECORD_SECONDS = 10
 LISTEN_TIMEOUT = 4                       # give up if you don't start talking within this many seconds
 AUTO_CALIBRATE = True                    # measure room noise at startup
 NOISE_MULTIPLIER = 3.0                   # speech must be this many times louder than room noise
