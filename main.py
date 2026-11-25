@@ -7,6 +7,7 @@ import time
 from datetime import datetime
 
 import config
+import ui_events
 
 
 class _Tee:
@@ -76,6 +77,8 @@ def respond(text: str, t_heard: float = None, stream=None) -> bool:
     Returns True if he was interrupted."""
     clips = queue.Queue(maxsize=3)
     interrupted = threading.Event()
+    ui_events.stop_speaking.clear()
+    ui_events.emit("status", "thinking")
 
     def put(item):
         while not interrupted.is_set():
@@ -93,11 +96,13 @@ def respond(text: str, t_heard: float = None, stream=None) -> bool:
                     break
                 count += 1
                 print(f"JARVIS: {sentence}")
+                ui_events.emit("jarvis", sentence)
                 put((sentence, tts.synthesize(sentence)))
         except Exception as e:
             print(f"[brain error] {e}")
             if count == 0:
                 msg = "I'm having trouble reaching my servers, sir."
+                ui_events.emit("jarvis", msg)
                 put((msg, tts.synthesize(msg)))
         finally:
             put(None)
@@ -124,15 +129,21 @@ def respond(text: str, t_heard: float = None, stream=None) -> bool:
             if item is None:
                 break
             sentence, clip = item
+            if first:
+                ui_events.emit("status", "speaking")
             if first and t_heard is not None:
                 print(f"[time] reply started {time.perf_counter() - t_heard:.1f}s after you stopped talking")
             first = False
+            if ui_events.stop_speaking.is_set():
+                interrupted.set()
             if interrupted.is_set():
                 break
             if clip is not None:
                 tts.play(clip)
             else:
                 tts.speak_system(sentence)
+            if ui_events.stop_speaking.is_set():
+                interrupted.set()
     finally:
         if watcher is not None:
             stop_watch.set()
@@ -143,33 +154,58 @@ def respond(text: str, t_heard: float = None, stream=None) -> bool:
     return interrupted.is_set()
 
 
+def say(text: str):
+    """Speak a fixed line (and show it in the window)."""
+    print(f"JARVIS: {text}")
+    ui_events.emit("jarvis", text)
+    ui_events.emit("status", "speaking")
+    speak(text)
+
+
+def wait_for_trigger(stream):
+    """Block until you say "Hey Jarvis", press Talk, or type a message.
+    Returns ("wake", None), ("talk", None) or ("text", message)."""
+    ui_events.emit("status", "idle")
+    if config.MODE == "wake":
+        print("\n[waiting for 'Hey Jarvis'...]")
+        return wait_for_wake_word(stream, poll=ui_events.poll) or ("wake", None)
+    stream.stop()
+    try:
+        if ui_events.gui_active:
+            return ui_events.inbox.get()
+        input("\n[press Enter to talk]")
+        return ("talk", None)
+    finally:
+        stream.start()
+
+
 def main():
-    timers.announce = lambda msg: (print(f"JARVIS: {msg}"), tts.speak(msg))
+    timers.announce = say
     print("JARVIS online.")
-    speak("Jarvis online. At your service, sir.")
+    say("Jarvis online. At your service, sir.")
 
     with open_stream() as stream:
         if config.AUTO_CALIBRATE:
             calibrate(stream)
 
         need_wake = True
-        already_woken = False  # you said "Hey Jarvis" to interrupt him
+        already_woken = False  # you said "Hey Jarvis" (or pressed Stop) to interrupt him
         while True:
+            typed = None
             if need_wake:
                 if already_woken:
                     already_woken = False
-                elif config.MODE == "wake":
-                    print("\n[waiting for 'Hey Jarvis'...]")
-                    wait_for_wake_word(stream)
+                    kind = "talk"
                 else:
-                    stream.stop()
-                    input("\n[press Enter to talk]")
-                    stream.start()
-                chime(stream)
-                print("[listening]")
-                audio = record_until_silence(stream)
+                    kind, typed = wait_for_trigger(stream)
+                if kind != "text":
+                    chime(stream)
+                    print("[listening]")
+                    ui_events.emit("status", "listening")
+                    audio = record_until_silence(stream)
             else:
                 print("[listening for a follow-up...]")
+                ui_events.emit("status", "listening")
                 audio = record_until_silence(stream, config.FOLLOWUP_SECONDS)
 
             # Pause the mic while we transcribe, think and speak, so stale
@@ -177,22 +213,26 @@ def main():
             stream.stop()
             t_heard = time.perf_counter()
 
-            text = transcribe(audio) if len(audio) else ""
+            if typed is not None:
+                text = typed.strip()
+            else:
+                text = transcribe(audio) if len(audio) else ""
             if not text:
-                if need_wake and len(audio):
+                if need_wake and typed is None and len(audio):
                     print("[heard sound but couldn't make out words]")
                 need_wake = True
                 stream.start()
                 continue
-            print(f"You: {text}  [stt {time.perf_counter() - t_heard:.1f}s]")
+            print(f"You: {text}  [{'typed' if typed is not None else f'stt {time.perf_counter() - t_heard:.1f}s'}]")
+            ui_events.emit("you", text)
 
             said = normalize(text)
             if is_exit(said):
-                speak("Powering down. Goodbye, sir.")
+                say("Powering down. Goodbye, sir.")
                 break
             if said in RESET_PHRASES:
                 reset()
-                speak("Very well, sir. Fresh start.")
+                say("Very well, sir. Fresh start.")
                 need_wake = True
                 stream.start()
                 continue
@@ -204,9 +244,12 @@ def main():
             stream.start()
             if was_interrupted:
                 need_wake, already_woken = True, True  # go straight to listening
+            elif typed is not None:
+                need_wake = True  # typed chat: wait for the next message or wake word
             else:
                 # Keep listening briefly so you can reply without the wake word.
                 need_wake = config.FOLLOWUP_SECONDS <= 0
+    ui_events.emit("status", "off")
 
 
 if __name__ == "__main__":
