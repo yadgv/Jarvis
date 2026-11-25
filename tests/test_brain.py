@@ -122,3 +122,9 @@ def test_empty_reply_not_saved(llm, monkeypatch, capsys):
     assert llm.think("hmm") == ""
     assert llm._history == []
     assert "max_tokens" in capsys.readouterr().out
+
+
+def test_first_reply_starts_at_a_comma(llm, monkeypatch):
+    use_plan(llm, monkeypatch, lambda m: end(["Right away sir, the weather in Courtice, ", "is cold. Wrap up, sir. "]))
+    assert list(llm.think_stream("weather")) == [
+        "Right away sir, the weather in Courtice,", "is cold.", "Wrap up, sir."]

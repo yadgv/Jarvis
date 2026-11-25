@@ -20,6 +20,9 @@ if _history:
 # End of a sentence: . ! or ? (plus closing quotes/brackets) followed by a space.
 # Needing the space keeps numbers like "3.5" together.
 _SENTENCE_END = re.compile(r"[.!?]+[\"')\]]*\s+")
+# A comma/semicolon/dash pause; used to start speaking the first reply sooner.
+_CLAUSE_END = re.compile(r"(?:[,;:]|\s[-\u2013\u2014])\s+")
+FIRST_CLAUSE_WORDS = 5
 
 MAX_TOOL_ROUNDS = 4
 # Room for Claude's (hidden) thinking plus a short spoken reply. With 300 the
@@ -67,12 +70,24 @@ def _use_claude() -> bool:
     return time.monotonic() >= _claude_off_until
 
 
+def _first_break(buf, said):
+    """The first thing he says can end at a comma once it's a few words long,
+    so his voice starts sooner; later ones wait for the full sentence."""
+    m = _SENTENCE_END.search(buf)
+    if said or m:
+        return m
+    for m in _CLAUSE_END.finditer(buf):
+        if len(buf[: m.start()].split()) >= FIRST_CLAUSE_WORDS:
+            return m
+    return None
+
+
 def _sentences(pieces, said):
     """Turns streamed text pieces into whole sentences as soon as each ends."""
     buf = ""
     for delta in pieces:
         buf += delta
-        while (m := _SENTENCE_END.search(buf)):
+        while (m := _first_break(buf, said)):
             sentence = buf[: m.end()].strip()
             buf = buf[m.end():]
             if sentence:
