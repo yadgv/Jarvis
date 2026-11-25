@@ -59,7 +59,8 @@ Jarvis can use tools (all free, no extra API keys):
   In Google Calendar open Settings, pick your calendar, scroll to *Integrate calendar* and copy the
   **Secret address in iCal format**. Add it to `.env`:
   `CALENDAR_ICS_URLS=https://calendar.google.com/calendar/ical/.../basic.ics`
-  (several calendars: separate the links with spaces). Keep this link private.
+  (several calendars: separate the links with spaces). iCloud `webcal://` links work as-is.
+  `config.py` has a default link built in; `.env` overrides it.
 - **Share prices** (Yahoo Finance): "what is Nvidia trading at?".
 - **PC control**: "open Spotify", "volume up", "set the volume to 30", "mute", "pause the music", "next song", "lock the PC".
   Apps come from the Start menu or the `APPS` list in `config.py`.
