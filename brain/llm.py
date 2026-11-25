@@ -1,11 +1,12 @@
 """The brain: Claude, conversation memory, and tools (see skills/)."""
 import re
+import time
 from datetime import datetime
 
 import anthropic
 
 import config
-from brain import memory
+from brain import backup, memory
 import skills
 
 _client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
@@ -56,57 +57,120 @@ def _trim():
         del _history[: len(_history) - keep]
 
 
-def think_stream(user_text: str):
-    """Yields the reply one sentence at a time while Claude is still writing,
-    so Jarvis can start speaking the first sentence straight away.
-    If Claude uses a tool (remember/forget), runs it and carries on."""
-    _trim()
+# When Claude stops working for billing/key/limit reasons, Jarvis uses the
+# backup model for this long before trying Claude again.
+BACKUP_MINUTES = getattr(config, "BACKUP_MINUTES", 15)
+_claude_off_until = 0.0
+def _use_claude() -> bool:
+    if not config.ANTHROPIC_API_KEY and backup.available():
+        return False
+    return time.monotonic() >= _claude_off_until
+
+
+def _sentences(pieces, said):
+    """Turns streamed text pieces into whole sentences as soon as each ends."""
+    buf = ""
+    for delta in pieces:
+        buf += delta
+        while (m := _SENTENCE_END.search(buf)):
+            sentence = buf[: m.end()].strip()
+            buf = buf[m.end():]
+            if sentence:
+                said.append(sentence)
+                yield sentence
+    if buf.strip():
+        said.append(buf.strip())
+        yield buf.strip()
+
+
+def _claude_turn(user_text, system, said, tools_used):
     # Tool calls live only in this turn's working copy; the saved history
     # keeps just what was said, so it stays simple user/assistant pairs.
     messages = _history + [{"role": "user", "content": user_text}]
+    stop_reason = None
+    for _ in range(MAX_TOOL_ROUNDS + 1):
+        with _client.messages.stream(
+            model=config.LLM_MODEL,
+            max_tokens=MAX_TOKENS,
+            output_config={"effort": LLM_EFFORT},
+            system=system,
+            messages=messages,
+            tools=skills.anthropic_tools(),
+        ) as stream:
+            yield from _sentences(stream.text_stream, said)
+            final = stream.get_final_message()
+
+        stop_reason = final.stop_reason
+        tool_uses = [b for b in final.content if b.type == "tool_use"]
+        if final.stop_reason != "tool_use" or not tool_uses:
+            break
+        messages.append({"role": "assistant", "content": final.content})
+        results = []
+        for b in tool_uses:
+            out = skills.run(b.name, b.input)
+            tools_used.append(f"{b.name} -> {str(out)[:80]}")
+            results.append({"type": "tool_result", "tool_use_id": b.id, "content": out})
+        messages.append({"role": "user", "content": results})
+    if not said:
+        print(f"[brain] Claude finished without saying anything (stop: {stop_reason})")
+
+
+def _backup_turn(user_text, system, said, tools_used):
+    """The same turn on the free OpenRouter model (OpenAI message format)."""
+    messages = ([{"role": "system", "content": system}] + list(_history)
+                + [{"role": "user", "content": user_text}])
+    t0 = time.perf_counter()
+    model = None
+    for _ in range(MAX_TOOL_ROUNDS + 1):
+        result = {}
+
+        def pieces():
+            for kind, value in backup.stream_round(messages):
+                if kind == "text":
+                    yield value
+                else:
+                    result["done"] = value
+        yield from _sentences(pieces(), said)
+        text, tool_calls, model = result["done"]
+        if not tool_calls:
+            break
+        messages.append({"role": "assistant", "content": text or None, "tool_calls": tool_calls})
+        for call in tool_calls:
+            name = call["function"]["name"]
+            out = skills.run(name, backup.parse_args(call))
+            tools_used.append(f"{name} -> {str(out)[:80]}")
+            messages.append({"role": "tool", "tool_call_id": call["id"], "content": out})
+    print(f"[brain] backup model {model or '?'} answered in {time.perf_counter() - t0:.1f}s")
+
+
+def think_stream(user_text: str):
+    """Yields the reply one sentence at a time while Claude is still writing,
+    so Jarvis can start speaking the first sentence straight away.
+    If Claude uses a tool (remember/forget), runs it and carries on.
+    If Claude is out of credits (or the key or rate limit fails), the free
+    backup model on OpenRouter answers instead."""
+    global _claude_off_until
+    _trim()
     # Build the system prompt once per turn: Claude's thinking blocks are tied
     # to it, so if the clock ticked over to a new minute between tool rounds the
     # API rejected the second round ("Invalid signature in thinking block").
     system = _system_prompt()
     said, tools_used = [], []
-    stop_reason = None
     try:
-        for _ in range(MAX_TOOL_ROUNDS + 1):
-            buf = ""
-            with _client.messages.stream(
-                model=config.LLM_MODEL,
-                max_tokens=MAX_TOKENS,
-                output_config={"effort": LLM_EFFORT},
-                system=system,
-                messages=messages,
-                tools=skills.anthropic_tools(),
-            ) as stream:
-                for delta in stream.text_stream:
-                    buf += delta
-                    while (m := _SENTENCE_END.search(buf)):
-                        sentence = buf[: m.end()].strip()
-                        buf = buf[m.end():]
-                        if sentence:
-                            said.append(sentence)
-                            yield sentence
-                final = stream.get_final_message()
-            if buf.strip():
-                said.append(buf.strip())
-                yield buf.strip()
-
-            stop_reason = final.stop_reason
-            tool_uses = [b for b in final.content if b.type == "tool_use"]
-            if final.stop_reason != "tool_use" or not tool_uses:
-                break
-            messages.append({"role": "assistant", "content": final.content})
-            results = []
-            for b in tool_uses:
-                out = skills.run(b.name, b.input)
-                tools_used.append(f"{b.name} -> {str(out)[:80]}")
-                results.append({"type": "tool_result", "tool_use_id": b.id, "content": out})
-            messages.append({"role": "user", "content": results})
-        if not said:
-            print(f"[brain] Claude finished without saying anything (stop: {stop_reason})")
+        if not _use_claude():
+            yield from _backup_turn(user_text, system, said, tools_used)
+            return
+        try:
+            yield from _claude_turn(user_text, system, said, tools_used)
+        except Exception as e:
+            # Only switch if nothing was spoken yet, so he never hears a reply twice.
+            if said or not backup.available() or not backup.claude_unavailable(e):
+                raise
+            _claude_off_until = time.monotonic() + BACKUP_MINUTES * 60
+            print(f"[brain] Claude unavailable ({type(e).__name__}: {str(e)[:150]}), "
+                  f"using the backup model for the next {BACKUP_MINUTES} minutes")
+            tools_used.clear()
+            yield from _backup_turn(user_text, system, said, tools_used)
     finally:
         reply = " ".join(said)
         if reply:
