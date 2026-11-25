@@ -1,15 +1,16 @@
 """Play a song, artist, album or playlist by name in the Apple Music app.
 
 Apple Music for Windows has no API to start a track, so Jarvis opens the app
-and drives its search box with the screen-control skill (use_computer): it
-types the name, picks the right result and presses play. It needs Claude
-(screen control) and takes several seconds. Pause/skip/volume use the media
+and first drives it through its buttons' names (UI Automation, no screenshots).
+If that can't find the song, it falls back to screen control (use_computer),
+which needs Claude and takes several seconds. Pause/skip/volume use the media
 keys instead (the 'media' skill), which is instant.
 """
 import time
 
 import config
-from skills import computer, pc_control
+from skills import computer, pc_control, ui_automation
+from skills.quick_actions import log_tier
 
 KINDS = ("song", "artist", "album", "playlist")
 
@@ -25,6 +26,11 @@ def play_music(a):
     if not opened.startswith("Opened"):
         return opened
     time.sleep(config.MUSIC_OPEN_WAIT)  # give the app a moment to come to the front
+    # Tier 2: the app's own buttons by name (no screenshots, no big model).
+    played = ui_automation.play_in_app(config.MUSIC_APP, query)
+    if played:
+        return f"Playing: {played}."
+    log_tier(3, f"play_music '{query}' falls back to screen control")
     where = ("Look in his Library > Playlists first; if it isn't there, search Apple Music. "
              if kind == "playlist" else "")
     task = (

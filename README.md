@@ -138,6 +138,14 @@ Jarvis can use tools (all free, no extra API keys):
   "change it to..." rewrites it and "no" or "cancel" drops it.
 - **Play music**: "play Blinding Lights", "play some Drake", "put on my workout playlist". Jarvis opens Apple Music
   and uses screen control to search and press play (takes several seconds and needs Claude). Pause/next use the media keys.
+- **Quick PC actions (no screenshots)**: "open Bluetooth settings", "turn on dark mode", "search YouTube for lo-fi",
+  "open my Downloads", "brightness 40". These run directly, so they're instant and cost nothing extra.
+- **App buttons by name**: Jarvis can read an open app's buttons and boxes as text (Windows UI Automation) and
+  click or type by name, e.g. pressing Play in Apple Music, with no screenshots. Needs `pip install uiautomation`.
+  Clicking anything like Send, Buy or Delete asks you first.
+- **How PC tasks are done, cheapest first**: (1) a direct action above, (2) the app's buttons by name,
+  (3) screen control from screenshots (below) only when 1 and 2 can't. `jarvis.log` shows which tier ran
+  (`[pc] tier ...`), and screen-control tasks log how many tokens they used.
 - **Look at the screen**: "what's on my screen?", "read me that error", "what does this email say?".
   Takes a screenshot only when you ask, scales it down and sends it to `SCREEN_MODEL` (Claude Opus 5.5,
   a bigger model than the chat one, so this costs a bit more per question). Nothing is saved.
