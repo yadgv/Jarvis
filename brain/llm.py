@@ -173,7 +173,7 @@ FOLLOWUP_NOTE = (
 IGNORE = "[ignore]"
 
 
-def think_stream(user_text: str, followup: bool = False):
+def think_stream(user_text: str, followup: bool = False, note: str = ""):
     """Yields the reply one sentence at a time while Claude is still writing,
     so Jarvis can start speaking the first sentence straight away.
     If Claude uses a tool (remember/forget), runs it and carries on.
@@ -182,7 +182,7 @@ def think_stream(user_text: str, followup: bool = False):
     global _claude_off_until, last_ignored
     last_ignored = False
     _trim()
-    asked = FOLLOWUP_NOTE + user_text if followup else user_text
+    asked = (FOLLOWUP_NOTE if followup else "") + note + user_text
     # Overheard chatter must never be able to switch him off.
     exclude = ("shut_down",) if followup else ()
     # Build the system prompt once per turn: Claude's thinking blocks are tied
