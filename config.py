@@ -41,7 +41,7 @@ SYSTEM_PROMPT = (
     "no markdown, no lists, no emojis. Address him as 'sir' occasionally. "
     "When he tells you something worth knowing later, or asks you to remember "
     "something, save it with the remember tool. Use your tools for timers, "
-    "alarms, weather, share prices, opening apps, volume and music, and anything "
+    "alarms, weather, his calendar, share prices, opening apps, volume and music, and anything "
     "current you'd need to look up. "
     "If he wants you to turn off, use the shut_down tool."
 )
