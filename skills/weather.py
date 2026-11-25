@@ -18,21 +18,38 @@ CODES = {
 
 
 def _find_place(name):
-    r = requests.get(GEOCODE_URL, params={"name": name, "count": 1, "language": "en"}, timeout=10)
+    """Look up a place. "Courtice, Ontario" searches for "Courtice" and prefers
+    the result whose region or country matches "Ontario" (the geocoder only
+    understands the bare place name)."""
+    parts = [p.strip() for p in name.split(",") if p.strip()]
+    if not parts:
+        return None
+    r = requests.get(GEOCODE_URL, params={"name": parts[0], "count": 10, "language": "en"}, timeout=10)
     r.raise_for_status()
     results = r.json().get("results") or []
     if not results:
         return None
-    p = results[0]
+    hints = [h.lower() for h in parts[1:]]
+
+    def matches(p):
+        where = " ".join(str(p.get(k, "")) for k in ("admin1", "admin2", "country", "country_code")).lower()
+        return sum(h in where for h in hints)
+
+    p = max(results, key=matches) if hints else results[0]
     label = ", ".join(x for x in (p.get("name"), p.get("admin1"), p.get("country")) if x)
     return p["latitude"], p["longitude"], label
 
 
 def get_weather(a):
-    place = (a.get("location") or config.HOME_CITY or "").strip()
-    if not place:
-        return "No location given and HOME_CITY isn't set in config.py. Ask the user which city."
-    found = _find_place(place)
+    place = (a.get("location") or "").strip()
+    home = getattr(config, "HOME_COORDS", None)
+    if not place and home and config.HOME_CITY:
+        found = (home[0], home[1], config.HOME_CITY)
+    else:
+        place = place or (config.HOME_CITY or "").strip()
+        if not place:
+            return "No location given and HOME_CITY isn't set in config.py. Ask the user which city."
+        found = _find_place(place)
     if not found:
         return f"Couldn't find a place called {place}."
     lat, lon, label = found
