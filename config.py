@@ -50,9 +50,13 @@ SYSTEM_PROMPT = (
 HOME_CITY = "Courtice, Ontario"          # "Place, Region/Country"; used when you ask for the weather without a city
 HOME_COORDS = (43.91, -78.79)            # lat, lon of HOME_CITY; skips the lookup (None to look it up)
 TEMPERATURE_UNIT = "celsius"             # or "fahrenheit"
-# Private iCal links of your calendars (read-only), set in .env, space-separated.
+# Private iCal links of your calendars (read-only), space-separated. webcal:// links work too.
+# Set CALENDAR_ICS_URLS in .env to override. iCloud: Calendar app > share calendar > Public Calendar.
 # Google Calendar: Settings > your calendar > Integrate calendar > Secret address in iCal format.
-CALENDAR_ICS_URLS = os.getenv("CALENDAR_ICS_URLS", "").split()
+CALENDAR_ICS_URLS = os.getenv(
+    "CALENDAR_ICS_URLS",
+    "webcal://p176-caldav.icloud.com/published/2/MTcxOTk5NzcwMDgxNzE5OaZmraEpYkLTlOLxNgWQzDEesl3gCEFrjfHZ6SWrN8Rf",
+).split()
 # Apps Jarvis can open by name. Anything in the Windows Start menu works too
 # ("open Spotify"), so only add ones it can't find. Values are run as-is.
 APPS = {

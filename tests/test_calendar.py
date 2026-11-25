@@ -71,3 +71,12 @@ def test_not_configured(monkeypatch):
 def test_bad_day(monkeypatch):
     setup(monkeypatch)
     assert "YYYY-MM-DD" in skills.run("get_calendar_events", {"day": "next blursday"})
+
+
+def test_webcal_links_fetched_over_https(monkeypatch):
+    seen = []
+    monkeypatch.setattr(config, "CALENDAR_ICS_URLS", ["webcal://p1-caldav.icloud.com/published/2/abc"])
+    monkeypatch.setattr(calendar_events.requests, "get", lambda url, **k: (seen.append(url), Resp())[1])
+    calendar_events._cache.clear()
+    assert "Dentist" in skills.run("get_calendar_events", {})
+    assert seen == ["https://p1-caldav.icloud.com/published/2/abc"]

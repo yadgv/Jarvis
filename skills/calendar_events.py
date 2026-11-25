@@ -4,7 +4,7 @@ Google Calendar: Settings > (your calendar) > Integrate calendar >
 "Secret address in iCal format". Put it in .env as
     CALENDAR_ICS_URLS=https://calendar.google.com/calendar/ical/.../basic.ics
 Several calendars: separate the links with spaces. Outlook and iCloud
-calendars have the same kind of link.
+calendars have the same kind of link (webcal:// links work too).
 """
 import time
 from datetime import date, datetime, timedelta
@@ -23,8 +23,15 @@ _cache = {}  # url -> (fetched_at, Calendar)
 CACHE_SECONDS = 300
 
 
+def _https(url):
+    """Apple and others hand out webcal:// links; they're plain HTTPS underneath."""
+    if url.lower().startswith("webcal://"):
+        return "https://" + url[len("webcal://"):]
+    return url
+
+
 def _calendars():
-    for url in config.CALENDAR_ICS_URLS:
+    for url in map(_https, config.CALENDAR_ICS_URLS):
         hit = _cache.get(url)
         if hit and time.time() - hit[0] < CACHE_SECONDS:
             yield hit[1]
