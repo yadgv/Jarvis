@@ -68,6 +68,15 @@ VOICES = {
 }
 
 # --- Skills ---
+# Arduino over USB (flash hardware/arduino/jarvis_bridge first). Port is found
+# automatically; set it if not, e.g. "COM5" on Windows or "/dev/ttyACM0" on the Pi.
+ARDUINO_PORT = None
+ARDUINO_BAUD = 115200
+ARDUINO_DEVICES = {                      # things to switch: name -> pin
+    "built-in light": 13,
+}
+ARDUINO_SENSORS = {}                     # things to read: name -> pin, e.g. {"light sensor": "A0"}
+
 # Looking at the screen uses a bigger model than the chat (better at reading screens).
 SCREEN_MODEL = "claude-opus-5-5"
 SCREEN_EFFORT = "low"                    # low = quickest answer; raise to medium for harder screens

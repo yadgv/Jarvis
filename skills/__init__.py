@@ -6,6 +6,7 @@ That's provider-neutral: anthropic_tools() and openai_tools() turn it into the
 format Claude or an OpenAI-style API (Groq, OpenAI, Ollama...) expects.
 """
 # One module per line, so adding a skill doesn't clash with other changes.
+from skills import arduino  # noqa: E402
 from skills import briefing  # noqa: E402
 from skills import calendar_events  # noqa: E402
 from skills import computer  # noqa: E402
@@ -41,6 +42,7 @@ MODULES = [
     screen,
     computer,
     system,
+    arduino,
     personality,
 ]
 # Counts conversation turns, so a tool can tell "he said yes" (a later turn)
