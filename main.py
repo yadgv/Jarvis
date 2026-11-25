@@ -2,6 +2,7 @@
 import queue
 import re
 import threading
+import time
 
 import config
 from audio import tts
@@ -9,18 +10,21 @@ from audio.recorder import calibrate, chime, open_stream, record_until_silence
 from audio.stt import transcribe
 from audio.tts import speak
 from brain.llm import reset, think_stream
-from skills import timers
+from skills import system, timers
 
 if config.MODE == "wake":
     from audio.wakeword import wait_for_wake_word
 
-# The whole sentence has to be one of these, so "don't shut down the PC"
-# doesn't turn Jarvis off.
+# After trimming filler words ("okay", "please", "Jarvis"...) from both ends,
+# the whole sentence has to be one of these, so "don't shut down the PC"
+# doesn't turn Jarvis off. Anything else ("that's all for today, go to sleep")
+# is left to Claude, which can call the shut_down tool.
 EXIT_PHRASES = {
-    "goodbye jarvis", "bye jarvis", "goodbye",
-    "shut down", "jarvis shut down", "shut down jarvis",
-    "power down", "jarvis power down", "power down jarvis",
+    "goodbye", "bye", "good bye", "shut down", "shutdown", "power down",
+    "power off", "turn off", "go to sleep",
 }
+FILLER = {"okay", "ok", "please", "now", "alright", "hey", "jarvis", "you", "can",
+          "then", "so", "well", "thanks", "thank", "right", "just", "yes", "yeah", "and"}
 # Clears the conversation. Saved facts stay; ask "forget that my..." to drop one.
 RESET_PHRASES = {"new conversation", "start over", "start a new conversation"}
 
@@ -30,7 +34,16 @@ def normalize(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def respond(text: str):
+def is_exit(said: str) -> bool:
+    words = said.split()
+    while words and words[0] in FILLER:
+        words.pop(0)
+    while words and words[-1] in FILLER:
+        words.pop()
+    return " ".join(words) in EXIT_PHRASES
+
+
+def respond(text: str, t_heard: float = None):
     """Think and speak at the same time: while one sentence plays, the next
     is already being written by Claude and turned into audio."""
     clips = queue.Queue(maxsize=3)
@@ -51,8 +64,12 @@ def respond(text: str):
             clips.put(None)
 
     threading.Thread(target=produce, daemon=True).start()
+    first = True
     while (item := clips.get()) is not None:
         sentence, clip = item
+        if first and t_heard is not None:
+            print(f"[time] reply started {time.perf_counter() - t_heard:.1f}s after you stopped talking")
+        first = False
         if clip is not None:
             tts.play(clip)
         else:
@@ -88,6 +105,7 @@ def main():
             # Pause the mic while we transcribe, think and speak, so stale
             # audio (and Jarvis's own voice) doesn't pile up in the buffer.
             stream.stop()
+            t_heard = time.perf_counter()
 
             text = transcribe(audio) if len(audio) else ""
             if not text:
@@ -96,10 +114,10 @@ def main():
                 need_wake = True
                 stream.start()
                 continue
-            print(f"You: {text}")
+            print(f"You: {text}  [stt {time.perf_counter() - t_heard:.1f}s]")
 
             said = normalize(text)
-            if said in EXIT_PHRASES:
+            if is_exit(said):
                 speak("Powering down. Goodbye, sir.")
                 break
             if said in RESET_PHRASES:
@@ -109,7 +127,9 @@ def main():
                 stream.start()
                 continue
 
-            respond(text)
+            respond(text, t_heard)
+            if system.shutdown_requested:
+                break
 
             stream.start()
             # Keep listening briefly so you can reply without the wake word.

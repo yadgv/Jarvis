@@ -55,6 +55,8 @@ Jarvis can use tools (all free, no extra API keys):
 - **Timers and alarms**: "set a 10 minute tea timer", "wake me at 7:30", "how long left?", "cancel the timer".
 - **Weather** (Open-Meteo): "what's the weather?", "will it rain this week?". Set `HOME_CITY` in `config.py`.
 - **Web search** (DuckDuckGo): "who won the match last night?".
+- **Share prices** (Yahoo Finance): "what is Nvidia trading at?".
+- **Shut down**: "okay, shut down", or just tell him you're done for the day.
 - **Memory**: "remember that…", "forget that…".
 
 Skills live in `skills/`, one file each, written in a provider-neutral way so another LLM

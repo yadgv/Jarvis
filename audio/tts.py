@@ -19,13 +19,14 @@ _speaking = threading.RLock()
 # ---------- Fish Audio ----------
 FISH_URL = "https://api.fish.audio/v1/tts"
 FISH_RATE = 44100
+_http = requests.Session()  # reuses the connection: saves a TLS handshake per sentence
 _fish_ok = bool(config.FISH_API_KEY and config.FISH_VOICE_ID)
 
 
 def _synth_fish(text: str):
     global _fish_ok
     try:
-        r = requests.post(
+        r = _http.post(
             FISH_URL,
             headers={
                 "Authorization": f"Bearer {config.FISH_API_KEY}",
