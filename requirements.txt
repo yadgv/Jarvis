@@ -8,3 +8,5 @@ numpy
 requests
 webrtcvad-wheels
 ddgs
+icalendar
+recurring-ical-events

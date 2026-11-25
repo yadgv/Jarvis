@@ -49,6 +49,9 @@ SYSTEM_PROMPT = (
 HOME_CITY = "Courtice, Ontario"          # "Place, Region/Country"; used when you ask for the weather without a city
 HOME_COORDS = (43.91, -78.79)            # lat, lon of HOME_CITY; skips the lookup (None to look it up)
 TEMPERATURE_UNIT = "celsius"             # or "fahrenheit"
+# Private iCal links of your calendars (read-only), set in .env, space-separated.
+# Google Calendar: Settings > your calendar > Integrate calendar > Secret address in iCal format.
+CALENDAR_ICS_URLS = os.getenv("CALENDAR_ICS_URLS", "").split()
 
 # --- Activation ---
 # "enter" = press Enter to talk (easy testing)
