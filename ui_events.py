@@ -11,6 +11,7 @@ import threading
 _listeners = []
 inbox = queue.Queue()            # ("text", "what's the weather") or ("talk", None)
 stop_speaking = threading.Event()
+cancel = threading.Event()     # click the orb while he is busy: stop a long screen task
 gui_active = False
 
 

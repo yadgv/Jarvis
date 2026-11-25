@@ -62,7 +62,7 @@ SCREEN_MODEL = "claude-opus-5-5"
 SCREEN_EFFORT = "low"                    # low = quickest answer; raise to medium for harder screens
 # Clicking and typing for you (emergency stop: move the mouse into a screen corner).
 COMPUTER_EFFORT = "medium"
-COMPUTER_MAX_STEPS = 25                  # rounds of look-and-act before giving up
+COMPUTER_MAX_STEPS = 40                  # rounds of look-and-act before pausing to ask whether to keep going
 # Morning briefing (weather, calendar, reminders, news) on your first hello of the day.
 MORNING_BRIEFING = True
 BRIEFING_FROM_HOUR = 4                   # a hello before this hour counts as the night before

@@ -348,6 +348,9 @@ class JarvisWidget:
                 tts.stop()
         elif self.status == "idle":
             ui_events.inbox.put(("talk", None))
+        elif self.status == "thinking":  # e.g. a long screen-control task: stop after this step
+            ui_events.cancel.set()
+            self.set_text(self.status_item, text="STOPPING...")
 
     def open_typing(self):
         self.typing = True
