@@ -61,6 +61,8 @@ Jarvis can use tools (all free, no extra API keys):
   `CALENDAR_ICS_URLS=https://calendar.google.com/calendar/ical/.../basic.ics`
   (several calendars: separate the links with spaces). Keep this link private.
 - **Share prices** (Yahoo Finance): "what is Nvidia trading at?".
+- **PC control**: "open Spotify", "volume up", "set the volume to 30", "mute", "pause the music", "next song", "lock the PC".
+  Apps come from the Start menu or the `APPS` list in `config.py`.
 - **Shut down**: "okay, shut down", or just tell him you're done for the day.
 - **Memory**: "remember that…", "forget that…".
 

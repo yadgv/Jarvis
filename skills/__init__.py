@@ -5,10 +5,10 @@ Each skill module exposes SKILLS: a list of dicts with
 That's provider-neutral: anthropic_tools() and openai_tools() turn it into the
 format Claude or an OpenAI-style API (Groq, OpenAI, Ollama...) expects.
 """
-from skills import calendar_events, memory_tools, stocks, system, timers, weather, web_search
+from skills import calendar_events, memory_tools, pc_control, stocks, system, timers, weather, web_search
 
 SKILLS = [*memory_tools.SKILLS, *timers.SKILLS, *weather.SKILLS, *web_search.SKILLS,
-          *calendar_events.SKILLS, *stocks.SKILLS, *system.SKILLS]
+          *calendar_events.SKILLS, *stocks.SKILLS, *pc_control.SKILLS, *system.SKILLS]
 _BY_NAME = {s["name"]: s for s in SKILLS}
 
 
