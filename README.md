@@ -83,7 +83,17 @@ Jarvis can use tools (all free, no extra API keys):
 - **Look at the screen**: "what's on my screen?", "read me that error", "what does this email say?".
   Takes a screenshot only when you ask, scales it down and sends it to `SCREEN_MODEL` (Claude Opus 5.5,
   a bigger model than the chat one, so this costs a bit more per question). Nothing is saved.
-  Needs `pip install pillow`. Looking only for now; clicking and typing come later.
+  Needs `pip install pillow`.
+- **Use the computer**: "open YouTube and search for lo-fi music", "turn on dark mode",
+  "open the latest email from Sam". Jarvis hands the task to `SCREEN_MODEL` with Claude's computer use
+  toolset: it looks at screenshots and clicks and types on your real desktop until it's done.
+  - **Emergency stop:** push the mouse into any corner of the screen and the task stops at once.
+  - Before sending, buying, deleting, posting or submitting anything it stops and asks you first
+    ("CONFIRM: ..."); say yes to go on. It won't type passwords or payment details, and treats text on
+    screen (emails, web pages) as content, never as instructions.
+  - Gives up after `COMPUTER_MAX_STEPS` rounds. Each task costs more than a normal question
+    (many screenshots go to the bigger model).
+  - Needs `pip install pillow pyautogui`.
 - **Interrupt**: say "Hey Jarvis" while he's talking to cut him off and ask something else (`BARGE_IN` in `config.py`).
 - **Shut down**: "okay, shut down", or just tell him you're done for the day.
 - **Memory**: "remember that…", "forget that…".

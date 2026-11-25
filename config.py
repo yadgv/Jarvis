@@ -41,7 +41,7 @@ SYSTEM_PROMPT = (
     "no markdown, no lists, no emojis. Address him as 'sir' occasionally. "
     "When he tells you something worth knowing later, or asks you to remember "
     "something, save it with the remember tool. Use your tools for timers, "
-    "alarms, weather, his calendar, share prices, opening apps, volume and music, looking at his screen, and anything "
+    "alarms, weather, his calendar, share prices, opening apps, volume and music, looking at and using his screen, and anything "
     "current you'd need to look up. "
     "If he wants you to turn off, use the shut_down tool."
 )
@@ -50,6 +50,9 @@ SYSTEM_PROMPT = (
 # Looking at the screen uses a bigger model than the chat (better at reading screens).
 SCREEN_MODEL = "claude-opus-5-5"
 SCREEN_EFFORT = "low"                    # low = quickest answer; raise to medium for harder screens
+# Clicking and typing for you (emergency stop: move the mouse into a screen corner).
+COMPUTER_EFFORT = "medium"
+COMPUTER_MAX_STEPS = 25                  # rounds of look-and-act before giving up
 HOME_CITY = "Courtice, Ontario"          # "Place, Region/Country"; used when you ask for the weather without a city
 HOME_COORDS = (43.91, -78.79)            # lat, lon of HOME_CITY; skips the lookup (None to look it up)
 TEMPERATURE_UNIT = "celsius"             # or "fahrenheit"
