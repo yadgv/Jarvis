@@ -9,6 +9,7 @@ format Claude or an OpenAI-style API (Groq, OpenAI, Ollama...) expects.
 from skills import briefing  # noqa: E402
 from skills import calendar_events  # noqa: E402
 from skills import computer  # noqa: E402
+from skills import email_reader  # noqa: E402
 from skills import icloud_calendar  # noqa: E402
 from skills import memory_tools  # noqa: E402
 from skills import music  # noqa: E402
@@ -31,6 +32,7 @@ MODULES = [
     news,
     web_search,
     calendar_events,
+    email_reader,
     icloud_calendar,
     stocks,
     pc_control,

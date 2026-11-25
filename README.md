@@ -111,6 +111,14 @@ Jarvis can use tools (all free, no extra API keys):
 - **Share prices** (Yahoo Finance): "what is Nvidia trading at?".
 - **PC control**: "open Spotify", "volume up", "set the volume to 30", "mute", "pause the music", "next song", "lock the PC".
   Apps come from the Start menu or the `APPS` list in `config.py`.
+- **Email** (Gmail, read-only): "any new emails?", "did Amazon email me?". Gmail needs an app password:
+  turn on 2-Step Verification (myaccount.google.com > Security), then make one at
+  myaccount.google.com/apppasswords. Add to `.env`:
+  ```
+  GMAIL_ADDRESS=you@gmail.com
+  GMAIL_APP_PASSWORD=abcd efgh ijkl mnop
+  ```
+  Mail is opened read-only, so nothing gets marked as read. New email is also part of the morning briefing.
 - **Play music**: "play Blinding Lights", "play some Drake", "put on my workout playlist". Jarvis opens Apple Music
   and uses screen control to search and press play (takes several seconds and needs Claude). Pause/next use the media keys.
 - **Look at the screen**: "what's on my screen?", "read me that error", "what does this email say?".

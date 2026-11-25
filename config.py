@@ -84,6 +84,10 @@ CALENDAR_ICS_URLS = os.getenv(
 ICLOUD_USERNAME = os.getenv("ICLOUD_USERNAME")
 ICLOUD_APP_PASSWORD = os.getenv("ICLOUD_APP_PASSWORD")
 ICLOUD_CALENDAR = os.getenv("ICLOUD_CALENDAR", "")   # calendar name to add to; empty = the first one
+# Reading Gmail (read-only): app password from myaccount.google.com/apppasswords. Put in .env:
+# GMAIL_ADDRESS=you@gmail.com and GMAIL_APP_PASSWORD=abcd efgh ijkl mnop
+GMAIL_ADDRESS = os.getenv("GMAIL_ADDRESS")
+GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
 # Playing songs by name: Jarvis opens this app and uses screen control to search and press play.
 MUSIC_APP = "apple music"
 MUSIC_OPEN_WAIT = 3                      # seconds to let the app open before searching
