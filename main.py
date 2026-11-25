@@ -38,7 +38,7 @@ from audio.recorder import calibrate, chime, open_stream, record_until_silence
 from audio.stt import transcribe
 from audio.tts import speak
 from brain.llm import reset, think_stream
-from skills import reminders, system, timers
+from skills import briefing, reminders, system, timers
 
 watch_for_interrupt = None
 if config.MODE == "wake":
@@ -87,7 +87,7 @@ def is_exit(said: str) -> bool:
     return " ".join(words) in EXIT_PHRASES
 
 
-def respond(text: str, t_heard: float = None, stream=None, followup: bool = False) -> bool:
+def respond(text: str, t_heard: float = None, stream=None, followup: bool = False, note: str = "") -> bool:
     """Think and speak at the same time: while one sentence plays, the next
     is already being written by Claude and turned into audio.
     If barge-in is on, "Hey Jarvis" while he's talking cuts him off.
@@ -112,7 +112,8 @@ def respond(text: str, t_heard: float = None, stream=None, followup: bool = Fals
     def produce():
         count = 0
         try:
-            for sentence in think_stream(text, followup=followup) if followup else think_stream(text):
+            extra = {k: v for k, v in (("followup", followup), ("note", note)) if v}
+            for sentence in think_stream(text, **extra):
                 if interrupted.is_set():
                     break
                 count += 1
@@ -274,8 +275,11 @@ def main():
                 stream.start()
                 continue
 
-            was_interrupted = respond(text, t_heard, stream, followup=followup) if followup \
-                else respond(text, t_heard, stream)
+            extra = {"followup": True} if followup else {}
+            if not followup and briefing.is_first_hello(said):
+                extra["note"] = briefing.NOTE  # first hello of the day: give the morning briefing
+                briefing.mark_briefed()
+            was_interrupted = respond(text, t_heard, stream, **extra)
             if system.shutdown_requested:
                 break
 
