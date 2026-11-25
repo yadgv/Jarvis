@@ -13,3 +13,4 @@ recurring-ical-events
 pillow
 pyautogui
 pyserial
+uiautomation; sys_platform == "win32"

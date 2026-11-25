@@ -263,6 +263,18 @@ def _add_user_text(messages, text):
         messages.append({"role": "user", "content": text})
 
 
+_tokens = {"input": 0, "output": 0, "steps": 0}
+
+
+def _count(response):
+    usage = getattr(response, "usage", None)
+    _tokens["steps"] += 1
+    if usage is not None:
+        _tokens["input"] += (getattr(usage, "input_tokens", 0) or 0) + \
+            (getattr(usage, "cache_read_input_tokens", 0) or 0) + (getattr(usage, "cache_creation_input_tokens", 0) or 0)
+        _tokens["output"] += getattr(usage, "output_tokens", 0) or 0
+
+
 def _loop(gui, scr, messages):
     global _pending
     ui_events.cancel.clear()
@@ -275,6 +287,7 @@ def _loop(gui, scr, messages):
         response = screen.create(model=config.SCREEN_MODEL, max_tokens=16000, system=SYSTEM, tools=[TOOLSET],
                                  output_config={"effort": config.COMPUTER_EFFORT}, messages=messages)
         print(f"[computer] step {step + 1}: model took {time.perf_counter() - t0:.1f}s")
+        _count(response)
         messages.append({"role": "assistant", "content": response.content})
         if response.stop_reason == "refusal":
             return "The computer-use model declined this task."
@@ -305,6 +318,7 @@ def use_computer(a):
         return "Controlling the computer needs pyautogui. Tell the user to run: pip install pyautogui"
     _dpi_aware()
     t0 = time.perf_counter()
+    _tokens.update(input=0, output=0, steps=0)
     try:
         if a.get("confirmed") and _pending:
             gui, scr, messages = _pending
@@ -330,16 +344,20 @@ def use_computer(a):
         raise
     finally:
         print(f"[computer] finished in {time.perf_counter() - t0:.1f}s")
+        print(f"[pc] tier 3: use_computer, {_tokens['steps']} model calls, "
+              f"{_tokens['input']:,} input + {_tokens['output']:,} output tokens")
 
 
 SKILLS = [
     {
         "name": "use_computer",
         "description": (
-            "Operate the user's computer by clicking and typing to carry out a task on screen, e.g. "
-            "'open YouTube and search for lo-fi music', 'turn on dark mode', 'open the latest email from Sam'. "
-            "Slow (can take a minute): prefer open_app, media, set_volume or look_at_screen when they fit, and "
-            "tell him you're on it first. If the result starts with CONFIRM:, ask him that question and call "
+            "LAST RESORT: operate the computer from screenshots, clicking and typing, e.g. 'open the "
+            "latest email from Sam and forward it to Mona'. Slow and costly (many screenshots to a bigger model). "
+            "First use the direct tools when they fit: open_website (sites and searches, e.g. YouTube "
+            "search), open_settings, dark_mode, open_folder, open_app, media, set_volume, play_music; and for "
+            "buttons inside an app use app_controls (reads them as text). Only use this when those can't do "
+            "it, and tell him you're on it first. If the result starts with CONFIRM:, ask him that question and call "
             "again with confirmed=true only if he clearly says yes."
         ),
         "parameters": {
