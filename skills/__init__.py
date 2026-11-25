@@ -16,12 +16,14 @@ from skills import memory_tools  # noqa: E402
 from skills import music  # noqa: E402
 from skills import news  # noqa: E402
 from skills import pc_control  # noqa: E402
+from skills import quick_actions  # noqa: E402
 from skills import personality  # noqa: E402
 from skills import reminders  # noqa: E402
 from skills import screen  # noqa: E402
 from skills import stocks  # noqa: E402
 from skills import system  # noqa: E402
 from skills import timers  # noqa: E402
+from skills import ui_automation  # noqa: E402
 from skills import weather  # noqa: E402
 from skills import web_search  # noqa: E402
 
@@ -38,6 +40,8 @@ MODULES = [
     icloud_calendar,
     stocks,
     pc_control,
+    quick_actions,
+    ui_automation,
     music,
     screen,
     computer,
