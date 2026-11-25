@@ -253,6 +253,10 @@ def main():
 
 
 if __name__ == "__main__":
+    if "--gui" in sys.argv:  # same as running gui.py
+        import gui
+        gui.launch()
+        sys.exit()
     try:
         main()
     except KeyboardInterrupt:

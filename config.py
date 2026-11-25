@@ -69,6 +69,9 @@ APPS = {
     "chrome": "chrome",
     "google chrome": "chrome",
     "edge": "msedge",
+    # Store apps have no Start-menu shortcut file, so they're opened by their app id
+    "apple music": r"shell:AppsFolder\AppleInc.AppleMusicWin_nzyj5cx40ttqa!App",
+    "music": r"shell:AppsFolder\AppleInc.AppleMusicWin_nzyj5cx40ttqa!App",
 }
 
 # --- Activation ---

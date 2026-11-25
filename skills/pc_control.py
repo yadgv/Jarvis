@@ -132,7 +132,7 @@ def lock_screen(a=None):
 SKILLS = [
     {
         "name": "open_app",
-        "description": "Open an app on the user's computer by name, e.g. Chrome, Spotify, Notepad, Calculator, VS Code.",
+        "description": "Open an app on the user's computer by name, e.g. Chrome, Spotify, Apple Music, Notepad, Calculator, VS Code.",
         "parameters": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]},
         "run": open_app,
     },
