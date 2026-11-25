@@ -226,6 +226,9 @@ class JarvisWidget:
             show = on
             if item == self.entry_item:
                 show = on and self.typing   # the text box only appears when you click to type
+                # Some Tk builds (seen on Windows) ignore "hidden" for embedded
+                # widgets, so also move the box far outside the canvas.
+                self.canvas.coords(item, (18, PANEL_H - 20) if show else (-5000, -5000))
             elif item == self.hint_item:
                 show = on and not self.typing
             self.canvas.itemconfigure(item, state="normal" if show else "hidden")
