@@ -80,6 +80,10 @@ Jarvis can use tools (all free, no extra API keys):
 - **Share prices** (Yahoo Finance): "what is Nvidia trading at?".
 - **PC control**: "open Spotify", "volume up", "set the volume to 30", "mute", "pause the music", "next song", "lock the PC".
   Apps come from the Start menu or the `APPS` list in `config.py`.
+- **Look at the screen**: "what's on my screen?", "read me that error", "what does this email say?".
+  Takes a screenshot only when you ask, scales it down and sends it to `SCREEN_MODEL` (Claude Opus 5.5,
+  a bigger model than the chat one, so this costs a bit more per question). Nothing is saved.
+  Needs `pip install pillow`. Looking only for now; clicking and typing come later.
 - **Interrupt**: say "Hey Jarvis" while he's talking to cut him off and ask something else (`BARGE_IN` in `config.py`).
 - **Shut down**: "okay, shut down", or just tell him you're done for the day.
 - **Memory**: "remember that…", "forget that…".
