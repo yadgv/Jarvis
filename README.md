@@ -119,6 +119,8 @@ Jarvis can use tools (all free, no extra API keys):
   GMAIL_APP_PASSWORD=abcd efgh ijkl mnop
   ```
   Mail is opened read-only, so nothing gets marked as read. New email is also part of the morning briefing.
+- **Play music**: "play Blinding Lights", "play some Drake", "put on my workout playlist". Jarvis opens Apple Music
+  and uses screen control to search and press play (takes several seconds and needs Claude). Pause/next use the media keys.
 - **Look at the screen**: "what's on my screen?", "read me that error", "what does this email say?".
   Takes a screenshot only when you ask, scales it down and sends it to `SCREEN_MODEL` (Claude Opus 5.5,
   a bigger model than the chat one, so this costs a bit more per question). Nothing is saved.

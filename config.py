@@ -88,6 +88,9 @@ ICLOUD_CALENDAR = os.getenv("ICLOUD_CALENDAR", "")   # calendar name to add to; 
 # GMAIL_ADDRESS=you@gmail.com and GMAIL_APP_PASSWORD=abcd efgh ijkl mnop
 GMAIL_ADDRESS = os.getenv("GMAIL_ADDRESS")
 GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
+# Playing songs by name: Jarvis opens this app and uses screen control to search and press play.
+MUSIC_APP = "apple music"
+MUSIC_OPEN_WAIT = 3                      # seconds to let the app open before searching
 # Apps Jarvis can open by name. Anything in the Windows Start menu works too
 # ("open Spotify"), so only add ones it can't find. Values are run as-is.
 APPS = {
