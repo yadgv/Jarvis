@@ -141,6 +141,11 @@ Jarvis can use tools (all free, no extra API keys):
   - After `COMPUTER_MAX_STEPS` (40) rounds it pauses and asks whether to keep going. Only the last few
     screenshots are kept, so long tasks stay quick, but each task still costs more than a normal question.
   - Needs `pip install pillow pyautogui`.
+- **Arduino over USB**: "turn on the desk lamp", "fan to 50 percent", "what's the light level?", "is the Arduino connected?".
+  Open `hardware/arduino/jarvis_bridge/jarvis_bridge.ino` in the Arduino IDE and upload it, then close the
+  Serial Monitor (it holds the port). Jarvis finds the board by itself (or set `ARDUINO_PORT`, e.g. `COM5`).
+  Name what's wired up in `config.py`: `ARDUINO_DEVICES = {"desk lamp": 7}`, `ARDUINO_SENSORS = {"light sensor": "A0"}`.
+  The same works on the Pi (`/dev/ttyACM0`). Add your own commands in the sketch's `handle()`; Jarvis can send them too.
 - **Interrupt**: say "Hey Jarvis" while he's talking to cut him off and ask something else (`BARGE_IN` in `config.py`).
 - **Shut down**: "okay, shut down", or just tell him you're done for the day.
 - **Memory**: "remember that…", "forget that…".
@@ -173,5 +178,6 @@ config.py      all settings
 audio/         recorder, wake word, speech-to-text, text-to-speech
 brain/llm.py   Claude, conversation memory and tools
 brain/memory.py  saving history and facts in memory/
+hardware/      Arduino sketch Jarvis talks to over USB
 skills/        tools Jarvis can use (timers, weather, web search, memory)
 ```
