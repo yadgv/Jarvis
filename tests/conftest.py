@@ -29,6 +29,10 @@ _stub("sounddevice", play=lambda *a, **k: None, wait=lambda: None, InputStream=o
 _stub("faster_whisper", WhisperModel=_Whisper)
 _stub("anthropic", Anthropic=lambda **k: None)
 
+import config  # noqa: E402
+
+config.MODE = "enter"  # main.py then skips loading the wake-word model
+
 
 import pytest  # noqa: E402
 import requests  # noqa: E402

@@ -27,3 +27,22 @@ def wait_for_wake_word(stream):
                 return
         else:
             hits = 0
+
+
+def watch_for_interrupt(stream, stop_event, on_wake):
+    """While Jarvis is talking: listen for "Hey Jarvis" and call on_wake() if heard.
+    Uses a stricter threshold than normal, because the mic also picks up
+    Jarvis's own voice from the speaker. Returns when stop_event is set."""
+    _model.reset()
+    hits = 0
+    while not stop_event.is_set():
+        data, _ = stream.read(CHUNK)
+        score = max(_model.predict(data[:, 0]).values())
+        if score > config.BARGE_IN_THRESHOLD:
+            hits += 1
+            if hits >= config.WAKE_CONSECUTIVE_FRAMES + 1:
+                _model.reset()
+                on_wake()
+                return
+        else:
+            hits = 0

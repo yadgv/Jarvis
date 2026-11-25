@@ -37,8 +37,9 @@ from audio.tts import speak
 from brain.llm import reset, think_stream
 from skills import system, timers
 
+watch_for_interrupt = None
 if config.MODE == "wake":
-    from audio.wakeword import wait_for_wake_word
+    from audio.wakeword import wait_for_wake_word, watch_for_interrupt
 
 # After trimming filler words ("okay", "please", "Jarvis"...) from both ends,
 # the whole sentence has to be one of these, so "don't shut down the PC"
@@ -68,37 +69,78 @@ def is_exit(said: str) -> bool:
     return " ".join(words) in EXIT_PHRASES
 
 
-def respond(text: str, t_heard: float = None):
+def respond(text: str, t_heard: float = None, stream=None) -> bool:
     """Think and speak at the same time: while one sentence plays, the next
-    is already being written by Claude and turned into audio."""
+    is already being written by Claude and turned into audio.
+    If barge-in is on, "Hey Jarvis" while he's talking cuts him off.
+    Returns True if he was interrupted."""
     clips = queue.Queue(maxsize=3)
+    interrupted = threading.Event()
+
+    def put(item):
+        while not interrupted.is_set():
+            try:
+                clips.put(item, timeout=0.2)
+                return
+            except queue.Full:
+                pass
 
     def produce():
         count = 0
         try:
             for sentence in think_stream(text):
+                if interrupted.is_set():
+                    break
                 count += 1
                 print(f"JARVIS: {sentence}")
-                clips.put((sentence, tts.synthesize(sentence)))
+                put((sentence, tts.synthesize(sentence)))
         except Exception as e:
             print(f"[brain error] {e}")
             if count == 0:
                 msg = "I'm having trouble reaching my servers, sir."
-                clips.put((msg, tts.synthesize(msg)))
+                put((msg, tts.synthesize(msg)))
         finally:
-            clips.put(None)
+            put(None)
+
+    # Listen for "Hey Jarvis" while he talks.
+    stop_watch = threading.Event()
+    watcher = None
+    if stream is not None and watch_for_interrupt and config.MODE == "wake" and config.BARGE_IN:
+        def on_wake():
+            interrupted.set()
+            tts.stop()
+        stream.start()
+        watcher = threading.Thread(target=watch_for_interrupt, args=(stream, stop_watch, on_wake), daemon=True)
+        watcher.start()
 
     threading.Thread(target=produce, daemon=True).start()
     first = True
-    while (item := clips.get()) is not None:
-        sentence, clip = item
-        if first and t_heard is not None:
-            print(f"[time] reply started {time.perf_counter() - t_heard:.1f}s after you stopped talking")
-        first = False
-        if clip is not None:
-            tts.play(clip)
-        else:
-            tts.speak_system(sentence)
+    try:
+        while not interrupted.is_set():
+            try:
+                item = clips.get(timeout=0.2)
+            except queue.Empty:
+                continue
+            if item is None:
+                break
+            sentence, clip = item
+            if first and t_heard is not None:
+                print(f"[time] reply started {time.perf_counter() - t_heard:.1f}s after you stopped talking")
+            first = False
+            if interrupted.is_set():
+                break
+            if clip is not None:
+                tts.play(clip)
+            else:
+                tts.speak_system(sentence)
+    finally:
+        if watcher is not None:
+            stop_watch.set()
+            watcher.join(timeout=1)
+            stream.stop()
+    if interrupted.is_set():
+        print("[interrupted]")
+    return interrupted.is_set()
 
 
 def main():
@@ -111,9 +153,12 @@ def main():
             calibrate(stream)
 
         need_wake = True
+        already_woken = False  # you said "Hey Jarvis" to interrupt him
         while True:
             if need_wake:
-                if config.MODE == "wake":
+                if already_woken:
+                    already_woken = False
+                elif config.MODE == "wake":
                     print("\n[waiting for 'Hey Jarvis'...]")
                     wait_for_wake_word(stream)
                 else:
@@ -152,13 +197,16 @@ def main():
                 stream.start()
                 continue
 
-            respond(text, t_heard)
+            was_interrupted = respond(text, t_heard, stream)
             if system.shutdown_requested:
                 break
 
             stream.start()
-            # Keep listening briefly so you can reply without the wake word.
-            need_wake = config.FOLLOWUP_SECONDS <= 0
+            if was_interrupted:
+                need_wake, already_woken = True, True  # go straight to listening
+            else:
+                # Keep listening briefly so you can reply without the wake word.
+                need_wake = config.FOLLOWUP_SECONDS <= 0
 
 
 if __name__ == "__main__":
