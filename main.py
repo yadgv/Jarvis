@@ -52,6 +52,21 @@ EXIT_PHRASES = {
 }
 FILLER = {"okay", "ok", "please", "now", "alright", "hey", "jarvis", "you", "can",
           "then", "so", "well", "thanks", "thank", "right", "just", "yes", "yeah", "and"}
+# Said after a reply without the wake word, these just end the conversation
+# quietly ("I understand" to someone else used to get a reply, or worse).
+ACKNOWLEDGEMENTS = {
+    "i understand", "understood", "i see", "ok", "okay", "cool", "nice", "great", "got it",
+    "thanks", "thank you", "alright", "yeah", "yes", "no", "mm", "hmm", "uh huh", "right",
+    "sure", "fine", "perfect", "good", "awesome", "oh", "ah", "wow", "lol", "same", "true",
+}
+last_ignored = False  # the last follow-up wasn't meant for Jarvis
+
+
+def is_acknowledgement(said: str) -> bool:
+    words = [w for w in said.split() if w not in ("jarvis", "sir")]
+    return not words or " ".join(words) in ACKNOWLEDGEMENTS
+
+
 # Clears the conversation. Saved facts stay; ask "forget that my..." to drop one.
 RESET_PHRASES = {"new conversation", "start over", "start a new conversation"}
 
@@ -70,11 +85,15 @@ def is_exit(said: str) -> bool:
     return " ".join(words) in EXIT_PHRASES
 
 
-def respond(text: str, t_heard: float = None, stream=None) -> bool:
+def respond(text: str, t_heard: float = None, stream=None, followup: bool = False) -> bool:
     """Think and speak at the same time: while one sentence plays, the next
     is already being written by Claude and turned into audio.
     If barge-in is on, "Hey Jarvis" while he's talking cuts him off.
+    followup=True: heard without the wake word, so stay quiet if it wasn't
+    meant for him (sets last_ignored).
     Returns True if he was interrupted."""
+    global last_ignored
+    last_ignored = False
     clips = queue.Queue(maxsize=3)
     interrupted = threading.Event()
     ui_events.stop_speaking.clear()
@@ -91,13 +110,16 @@ def respond(text: str, t_heard: float = None, stream=None) -> bool:
     def produce():
         count = 0
         try:
-            for sentence in think_stream(text):
+            for sentence in think_stream(text, followup=followup) if followup else think_stream(text):
                 if interrupted.is_set():
                     break
                 count += 1
                 # Start the voice now; the text is shown when it starts playing.
                 put((sentence, tts.synthesize(sentence)))
-            if count == 0 and not interrupted.is_set():
+            if count == 0 and followup and not interrupted.is_set():
+                global last_ignored
+                last_ignored = True   # not for him: say nothing
+            elif count == 0 and not interrupted.is_set():
                 # Never leave him hanging in silence.
                 msg = "Sorry, sir, I lost my train of thought. Could you say that again?"
                 put((msg, tts.synthesize(msg)))
@@ -232,6 +254,13 @@ def main():
             ui_events.emit("you", text)
 
             said = normalize(text)
+            followup = not need_wake and typed is None
+            if followup and (is_acknowledgement(said) or (is_exit(said) and "jarvis" not in said)):
+                # "I understand", "bye" etc. without his name: end the chat quietly.
+                print("[follow-up ignored: sounded like the end of the conversation]")
+                need_wake = True
+                stream.start()
+                continue
             if is_exit(said):
                 say("Powering down. Goodbye, sir.")
                 break
@@ -242,14 +271,15 @@ def main():
                 stream.start()
                 continue
 
-            was_interrupted = respond(text, t_heard, stream)
+            was_interrupted = respond(text, t_heard, stream, followup=followup) if followup \
+                else respond(text, t_heard, stream)
             if system.shutdown_requested:
                 break
 
             stream.start()
             if was_interrupted:
                 need_wake, already_woken = True, True  # go straight to listening
-            elif typed is not None:
+            elif typed is not None or last_ignored:
                 need_wake = True  # typed chat: wait for the next message or wake word
             else:
                 # Keep listening briefly so you can reply without the wake word.

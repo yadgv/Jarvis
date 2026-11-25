@@ -13,18 +13,18 @@ SKILLS = [*memory_tools.SKILLS, *timers.SKILLS, *weather.SKILLS, *web_search.SKI
 _BY_NAME = {s["name"]: s for s in SKILLS}
 
 
-def anthropic_tools():
+def anthropic_tools(exclude=()):
     return [
         {"name": s["name"], "description": s["description"], "input_schema": s["parameters"]}
-        for s in SKILLS
+        for s in SKILLS if s["name"] not in exclude
     ]
 
 
-def openai_tools():
+def openai_tools(exclude=()):
     return [
         {"type": "function",
          "function": {"name": s["name"], "description": s["description"], "parameters": s["parameters"]}}
-        for s in SKILLS
+        for s in SKILLS if s["name"] not in exclude
     ]
 
 
