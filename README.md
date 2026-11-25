@@ -36,17 +36,19 @@ Wake word → Whisper → Claude → Piper voice. Runs on Windows now and on a R
    ```
    Say **"Hey Jarvis"**, then talk. Say **"Goodbye Jarvis"** to quit.
 
-## Desktop window
+## Desktop widget
 ```
 python gui.py          (or: python main.py --gui)
 ```
-Opens a window with a glowing orb of particles that shows what Jarvis is doing: slow cyan drift
-when standing by, green and rippling with your voice while he listens, swirling amber while he
-thinks, and pulsing with his voice while he speaks. Below it is the conversation.
-Type a message and press Enter, or press **Talk** to speak without the wake word.
-While he's speaking the button becomes **Stop** (or press Esc). "Hey Jarvis" still works.
-Closing the window turns Jarvis off. `python main.py` still runs him without a window.
-If the window doesn't appear, the terminal prints why (lines starting with `[gui]`).
+Jarvis appears as a small orb of particles in the bottom-right corner, on top of your other windows.
+- **Click** the orb to talk (no wake word needed). Click again while he's speaking to stop him.
+- **Drag** it to move it. **Right-click** it to type a message, move it back to the corner, or quit.
+- While you talk to him a panel slides out with what you said, his reply and a box to type in,
+  then tucks away after a few seconds.
+- The orb is silver when standing by, green while listening, amber while thinking, blue while speaking.
+
+"Hey Jarvis" still works. `python main.py` still runs him without the widget.
+If it doesn't appear, the terminal prints why (lines starting with `[gui]`).
 
 ## Tuning
 - Jarvis tells speech from noise with a voice detector (webrtcvad), so quiet talking counts.
@@ -102,7 +104,7 @@ Jarvis to start on boot (and restart if he crashes). On a Pi, Jarvis uses the fa
 ## Structure
 ```
 main.py        main loop
-gui.py         desktop window (python gui.py)
+gui.py         corner widget (python gui.py)
 ui_events.py   connects the window to the voice loop
 tests/         automated tests
 deploy/        Raspberry Pi setup script and service
