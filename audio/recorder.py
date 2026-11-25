@@ -6,6 +6,7 @@ import sounddevice as sd
 
 import config
 import ui_events
+from audio import smart_turn
 
 CHUNK = 1280  # 80 ms at 16 kHz (also what openWakeWord expects)
 VAD_FRAME = 320  # 20 ms frames for webrtcvad (4 per chunk)
@@ -66,9 +67,14 @@ def is_speech(chunk) -> bool:
     return voiced >= 2  # at least 40 ms of the 80 ms chunk is voice
 
 
-def record_until_silence(stream, start_timeout: float = None) -> np.ndarray:
+def record_until_silence(stream, start_timeout: float = None, ignore_seconds: float = 0) -> np.ndarray:
     """Returns float32 audio in [-1, 1] for Whisper.
     Gives up (returns empty audio) if no speech starts within start_timeout seconds.
+    The first ignore_seconds (the wake beep) are kept, so words said over the
+    beep aren't lost, but don't count as speech.
+
+    With Smart Turn on, a short pause ends your turn only if the model thinks
+    you've finished the sentence; a "thinking" pause waits longer.
 
     Background voices also sound like speech, so once you've started talking
     Jarvis learns how loud *you* are. After that, only sound at least
@@ -82,9 +88,15 @@ def record_until_silence(stream, start_timeout: float = None) -> np.ndarray:
     speaker_level = 0.0
     speech_chunks = 0
     chunks_per_sec = config.SAMPLE_RATE / CHUNK
-    max_silent = int(config.SILENCE_SECONDS * chunks_per_sec)
+    max_silent = plain_silent = int(config.SILENCE_SECONDS * chunks_per_sec)
     max_chunks = int(config.MAX_RECORD_SECONDS * chunks_per_sec)
     startup_limit = int(start_timeout * chunks_per_sec)
+    skip = int((ignore_seconds or 0) * chunks_per_sec + 0.999)
+    smart = smart_turn.load()
+    if smart:
+        smart_first = max(1, int(config.SMART_TURN_SILENCE * chunks_per_sec))
+        smart_every = max(1, int(0.4 * chunks_per_sec))
+        max_silent = int(config.SMART_TURN_MAX_SILENCE * chunks_per_sec)
     ended = "time limit"
 
     for i in range(max_chunks):
@@ -96,7 +108,7 @@ def record_until_silence(stream, start_timeout: float = None) -> np.ndarray:
         loudness = float(np.abs(chunk).mean())
         ui_events.emit("level", min(1.0, loudness / 1500))
 
-        talking = is_speech(chunk)
+        talking = i >= skip and is_speech(chunk)
         if talking and heard_speech and loudness < speaker_level * config.SPEAKER_DROP:
             talking = False  # someone quieter in the background, not you
         if talking:
@@ -111,6 +123,15 @@ def record_until_silence(stream, start_timeout: float = None) -> np.ndarray:
         if heard_speech and silent_chunks > max_silent:
             ended = "pause"
             break
+        if (smart and heard_speech and silent_chunks >= smart_first
+                and (silent_chunks - smart_first) % smart_every == 0):
+            audio = np.concatenate(frames).astype(np.float32) / 32768.0
+            finished = smart_turn.is_finished(audio)
+            if finished is None:  # model failed: back to a plain pause
+                smart, max_silent = False, plain_silent
+            elif finished:
+                ended = "finished sentence"
+                break
         if not heard_speech and i > startup_limit:
             peak = max(float(np.abs(f).mean()) for f in frames)
             print(f"[mic] no speech detected (loudest {peak:.0f}, needed {_threshold:.0f})")
@@ -122,20 +143,18 @@ def record_until_silence(stream, start_timeout: float = None) -> np.ndarray:
     return audio
 
 
-def chime(stream):
-    """Short two-tone beep so you know Jarvis is listening.
-    The mic is paused while it plays so the beep isn't recorded."""
+def chime(stream) -> float:
+    """Short two-tone beep so you know Jarvis is listening. Returns its length.
+    The mic keeps running (like GLaDOS and Home Assistant's pre-roll buffer),
+    so "Hey Jarvis, what's the weather" said in one go isn't cut; the
+    recorder just doesn't count the beep as speech."""
     if not config.WAKE_CHIME:
-        return
+        return 0.0
     rate = 22050
     t1 = np.linspace(0, 0.07, int(rate * 0.07), endpoint=False)
     t2 = np.linspace(0, 0.09, int(rate * 0.09), endpoint=False)
     tone = np.concatenate([np.sin(2 * np.pi * 880 * t1), np.sin(2 * np.pi * 1320 * t2)])
     fade = np.minimum(1, np.minimum(np.arange(tone.size), np.arange(tone.size)[::-1]) / 200)
     tone = (0.25 * tone * fade).astype(np.float32)
-    stream.stop()
-    try:
-        sd.play(tone, rate)
-        sd.wait()
-    finally:
-        stream.start()
+    sd.play(tone, rate)  # doesn't wait: recording starts straight away
+    return tone.size / rate + 0.1  # plus a little for the speaker's delay

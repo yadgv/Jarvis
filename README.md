@@ -71,9 +71,17 @@ or switch off "Jarvis" in Task Manager > Startup apps.
 - It says "no speech detected" when you did talk → lower `MIN_SPEECH_LEVEL` (the log shows how loud you were).
 - It never stops listening → raise `VAD_AGGRESSIVENESS` (max 3) or `MIN_SPEECH_LEVEL`.
 - People talking in the background keep him listening → raise `SPEAKER_DROP` (e.g. 0.5). The log line `[mic] recorded ...` shows how loud you were and what was ignored.
-- It cuts you off mid-sentence → raise `SILENCE_SECONDS` (default 0.6) or lower `SPEAKER_DROP`.
-- It cuts you off → raise `SILENCE_SECONDS`.
-- Wake word misfires → raise `WAKE_THRESHOLD` (e.g. 0.6).
+- It cuts you off mid-sentence → raise `SMART_TURN_MAX_SILENCE` (or `SILENCE_SECONDS` with `SMART_TURN = False`), or lower `SPEAKER_DROP`.
+- **Smart Turn** ([pipecat-ai/smart-turn](https://github.com/pipecat-ai/smart-turn)) listens to how you stopped:
+  a finished sentence ends after 0.3 s, a thinking pause ("I want to… um") waits up to 2 s.
+  The 8 MB model downloads to `memory/` the first time. The log shows `[turn] finished? 0.93`.
+- You can start talking during the beep; those words are kept.
+- Wake word misfires → raise `WAKE_THRESHOLD` (e.g. 0.6). A voice detector (`WAKE_VAD_THRESHOLD`) already
+  stops most TV/music wakes.
+- **Only wake for your voice:** `pip install scikit-learn scipy tqdm`, then `python train_my_voice.py`
+  (about 3 minutes: say "Hey Jarvis" 8 times, read 4 sentences, 5 s of quiet). Delete
+  `memory/my_voice_verifier.pkl` to go back to anyone.
+- **Music turns down** while he listens and talks (Windows, apps in `DUCK_APPS`, needs `pip install pycaw`).
 - To test without the wake word, set `MODE = "enter"`.
 - After a reply he keeps listening for `FOLLOWUP_SECONDS` (5) so you can carry on without "Hey Jarvis". In that window he only answers things meant for him: "okay", "I understand", "bye" (without his name) or chatter to someone else end the conversation quietly, and he can't be shut down by it. Set `FOLLOWUP_SECONDS = 0` to always need the wake word.
 
@@ -82,6 +90,8 @@ or switch off "Jarvis" in Task Manager > Startup apps.
   Say **"new conversation"** to start fresh.
 - Say **"remember that..."** and he saves it for good; he may also save personal details you mention.
   Say **"forget that..."** to remove one. Facts live in `memory/facts.json`, which you can edit by hand.
+- Past `FACTS_IN_PROMPT` (25) facts, only the newest few and the ones matching what you said are sent to Claude.
+- If you cut him off with "Hey Jarvis", he remembers only what he actually got to say.
 
 ## Skills
 Jarvis can use tools (all free, no extra API keys):
@@ -180,6 +190,11 @@ Jarvis to start on boot (and restart if he crashes). On a Pi, Jarvis uses the fa
 ## Logs and tests
 - Everything Jarvis prints also goes to `jarvis.log`, with times, including how long each reply took.
 - `pip install pytest` then `pytest` runs the tests (no mic or API key needed). GitHub runs them on every PR.
+
+## Credits
+Some ideas and code are adapted from other open-source assistants: [GLaDOS](https://github.com/dnhkng/GlaDOS) (MIT),
+[Smart Turn](https://github.com/pipecat-ai/smart-turn) (BSD 2-Clause), [openWakeWord](https://github.com/dscripka/openWakeWord) (Apache-2.0)
+and Home Assistant's [linux-voice-assistant](https://github.com/OHF-Voice/linux-voice-assistant) (Apache-2.0).
 
 ## Structure
 ```

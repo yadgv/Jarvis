@@ -1,12 +1,49 @@
 """Listens for "Hey Jarvis" using openWakeWord (free, runs on the Pi)."""
+import os
+
 import openwakeword
 from openwakeword.model import Model
 
 import config
 from audio.recorder import CHUNK
 
-openwakeword.utils.download_models()  # one-time download, cached after
-_model = Model(wakeword_models=[config.WAKE_WORD_MODEL], inference_framework="onnx")
+openwakeword.utils.download_models()  # one-time download (also the voice detector), cached after
+
+
+def _options():
+    """Extra checks openWakeWord has built in (github.com/dscripka/openWakeWord):
+    - vad_threshold: a Silero voice detector must also hear speech, so TV, music
+      and noise that happen to score high don't wake him.
+    - Speex noise suppression (Linux/Pi, needs speexdsp-ns).
+    - custom_verifier_models: a small model trained on *your* voice
+      (python train_my_voice.py), so other people saying "Hey Jarvis" don't."""
+    opts = {"wakeword_models": [config.WAKE_WORD_MODEL], "inference_framework": "onnx"}
+    if config.WAKE_VAD_THRESHOLD:
+        opts["vad_threshold"] = config.WAKE_VAD_THRESHOLD
+    if config.WAKE_NOISE_SUPPRESSION:
+        try:
+            import speexdsp_ns  # noqa: F401
+            opts["enable_speex_noise_suppression"] = True
+        except ImportError:
+            print("[wake] noise suppression needs: pip install speexdsp-ns (Linux only)")
+    return opts
+
+
+def _load():
+    # Fresh options for each Model: openWakeWord rewrites the model list in place.
+    model = Model(**_options())
+    if config.WAKE_VERIFIER and os.path.exists(config.WAKE_VERIFIER):
+        try:
+            name = next(iter(model.models))  # "hey_jarvis"
+            model = Model(**_options(), custom_verifier_models={name: config.WAKE_VERIFIER},
+                          custom_verifier_threshold=config.WAKE_VERIFIER_THRESHOLD)
+            print("[wake] only waking for your voice (memory/my_voice_verifier.pkl)")
+        except Exception as e:  # e.g. scikit-learn missing
+            print(f"[wake] couldn't load your-voice check ({e}); waking for anyone")
+    return model
+
+
+_model = _load()
 
 
 def wait_for_wake_word(stream, poll=None):

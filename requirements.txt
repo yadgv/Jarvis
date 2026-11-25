@@ -13,3 +13,5 @@ recurring-ical-events
 pillow
 pyautogui
 pyserial
+pycaw; sys_platform == "win32"
+# optional, only for train_my_voice.py (your-voice wake word): scikit-learn scipy tqdm
