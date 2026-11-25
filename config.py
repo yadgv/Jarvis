@@ -1,8 +1,31 @@
 """All settings in one place. Change these when porting to the Raspberry Pi."""
 import os
 
+
+def _load_env_file():
+    """Read KEY=value lines from a .env file next to this one, so API keys
+    work no matter which terminal or editor starts Jarvis. Real environment
+    variables win. The .env file is git-ignored."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    if not os.path.exists(path):
+        return
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+_load_env_file()
+
 # --- Brain ---
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+if not ANTHROPIC_API_KEY:
+    print("[setup] ANTHROPIC_API_KEY is not set, so Jarvis can't think.\n"
+          "        Put this line in a file called .env in the jarvis folder:\n"
+          "        ANTHROPIC_API_KEY=sk-ant-...")
 LLM_MODEL = "claude-haiku-5-5"          # fast + cheap for voice
 MAX_HISTORY_TURNS = 10                   # conversation memory (pairs)
 SYSTEM_PROMPT = (
