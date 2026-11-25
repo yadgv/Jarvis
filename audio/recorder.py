@@ -1,4 +1,6 @@
 """Records from the mic until you stop talking."""
+import sys
+
 import numpy as np
 import sounddevice as sd
 
@@ -13,7 +15,9 @@ try:
     import webrtcvad
     _vad = webrtcvad.Vad(config.VAD_AGGRESSIVENESS)
 except Exception as e:  # not installed / failed to load
-    print(f"[mic] voice detector unavailable ({e}); using loudness only.")
+    print(f"[mic] voice detector unavailable ({e}); using loudness only.\n"
+          f"      To install it for the Python that runs Jarvis:\n"
+          f'      "{sys.executable}" -m pip install webrtcvad-wheels')
     _vad = None
 
 # Minimum loudness for a chunk to count as speech. calibrate() raises it in

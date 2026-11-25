@@ -15,10 +15,14 @@ Wake word → Whisper → Claude → Piper voice. Runs on Windows now and on a R
    mkdir voices
    python -m piper.download_voices en_GB-alan-medium --data-dir voices
    ```
-4. Set your API key (from console.anthropic.com):
+4. Set your API key (from console.anthropic.com). Easiest: create a file named `.env`
+   in the `jarvis` folder containing:
    ```
-   setx ANTHROPIC_API_KEY "sk-ant-..."
+   ANTHROPIC_API_KEY=sk-ant-...
    ```
+   (It's git-ignored. Or use `setx ANTHROPIC_API_KEY "sk-ant-..."` and restart your terminal/VS Code.)
+   If you run Jarvis with a different Python than the one you installed packages into,
+   install them with that Python: `"path\to\python.exe" -m pip install -r requirements.txt`.
    Set your Fish Audio key (fish.audio → API Keys) for the main voice:
    ```
    setx FISH_API_KEY "your-fish-key"
