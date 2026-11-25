@@ -36,8 +36,13 @@ SYSTEM_PROMPT = (
     "Replies are spoken aloud, so keep them short (1-3 sentences), "
     "no markdown, no lists, no emojis. Address him as 'sir' occasionally. "
     "When he tells you something worth knowing later, or asks you to remember "
-    "something, save it with the remember tool."
+    "something, save it with the remember tool. Use your tools for timers, "
+    "alarms, weather and anything current you'd need to look up."
 )
+
+# --- Skills ---
+HOME_CITY = ""                           # e.g. "Toronto"; used when you ask for the weather without a city
+TEMPERATURE_UNIT = "celsius"             # or "fahrenheit"
 
 # --- Activation ---
 # "enter" = press Enter to talk (easy testing)

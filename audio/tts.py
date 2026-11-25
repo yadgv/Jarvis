@@ -4,6 +4,7 @@ If Fish Audio fails (no internet, bad key, out of credits) it drops to the next 
 """
 import io
 import os
+import threading
 import wave
 
 import numpy as np
@@ -11,6 +12,9 @@ import requests
 import sounddevice as sd
 
 import config
+
+# Only one thing talks at a time (e.g. a timer going off while Jarvis is mid-sentence).
+_speaking = threading.RLock()
 
 # ---------- Fish Audio ----------
 FISH_URL = "https://api.fish.audio/v1/tts"
@@ -89,8 +93,9 @@ def speak_system(text: str):
         import pyttsx3
         _fallback = pyttsx3.init()
         _fallback.setProperty("rate", 175)
-    _fallback.say(text)
-    _fallback.runAndWait()
+    with _speaking:
+        _fallback.say(text)
+        _fallback.runAndWait()
 
 
 def synthesize(text: str):
@@ -105,8 +110,9 @@ def synthesize(text: str):
 
 def play(clip):
     audio, rate = clip
-    sd.play(audio, rate)
-    sd.wait()
+    with _speaking:
+        sd.play(audio, rate)
+        sd.wait()
 
 
 def speak(text: str):
