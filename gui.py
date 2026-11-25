@@ -43,7 +43,12 @@ IS_WINDOWS = sys.platform == "win32"
 # the desktop with nothing behind them. Elsewhere it shows as a dark background.
 KEY = "#010203" if IS_WINDOWS else "#0b0f14"
 PANEL, PANEL_EDGE = "#0f141a", "#1c2631"
-TEXT, MUTED = "#e8edf2", "#7b8896"
+TEXT, MUTED = "#f2f6fa", "#b4c0cc"
+YOU_TEXT = "#cfd9e3"
+SHADOW = "#000000"   # behind the text; not the see-through KEY colour
+# On Windows the window stays one size and the panel area is see-through;
+# elsewhere (no see-through colour) it shrinks to the orb when collapsed.
+FIXED_SIZE = IS_WINDOWS
 SANS = "Segoe UI" if IS_WINDOWS else "DejaVu Sans"
 
 ORB = 128            # size of the round orb, in pixels
@@ -190,28 +195,32 @@ class JarvisWidget:
         ox, oy = PANEL_W + ORB / 2, ORB / 2  # orb centre (top-right of the canvas)
         # Panel (hidden while collapsed)
         top = 0
-        self.panel_items = [
-            _round_rect(c, 2, top + 2, PANEL_W - 10, PANEL_H - 6, 16, fill=PANEL, outline=PANEL_EDGE,
-                        tags="panel"),
-        ]
-        self.status_item = c.create_text(20, top + 18, anchor="w", text="", font=(SANS, 9, "bold"), fill=MUTED)
-        self.you_item = c.create_text(20, top + 40, anchor="nw", text="", width=PANEL_W - 44,
-                                      font=(SANS, 9), fill=MUTED)
-        self.jarvis_item = c.create_text(20, top + 62, anchor="nw", text="", width=PANEL_W - 44,
-                                         font=(SANS, 10), fill=TEXT)
-        self.entry = tk.Entry(self.root, font=(SANS, 10), bg="#161d25", fg=TEXT, insertbackground=TEXT,
-                              relief="flat", highlightthickness=1, highlightbackground=PANEL_EDGE,
-                              highlightcolor="#3d5266")
+        # No background: the text floats on the desktop like the orb. Each line
+        # has a thin black outline so it stays readable on light windows too.
+        self.panel_items = []
+        self.shadows = {}
+        self.status_item = self._text(20, top + 18, anchor="w", font=(SANS, 9, "bold"), fill=MUTED)
+        self.you_item = self._text(20, top + 40, anchor="nw", width=PANEL_W - 44, font=(SANS, 9, "bold"),
+                                   fill=YOU_TEXT)
+        self.jarvis_item = self._text(20, top + 62, anchor="nw", width=PANEL_W - 44, font=(SANS, 10, "bold"),
+                                      fill=TEXT)
+        # On Windows the KEY colour is see-through, so the text box has no fill either.
+        self.entry = tk.Entry(self.root, font=(SANS, 10, "bold"), bg=KEY, fg=TEXT, insertbackground=TEXT,
+                              relief="flat", highlightthickness=1, highlightbackground="#6b7c8d",
+                              highlightcolor="#9fb3c6")
         self.entry.bind("<Return>", lambda e: self.send())
         self.entry.bind("<Escape>", lambda e: self.close_typing())
         self.entry_item = c.create_window(18, PANEL_H - 20, anchor="sw", window=self.entry, width=PANEL_W - 46,
                                           height=28)
-        self.hint_item = c.create_text(20, PANEL_H - 24, anchor="w", text="Click here to type",
-                                       font=(SANS, 8), fill=MUTED, tags="panel")
-        for item in (self.status_item, self.you_item, self.jarvis_item):
+        self.hint_item = self._text(20, PANEL_H - 24, anchor="w", text="Click here to type",
+                                    font=(SANS, 8, "bold"), fill=MUTED)
+        for item in (self.status_item, self.you_item, self.jarvis_item, self.hint_item):
             c.addtag_withtag("panel", item)
+            for s in self.shadows[item]:
+                c.addtag_withtag("panel", s)
         c.tag_bind("panel", "<Button-1>", lambda e: self.open_typing())
         self.panel_items += [self.status_item, self.you_item, self.jarvis_item, self.entry_item, self.hint_item]
+        self.panel_items += [s for group in self.shadows.values() for s in group]
         # Orb: just the particles and ring, no disc behind them
         self.orb = Orb(c, ox, oy, ORB * 0.28)
         for item in [self.orb.ring] + self.orb.dots:
@@ -222,6 +231,28 @@ class JarvisWidget:
         c.bind("<Button-3>", lambda e: self.menu.tk_popup(e.x_root, e.y_root))
         c.bind("<Button-2>", lambda e: self.menu.tk_popup(e.x_root, e.y_root))  # macOS right-click
         self.hit = self._hit_area() if IS_WINDOWS else None
+
+    OUTLINE = ((-1, 0), (1, 0), (0, -1), (0, 1), (1, 1))
+
+    def _text(self, x, y, **kw):
+        """A text item with a thin black outline: copies of the same text, 1px
+        around it, drawn underneath and kept in step with it."""
+        group = [self.canvas.create_text(x + dx, y + dy, **{**kw, "fill": SHADOW}) for dx, dy in self.OUTLINE]
+        item = self.canvas.create_text(x, y, **kw)
+        self.shadows[item] = group
+        return item
+
+    def set_text(self, item, **kw):
+        self.canvas.itemconfigure(item, **kw)
+        kw.pop("fill", None)
+        if kw:
+            for s in self.shadows[item]:
+                self.canvas.itemconfigure(s, **kw)
+
+    def move_text(self, item, x, y):
+        self.canvas.coords(item, x, y)
+        for s, (dx, dy) in zip(self.shadows[item], self.OUTLINE):
+            self.canvas.coords(s, x + dx, y + dy)
 
     def _hit_area(self):
         """See-through pixels on Windows also let clicks fall through to the
@@ -256,14 +287,23 @@ class JarvisWidget:
                 # Some Tk builds (seen on Windows) ignore "hidden" for embedded
                 # widgets, so also move the box far outside the canvas.
                 self.canvas.coords(item, (18, PANEL_H - 20) if show else (-5000, -5000))
-            elif item == self.hint_item:
+            elif item == self.hint_item or item in self.shadows.get(self.hint_item, ()):
                 show = on and not self.typing
             self.canvas.itemconfigure(item, state="normal" if show else "hidden")
         self._place()
 
     def _place(self):
-        w = PANEL_W + ORB if self.expanded else ORB
-        h = max(ORB, PANEL_H) if self.expanded else ORB
+        # Keep the orb on screen whatever happens (e.g. a different screen size).
+        sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
+        self.right = min(max(self.right, ORB), sw)
+        self.top = min(max(self.top, 0), max(0, sh - ORB))
+        if FIXED_SIZE:
+            # The window never changes size: the panel area is see-through and
+            # clicks pass through it, so opening the panel can't move the orb.
+            w, h = PANEL_W + ORB, max(ORB, PANEL_H)
+        else:
+            w = PANEL_W + ORB if self.expanded else ORB
+            h = max(ORB, PANEL_H) if self.expanded else ORB
         # The canvas always holds the full layout; when collapsed, scroll it
         # so only the orb (top-right corner) is inside the window.
         self.canvas.configure(width=w, height=h, scrollregion=(PANEL_W + ORB - w, 0, PANEL_W + ORB, h))
@@ -331,7 +371,7 @@ class JarvisWidget:
             self.entry.delete(0, "end")
             ui_events.inbox.put(("text", text))
         else:
-            self.canvas.itemconfigure(self.status_item, text="BUSY, TRY AGAIN IN A MOMENT")
+            self.set_text(self.status_item, text="BUSY, TRY AGAIN IN A MOMENT")
         self.last_activity = time.time()
 
     # ----- updates -----
@@ -381,10 +421,10 @@ class JarvisWidget:
             jarvis = "…" + jarvis[-169:].split(" ", 1)[-1]
         self.last_activity = time.time()
         self.set_expanded(True)  # hidden items have no size, so show the panel before measuring
-        self.canvas.itemconfigure(self.you_item, text=f"You: {self.you_text}" if self.you_text else "")
-        self.canvas.itemconfigure(self.jarvis_item, text=jarvis)
+        self.set_text(self.you_item, text=f"You: {self.you_text}" if self.you_text else "")
+        self.set_text(self.jarvis_item, text=jarvis)
         _, y1, _, y2 = self.canvas.bbox(self.you_item) or (0, 0, 0, 0)
-        self.canvas.coords(self.jarvis_item, 20, (y2 + 6) if self.you_text else 40)
+        self.move_text(self.jarvis_item, 20, (y2 + 6) if self.you_text else 40)
         self.last_activity = time.time()
 
     def set_status(self, status):
@@ -392,7 +432,7 @@ class JarvisWidget:
         if status == "listening":
             self.jarvis_turn_open = False  # the next reply replaces the old one
         label, colour, *_ = STATES.get(status, (status, SILVER, 0, 0, 0))
-        self.canvas.itemconfigure(self.status_item, text=label.upper(), fill=_hex(colour))
+        self.set_text(self.status_item, text=label.upper(), fill=_hex(colour))
         if status in ACTIVE:
             self.last_activity = time.time()
 
