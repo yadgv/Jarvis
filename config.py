@@ -41,7 +41,7 @@ SYSTEM_PROMPT = (
     "no markdown, no lists, no emojis. Address him as 'sir' occasionally. "
     "When he tells you something worth knowing later, or asks you to remember "
     "something, save it with the remember tool. Use your tools for timers, "
-    "alarms, weather, share prices, opening apps, volume and music, and anything "
+    "alarms, weather, his calendar, share prices, opening apps, volume and music, and anything "
     "current you'd need to look up. "
     "If he wants you to turn off, use the shut_down tool."
 )
@@ -49,7 +49,10 @@ SYSTEM_PROMPT = (
 # --- Skills ---
 HOME_CITY = "Courtice, Ontario"          # "Place, Region/Country"; used when you ask for the weather without a city
 HOME_COORDS = (43.91, -78.79)            # lat, lon of HOME_CITY; skips the lookup (None to look it up)
-TEMPERATURE_UNIT = "celsius"
+TEMPERATURE_UNIT = "celsius"             # or "fahrenheit"
+# Private iCal links of your calendars (read-only), set in .env, space-separated.
+# Google Calendar: Settings > your calendar > Integrate calendar > Secret address in iCal format.
+CALENDAR_ICS_URLS = os.getenv("CALENDAR_ICS_URLS", "").split()
 # Apps Jarvis can open by name. Anything in the Windows Start menu works too
 # ("open Spotify"), so only add ones it can't find. Values are run as-is.
 APPS = {
@@ -62,7 +65,7 @@ APPS = {
     "chrome": "chrome",
     "google chrome": "chrome",
     "edge": "msedge",
-}             # or "fahrenheit"
+}
 
 # --- Activation ---
 # "enter" = press Enter to talk (easy testing)

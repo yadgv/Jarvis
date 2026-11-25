@@ -18,7 +18,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install test dependencies
         # Audio, speech and API libraries are stubbed in tests/conftest.py.
-        run: pip install pytest numpy requests
+        run: pip install pytest numpy requests icalendar recurring-ical-events
       - name: Compile everything
         run: python -m compileall -q .
       - name: Run tests
