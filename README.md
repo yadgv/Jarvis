@@ -92,6 +92,9 @@ or switch off "Jarvis" in Task Manager > Startup apps.
   Say **"forget that..."** to remove one. Facts live in `memory/facts.json`, which you can edit by hand.
 - Past `FACTS_IN_PROMPT` (25) facts, only the newest few and the ones matching what you said are sent to Claude.
 - If you cut him off with "Hey Jarvis", he remembers only what he actually got to say.
+- When a tool takes a while (searching, the screen, email) he says a short "One moment, sir." after 4 seconds
+  and "Still working on it" every 25, so you're not left in silence. Tools can also narrate their own steps
+  with `skills.progress("...")`.
 
 ## Skills
 Jarvis can use tools (all free, no extra API keys):
