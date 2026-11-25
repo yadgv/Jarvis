@@ -1,5 +1,5 @@
 """JARVIS corner widget: a small orb of particles that sits on top of your
-other windows in the bottom-right corner of the screen.
+other windows in the top-right corner of the screen.
 
     python gui.py          (or: python main.py --gui)
 
@@ -9,6 +9,7 @@ other windows in the bottom-right corner of the screen.
 - While you talk to him a panel slides out next to the orb with what you
   said, his reply and a box to type in. It tucks away again when he's done.
 - Right-click the orb for: type a message, move back to the corner, quit.
+  Click the panel to open the text box; Esc closes it.
 
 The orb is silver while standing by, green while listening, amber while
 thinking and blue while speaking, and it moves with the voice.
@@ -41,7 +42,7 @@ IS_WINDOWS = sys.platform == "win32"
 # On Windows this colour is see-through, so the widget is just the round orb
 # and the panel. Elsewhere it shows as a dark background.
 KEY = "#010203" if IS_WINDOWS else "#0b0f14"
-PUCK, PUCK_EDGE = "#0b0f14", "#1c2631"
+PUCK, PUCK_EDGE = "#121a23", "#3a4b5c"
 PANEL, PANEL_EDGE = "#0f141a", "#1c2631"
 TEXT, MUTED = "#e8edf2", "#7b8896"
 SANS = "Segoe UI" if IS_WINDOWS else "DejaVu Sans"
@@ -49,7 +50,7 @@ SANS = "Segoe UI" if IS_WINDOWS else "DejaVu Sans"
 ORB = 128            # size of the round orb, in pixels
 PANEL_W = 330        # width of the panel that slides out
 PANEL_H = 190
-MARGIN = (24, 64)    # distance from the right and bottom of the screen
+MARGIN = (24, 24)    # distance from the right and top of the screen
 COLLAPSE_AFTER = 7   # seconds of quiet before the panel tucks away
 PARTICLES = 220
 FPS = 30
@@ -114,7 +115,7 @@ class Orb:
 
         cos_t, sin_t = math.cos(0.35), math.sin(0.35)
         amp = ripple + energy * 0.28
-        dark = (11, 15, 20)
+        dark = (18, 26, 35)
         for (x, y, z, phase, speed), dot in zip(self.points, self.dots):
             a = (self.angle * speed if swirl else self.angle) + swirl * y * 1.5 * math.sin(t * 0.7)
             ca, sa = math.cos(a), math.sin(a)
@@ -126,7 +127,7 @@ class Orb:
             px = cx + x2 * r * breathe * wobble * persp
             py = cy + y2 * r * breathe * wobble * persp
             size = 0.5 + 1.2 * depth + 0.6 * energy * depth
-            colour = _mix(dark, _mix(self.colour, (255, 255, 255), 0.25 * depth), 0.15 + 0.85 * depth)
+            colour = _mix(dark, _mix(self.colour, (255, 255, 255), 0.25 * depth), 0.3 + 0.7 * depth)
             c.coords(dot, px - size, py - size, px + size, py + size)
             c.itemconfigure(dot, fill=_hex(colour))
 
@@ -154,7 +155,8 @@ class JarvisWidget:
         if IS_WINDOWS:
             root.attributes("-transparentcolor", KEY)
         self.right = root.winfo_screenwidth() - MARGIN[0]
-        self.bottom = root.winfo_screenheight() - MARGIN[1]
+        self.top = MARGIN[1]
+        self.typing = False
 
         self.canvas = tk.Canvas(root, width=PANEL_W + ORB, height=max(ORB, PANEL_H), bg=KEY,
                                 highlightthickness=0)
@@ -177,11 +179,12 @@ class JarvisWidget:
     def _build(self):
         c = self.canvas
         h = max(ORB, PANEL_H)
-        ox, oy = PANEL_W + ORB / 2, h - ORB / 2  # orb centre (bottom-right of the canvas)
+        ox, oy = PANEL_W + ORB / 2, ORB / 2  # orb centre (top-right of the canvas)
         # Panel (hidden while collapsed)
-        top = h - PANEL_H
+        top = 0
         self.panel_items = [
-            _round_rect(c, 2, top + 2, PANEL_W - 10, h - 6, 16, fill=PANEL, outline=PANEL_EDGE),
+            _round_rect(c, 2, top + 2, PANEL_W - 10, PANEL_H - 6, 16, fill=PANEL, outline=PANEL_EDGE,
+                        tags="panel"),
         ]
         self.status_item = c.create_text(20, top + 18, anchor="w", text="", font=(SANS, 9, "bold"), fill=MUTED)
         self.you_item = c.create_text(20, top + 40, anchor="nw", text="", width=PANEL_W - 44,
@@ -193,11 +196,17 @@ class JarvisWidget:
                               highlightcolor="#3d5266")
         self.entry.bind("<Return>", lambda e: self.send())
         self.entry.bind("<Escape>", lambda e: self.close_typing())
-        self.entry_item = c.create_window(18, h - 20, anchor="sw", window=self.entry, width=PANEL_W - 46, height=28)
-        self.panel_items += [self.status_item, self.you_item, self.jarvis_item, self.entry_item]
+        self.entry_item = c.create_window(18, PANEL_H - 20, anchor="sw", window=self.entry, width=PANEL_W - 46,
+                                          height=28)
+        self.hint_item = c.create_text(20, PANEL_H - 24, anchor="w", text="Click here to type",
+                                       font=(SANS, 8), fill=MUTED, tags="panel")
+        for item in (self.status_item, self.you_item, self.jarvis_item):
+            c.addtag_withtag("panel", item)
+        c.tag_bind("panel", "<Button-1>", lambda e: self.open_typing())
+        self.panel_items += [self.status_item, self.you_item, self.jarvis_item, self.entry_item, self.hint_item]
         # Orb
         self.puck = c.create_oval(ox - ORB / 2 + 2, oy - ORB / 2 + 2, ox + ORB / 2 - 2, oy + ORB / 2 - 2,
-                                  fill=PUCK, outline=PUCK_EDGE, width=1, tags="orb")
+                                  fill=PUCK, outline=PUCK_EDGE, width=2, tags="orb")
         self.orb = Orb(c, ox, oy, ORB * 0.28)
         for item in [self.orb.ring] + self.orb.dots:
             c.addtag_withtag("orb", item)
@@ -207,34 +216,39 @@ class JarvisWidget:
         c.bind("<Button-3>", lambda e: self.menu.tk_popup(e.x_root, e.y_root))
         c.bind("<Button-2>", lambda e: self.menu.tk_popup(e.x_root, e.y_root))  # macOS right-click
 
-    def set_expanded(self, on):
-        if on == self.expanded:
+    def set_expanded(self, on, force=False):
+        if on == self.expanded and not force:
             return
+        if not on:
+            self.typing = False
         self.expanded = on
-        state = "normal" if on else "hidden"
         for item in self.panel_items:
-            self.canvas.itemconfigure(item, state=state)
+            show = on
+            if item == self.entry_item:
+                show = on and self.typing   # the text box only appears when you click to type
+            elif item == self.hint_item:
+                show = on and not self.typing
+            self.canvas.itemconfigure(item, state="normal" if show else "hidden")
         self._place()
 
     def _place(self):
         w = PANEL_W + ORB if self.expanded else ORB
         h = max(ORB, PANEL_H) if self.expanded else ORB
         # The canvas always holds the full layout; when collapsed, scroll it
-        # so only the orb (bottom-right corner) is inside the window.
-        self.canvas.configure(width=w, height=h,
-                              scrollregion=(PANEL_W + ORB - w, max(ORB, PANEL_H) - h, PANEL_W + ORB, max(ORB, PANEL_H)))
+        # so only the orb (top-right corner) is inside the window.
+        self.canvas.configure(width=w, height=h, scrollregion=(PANEL_W + ORB - w, 0, PANEL_W + ORB, h))
         self.canvas.xview_moveto(0)
         self.canvas.yview_moveto(0)
-        self.root.geometry(f"{w}x{h}+{int(self.right - w)}+{int(self.bottom - h)}")
+        self.root.geometry(f"{w}x{h}+{int(self.right - w)}+{int(self.top)}")
 
     def to_corner(self):
         self.right = self.root.winfo_screenwidth() - MARGIN[0]
-        self.bottom = self.root.winfo_screenheight() - MARGIN[1]
+        self.top = MARGIN[1]
         self._place()
 
     # ----- mouse -----
     def _press(self, e):
-        self.drag = (e.x_root, e.y_root, self.right, self.bottom, False)
+        self.drag = (e.x_root, e.y_root, self.right, self.top, False)
 
     def _move(self, e):
         if not self.drag:
@@ -243,7 +257,7 @@ class JarvisWidget:
         dx, dy = e.x_root - x0, e.y_root - y0
         if moved or abs(dx) + abs(dy) > 5:
             self.drag = (x0, y0, r0, b0, True)
-            self.right, self.bottom = r0 + dx, b0 + dy
+            self.right, self.top = r0 + dx, b0 + dy
             self._place()
 
     def _release(self, e):
@@ -263,13 +277,16 @@ class JarvisWidget:
             ui_events.inbox.put(("talk", None))
 
     def open_typing(self):
-        self.set_expanded(True)
+        self.typing = True
+        self.set_expanded(True, force=True)
         self.last_activity = time.time()
         self.root.focus_force()
         self.entry.focus_set()
 
     def close_typing(self):
         self.entry.delete(0, "end")
+        self.typing = False
+        self.set_expanded(self.expanded, force=True)
         self.root.focus_set()
         self.last_activity = 0
 
@@ -320,8 +337,7 @@ class JarvisWidget:
         except tk.TclError:
             pass
 
-        typing = self.root.focus_get() == self.entry and self.entry.get()
-        if self.status in ACTIVE or typing:
+        if self.status in ACTIVE or (self.typing and (self.entry.get() or self.root.focus_get() == self.entry)):
             self.last_activity = time.time()
         self.set_expanded(time.time() - self.last_activity < COLLAPSE_AFTER)
         self.root.after(1000 // FPS, self.tick)
@@ -335,8 +351,7 @@ class JarvisWidget:
         self.canvas.itemconfigure(self.you_item, text=f"You: {self.you_text}" if self.you_text else "")
         self.canvas.itemconfigure(self.jarvis_item, text=jarvis)
         _, y1, _, y2 = self.canvas.bbox(self.you_item) or (0, 0, 0, 0)
-        top = max(ORB, PANEL_H) - PANEL_H
-        self.canvas.coords(self.jarvis_item, 20, (y2 + 6) if self.you_text else top + 40)
+        self.canvas.coords(self.jarvis_item, 20, (y2 + 6) if self.you_text else 40)
         self.last_activity = time.time()
 
     def set_status(self, status):
@@ -374,7 +389,7 @@ def start():
     JarvisWidget(root)
     root.lift()
     threading.Thread(target=run_voice_loop, daemon=True).start()
-    print("[gui] Jarvis is in the bottom-right corner of your screen. "
+    print("[gui] Jarvis is in the top-right corner of your screen. "
           "Click him to talk, drag to move, right-click for options.")
     root.mainloop()
 
