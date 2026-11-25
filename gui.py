@@ -39,10 +39,9 @@ import config
 import ui_events
 
 IS_WINDOWS = sys.platform == "win32"
-# On Windows this colour is see-through, so the widget is just the round orb
-# and the panel. Elsewhere it shows as a dark background.
+# On Windows this colour is see-through, so the orb's dots float straight on
+# the desktop with nothing behind them. Elsewhere it shows as a dark background.
 KEY = "#010203" if IS_WINDOWS else "#0b0f14"
-PUCK, PUCK_EDGE = "#121a23", "#3a4b5c"
 PANEL, PANEL_EDGE = "#0f141a", "#1c2631"
 TEXT, MUTED = "#e8edf2", "#7b8896"
 SANS = "Segoe UI" if IS_WINDOWS else "DejaVu Sans"
@@ -87,7 +86,7 @@ class Orb:
         self.t0 = time.perf_counter()
         rr = radius * 1.42
         self.ring = canvas.create_arc(cx - rr, cy - rr, cx + rr, cy + rr, start=90, extent=300,
-                                      style="arc", outline=PUCK_EDGE, width=2)
+                                      style="arc", outline=_hex(SILVER), width=2)
         self.points, self.dots = [], []
         golden = math.pi * (3 - math.sqrt(5))
         for i in range(PARTICLES):
@@ -96,7 +95,7 @@ class Orb:
             theta = golden * i
             self.points.append((ring * math.cos(theta), y, ring * math.sin(theta),
                                 random.uniform(0, math.tau), random.uniform(0.6, 1.4)))
-            self.dots.append(canvas.create_oval(0, 0, 0, 0, outline="", fill=PUCK))
+            self.dots.append(canvas.create_oval(0, 0, 0, 0, outline="", fill=_hex(SILVER)))
 
     def frame(self, status, level=0.0):
         _, target, spin, swirl, ripple = STATES.get(status, STATES["idle"])
@@ -111,11 +110,14 @@ class Orb:
         busy = status in ACTIVE
         c.itemconfigure(self.ring, start=(90 - math.degrees(self.angle) * 1.5) % 360,
                         extent=300 if busy else 359,
-                        outline=_hex(_mix((28, 38, 49), self.colour, 0.55 if busy else 0.12)))
+                        outline=_hex(_mix((95, 105, 115), self.colour, 0.75 if busy else 0.3)))
 
         cos_t, sin_t = math.cos(0.35), math.sin(0.35)
         amp = ripple + energy * 0.28
-        dark = (18, 26, 35)
+        # No backing disc any more, so the dots must stand out on any wallpaper:
+        # far-side dots are a dimmer shade of the colour (not near-black), and
+        # each dot gets a thin darker rim so it still shows on a white window.
+        dim = _mix(self.colour, (70, 78, 86), 0.55)
         for (x, y, z, phase, speed), dot in zip(self.points, self.dots):
             a = (self.angle * speed if swirl else self.angle) + swirl * y * 1.5 * math.sin(t * 0.7)
             ca, sa = math.cos(a), math.sin(a)
@@ -127,9 +129,10 @@ class Orb:
             px = cx + x2 * r * breathe * wobble * persp
             py = cy + y2 * r * breathe * wobble * persp
             size = 0.5 + 1.2 * depth + 0.6 * energy * depth
-            colour = _mix(dark, _mix(self.colour, (255, 255, 255), 0.25 * depth), 0.3 + 0.7 * depth)
+            colour = _mix(dim, _mix(self.colour, (255, 255, 255), 0.25 * depth), 0.2 + 0.8 * depth)
             c.coords(dot, px - size, py - size, px + size, py + size)
-            c.itemconfigure(dot, fill=_hex(colour))
+            c.itemconfigure(dot, fill=_hex(colour),
+                            outline=_hex(_mix(colour, (10, 14, 18), 0.45)) if size > 1.5 else "")
 
 
 def _round_rect(canvas, x1, y1, x2, y2, r, **kw):
@@ -204,9 +207,7 @@ class JarvisWidget:
             c.addtag_withtag("panel", item)
         c.tag_bind("panel", "<Button-1>", lambda e: self.open_typing())
         self.panel_items += [self.status_item, self.you_item, self.jarvis_item, self.entry_item, self.hint_item]
-        # Orb
-        self.puck = c.create_oval(ox - ORB / 2 + 2, oy - ORB / 2 + 2, ox + ORB / 2 - 2, oy + ORB / 2 - 2,
-                                  fill=PUCK, outline=PUCK_EDGE, width=2, tags="orb")
+        # Orb: just the particles and ring, no disc behind them
         self.orb = Orb(c, ox, oy, ORB * 0.28)
         for item in [self.orb.ring] + self.orb.dots:
             c.addtag_withtag("orb", item)
@@ -215,6 +216,27 @@ class JarvisWidget:
         c.tag_bind("orb", "<ButtonRelease-1>", self._release)
         c.bind("<Button-3>", lambda e: self.menu.tk_popup(e.x_root, e.y_root))
         c.bind("<Button-2>", lambda e: self.menu.tk_popup(e.x_root, e.y_root))  # macOS right-click
+        self.hit = self._hit_area() if IS_WINDOWS else None
+
+    def _hit_area(self):
+        """See-through pixels on Windows also let clicks fall through to the
+        window underneath, so without a backing disc only the tiny dots would be
+        clickable. This almost invisible square (1% opacity) under the orb
+        catches clicks and drags for it instead."""
+        try:
+            hit = tk.Toplevel(self.root)
+            hit.overrideredirect(True)
+            hit.attributes("-topmost", True)
+            hit.attributes("-alpha", 0.01)
+            hit.configure(bg="black")
+            hit.bind("<ButtonPress-1>", self._press)
+            hit.bind("<B1-Motion>", self._move)
+            hit.bind("<ButtonRelease-1>", self._release)
+            hit.bind("<Button-3>", lambda e: self.menu.tk_popup(e.x_root, e.y_root))
+            return hit
+        except tk.TclError as e:
+            print(f"[gui] no click area behind the orb: {e}")
+            return None
 
     def set_expanded(self, on, force=False):
         if on == self.expanded and not force:
@@ -243,6 +265,9 @@ class JarvisWidget:
         self.canvas.xview_moveto(0)
         self.canvas.yview_moveto(0)
         self.root.geometry(f"{w}x{h}+{int(self.right - w)}+{int(self.top)}")
+        if getattr(self, "hit", None):
+            self.hit.geometry(f"{ORB}x{ORB}+{int(self.right - ORB)}+{int(self.top)}")
+            self.root.lift()
 
     def to_corner(self):
         self.right = self.root.winfo_screenwidth() - MARGIN[0]
