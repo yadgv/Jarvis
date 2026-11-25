@@ -42,8 +42,12 @@ def daily_briefing(a=None):
         _section("Reminders", _reminders_today),
         _section("Headlines", lambda: news.get_news({"count": config.BRIEFING_HEADLINES})),
     ]
+    if getattr(config, "GMAIL_ADDRESS", None):
+        from skills import email_reader
+        parts.append(_section("New email", lambda: email_reader.check_email({"count": 5, "days": 1})))
     return ("Give a short spoken briefing from this (under about 45 seconds): greet him for the time of "
-            "day, then weather, what's on today, reminders, and two or three headlines in a few words each. "
+            "day, then weather, what's on today, reminders, any important new email (who from and what about), "
+            "and two or three headlines in a few words each. "
             "Skip anything unavailable or empty.\n" + "\n".join(parts))
 
 
