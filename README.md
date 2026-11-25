@@ -33,8 +33,10 @@ Wake word → Whisper → Claude → Piper voice. Runs on Windows now and on a R
    Say **"Hey Jarvis"**, then talk. Say **"Goodbye Jarvis"** to quit.
 
 ## Tuning
-- It never stops listening → raise `SILENCE_THRESHOLD` in `config.py`.
-- It cuts you off → lower `SILENCE_THRESHOLD` or raise `SILENCE_SECONDS`.
+- Jarvis tells speech from noise with a voice detector (webrtcvad), so quiet talking counts.
+- It says "no speech detected" when you did talk → lower `MIN_SPEECH_LEVEL` (the log shows how loud you were).
+- It never stops listening → raise `VAD_AGGRESSIVENESS` (max 3) or `MIN_SPEECH_LEVEL`.
+- It cuts you off → raise `SILENCE_SECONDS`.
 - Wake word misfires → raise `WAKE_THRESHOLD` (e.g. 0.6).
 - To test without the wake word, set `MODE = "enter"`.
 

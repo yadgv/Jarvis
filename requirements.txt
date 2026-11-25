@@ -6,3 +6,4 @@ pyttsx3
 sounddevice
 numpy
 requests
+webrtcvad-wheels

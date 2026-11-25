@@ -18,7 +18,7 @@ FISH_RATE = 44100
 _fish_ok = bool(config.FISH_API_KEY and config.FISH_VOICE_ID)
 
 
-def _speak_fish(text: str) -> bool:
+def _synth_fish(text: str):
     global _fish_ok
     try:
         r = requests.post(
@@ -41,17 +41,15 @@ def _speak_fish(text: str) -> bool:
             # Bad key or no credits: stop trying for this session
             print(f"[tts] Fish Audio {r.status_code}: {r.text[:120]} -> using fallback.")
             _fish_ok = False
-            return False
+            return None
         r.raise_for_status()
         audio = np.frombuffer(r.content, dtype=np.int16)
         if audio.size == 0:
-            return False
-        sd.play(audio, FISH_RATE)
-        sd.wait()
-        return True
+            return None
+        return audio, FISH_RATE
     except Exception as e:
         print(f"[tts] Fish Audio failed ({e}) -> using fallback.")
-        return False
+        return None
 
 
 # ---------- Piper (local) ----------
@@ -64,9 +62,9 @@ if os.path.exists(config.PIPER_VOICE):
         print(f"[tts] Piper failed to load ({e}).")
 
 
-def _speak_piper(text: str) -> bool:
+def _synth_piper(text: str):
     if _piper is None:
-        return False
+        return None
     try:
         buf = io.BytesIO()
         with wave.open(buf, "wb") as wf:
@@ -75,19 +73,17 @@ def _speak_piper(text: str) -> bool:
         with wave.open(buf, "rb") as wf:
             rate = wf.getframerate()
             audio = np.frombuffer(wf.readframes(wf.getnframes()), dtype=np.int16)
-        sd.play(audio, rate)
-        sd.wait()
-        return True
+        return audio, rate
     except Exception as e:
         print(f"[tts] Piper failed ({e}).")
-        return False
+        return None
 
 
 # ---------- pyttsx3 (last resort) ----------
 _fallback = None
 
 
-def _speak_system(text: str):
+def speak_system(text: str):
     global _fallback
     if _fallback is None:
         import pyttsx3
@@ -97,11 +93,27 @@ def _speak_system(text: str):
     _fallback.runAndWait()
 
 
+def synthesize(text: str):
+    """Turn text into audio without playing it. Returns (samples, rate),
+    or None if only the system voice is left (it can't render to audio)."""
+    if _fish_ok:
+        clip = _synth_fish(text)
+        if clip is not None:
+            return clip
+    return _synth_piper(text)
+
+
+def play(clip):
+    audio, rate = clip
+    sd.play(audio, rate)
+    sd.wait()
+
+
 def speak(text: str):
     if not text:
         return
-    if _fish_ok and _speak_fish(text):
-        return
-    if _speak_piper(text):
-        return
-    _speak_system(text)
+    clip = synthesize(text)
+    if clip is not None:
+        play(clip)
+    else:
+        speak_system(text)

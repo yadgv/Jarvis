@@ -1,11 +1,14 @@
 """JARVIS - Phase 1: wake word -> listen -> think -> speak."""
+import queue
 import re
+import threading
 
 import config
+from audio import tts
 from audio.recorder import calibrate, chime, open_stream, record_until_silence
 from audio.stt import transcribe
 from audio.tts import speak
-from brain.llm import reset, think
+from brain.llm import reset, think_stream
 
 if config.MODE == "wake":
     from audio.wakeword import wait_for_wake_word
@@ -23,6 +26,35 @@ RESET_PHRASES = {"new conversation", "forget that", "forget everything", "start 
 def normalize(text: str) -> str:
     text = re.sub(r"[^a-z' ]", " ", text.lower())
     return re.sub(r"\s+", " ", text).strip()
+
+
+def respond(text: str):
+    """Think and speak at the same time: while one sentence plays, the next
+    is already being written by Claude and turned into audio."""
+    clips = queue.Queue(maxsize=3)
+
+    def produce():
+        count = 0
+        try:
+            for sentence in think_stream(text):
+                count += 1
+                print(f"JARVIS: {sentence}")
+                clips.put((sentence, tts.synthesize(sentence)))
+        except Exception as e:
+            print(f"[brain error] {e}")
+            if count == 0:
+                msg = "I'm having trouble reaching my servers, sir."
+                clips.put((msg, tts.synthesize(msg)))
+        finally:
+            clips.put(None)
+
+    threading.Thread(target=produce, daemon=True).start()
+    while (item := clips.get()) is not None:
+        sentence, clip = item
+        if clip is not None:
+            tts.play(clip)
+        else:
+            tts.speak_system(sentence)
 
 
 def main():
@@ -54,10 +86,10 @@ def main():
             # audio (and Jarvis's own voice) doesn't pile up in the buffer.
             stream.stop()
 
-            text = transcribe(audio)
+            text = transcribe(audio) if len(audio) else ""
             if not text:
-                if need_wake:
-                    print("[heard nothing]")
+                if need_wake and len(audio):
+                    print("[heard sound but couldn't make out words]")
                 need_wake = True
                 stream.start()
                 continue
@@ -74,14 +106,7 @@ def main():
                 stream.start()
                 continue
 
-            try:
-                reply = think(text)
-            except Exception as e:
-                print(f"[brain error] {e}")
-                reply = "I'm having trouble reaching my servers, sir."
-            if reply:
-                print(f"JARVIS: {reply}")
-                speak(reply)
+            respond(text)
 
             stream.start()
             # Keep listening briefly so you can reply without the wake word.
