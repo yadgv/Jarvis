@@ -1,6 +1,8 @@
 """Listens for "Hey Jarvis" using openWakeWord (free, runs on the Pi)."""
+import collections
 import os
 
+import numpy as np
 import openwakeword
 from openwakeword.model import Model
 
@@ -46,6 +48,22 @@ def _load():
 _model = _load()
 
 
+# "Third person in the room" (off by default, config.ROOM_CONTEXT): keep the
+# last minute of sound heard while waiting, in memory only, so "Jarvis, what
+# do you think?" can use what was just being discussed. Idea from isair/jarvis.
+_room = collections.deque(maxlen=max(1, int(getattr(config, "ROOM_CONTEXT_SECONDS", 60) * 16000 / CHUNK)))
+WAKE_TAIL_CHUNKS = 20  # ~1.6 s: the "Hey Jarvis" itself, left out
+
+
+def take_room_audio():
+    """The audio heard before the wake word (float32), then forgets it."""
+    chunks = list(_room)[:-WAKE_TAIL_CHUNKS]
+    _room.clear()
+    if not chunks:
+        return np.array([], dtype=np.float32)
+    return np.concatenate(chunks).astype(np.float32) / 32768.0
+
+
 def wait_for_wake_word(stream, poll=None):
     """Blocks until the wake word is heard in WAKE_CONSECUTIVE_FRAMES frames in a row.
     Requiring a few frames filters out one-off spikes from TV, music or coughs.
@@ -58,6 +76,8 @@ def wait_for_wake_word(stream, poll=None):
             if request:
                 return request
         data, _ = stream.read(CHUNK)
+        if config.ROOM_CONTEXT:
+            _room.append(data[:, 0].copy())
         scores = _model.predict(data[:, 0])
         score = max(scores.values())
         if config.WAKE_DEBUG and score > 0.1:

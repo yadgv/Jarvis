@@ -159,6 +159,11 @@ WAKE_NOISE_SUPPRESSION = ON_PI           # Speex noise suppression for the wake 
 WAKE_VERIFIER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "memory", "my_voice_verifier.pkl")
 WAKE_VERIFIER_THRESHOLD = 0.3            # wake score above which your-voice check runs
 
+# "Third person in the room": remember the last minute of talk before "Hey Jarvis"
+# (in memory only, never saved) so "Jarvis, what do you think?" has context. Off by default.
+ROOM_CONTEXT = False
+ROOM_CONTEXT_SECONDS = 60
+
 # --- Audio ---
 SAMPLE_RATE = 16000
 MIC_DEVICE = None                        # None = default mic; set index on the Pi

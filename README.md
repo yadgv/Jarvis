@@ -86,6 +86,9 @@ or switch off "Jarvis" in Task Manager > Startup apps.
 - After a reply he keeps listening for `FOLLOWUP_SECONDS` (5) so you can carry on without "Hey Jarvis". In that window he only answers things meant for him: "okay", "I understand", "bye" (without his name) or chatter to someone else end the conversation quietly, and he can't be shut down by it. Set `FOLLOWUP_SECONDS = 0` to always need the wake word.
 
 ## Memory
+- **Third person in the room** (off by default; idea from isair/jarvis): set `ROOM_CONTEXT = True` and Jarvis
+  keeps the last minute of talk before "Hey Jarvis" in memory, so "Jarvis, what do you think?" or "settle this for
+  us" knows what you were discussing. It's turned into text on your PC, used for that one question, and never saved.
 - Jarvis remembers the conversation across restarts (if it was less than `HISTORY_MAX_AGE_HOURS` ago).
   Say **"new conversation"** to start fresh.
 - Say **"remember that..."** and he saves it for good; he may also save personal details you mention.

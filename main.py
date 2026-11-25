@@ -43,6 +43,7 @@ from skills import briefing, jobs, mcp_tools, reminders, system, timers
 import skills  # noqa: E402
 import telegram_bot  # noqa: E402
 import dictation  # noqa: E402
+import room_context  # noqa: E402
 
 watch_for_interrupt = None
 if config.MODE == "wake":
@@ -261,6 +262,7 @@ def main():
         smart_turn.load()  # downloads the end-of-sentence model the first time
 
         need_wake = True
+        room = None
         already_woken = False  # you said "Hey Jarvis" (or pressed Stop) to interrupt him
         while True:
             typed = None
@@ -270,6 +272,7 @@ def main():
                     kind = "talk"
                 else:
                     kind, typed = wait_for_trigger(stream)
+                room = room_context.start() if kind == "wake" else None
                 if kind != "text":
                     ducking.duck()  # music down while he listens and talks
                     beep = chime(stream)
@@ -322,6 +325,10 @@ def main():
             if not followup and briefing.is_first_hello(said):
                 extra["note"] = briefing.NOTE  # first hello of the day: give the morning briefing
                 briefing.mark_briefed()
+            if need_wake and room is not None:
+                heard = room_context.result(room)
+                if heard:
+                    extra["note"] = extra.get("note", "") + room_context.note(heard)
             was_interrupted = respond(text, t_heard, stream, **extra)
             if system.shutdown_requested:
                 break
