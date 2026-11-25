@@ -12,3 +12,4 @@ icalendar
 recurring-ical-events
 pillow
 pyautogui
+pyserial
