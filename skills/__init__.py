@@ -10,6 +10,7 @@ from skills import arduino  # noqa: E402
 from skills import briefing  # noqa: E402
 from skills import buzz  # noqa: E402
 from skills import calendar_events  # noqa: E402
+from skills import claude_code  # noqa: E402
 from skills import computer  # noqa: E402
 from skills import email_reader  # noqa: E402
 from skills import icloud_calendar  # noqa: E402
@@ -47,6 +48,7 @@ MODULES = [
     music,
     screen,
     computer,
+    claude_code,
     system,
     arduino,
     personality,

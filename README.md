@@ -122,6 +122,11 @@ Jarvis can use tools (all free, no extra API keys):
   "what's the buzz on Claude Code?", "what are people saying about the Raptors?". Checks Reddit, Hacker News,
   Polymarket odds and news from the last 30 days and sums it up in a few sentences; the full brief with links
   goes to your phone if the Telegram bot is set up.
+- **Claude Code by voice**: "ask Claude Code to add a dark mode to Jarvis". He reads the task back and starts
+  only after you say yes; it runs in the background in a folder from `CLAUDE_CODE_PROJECTS` (Jarvis's own folder
+  by default) and he tells you when it's done, with the full reply on Telegram. "Is Claude Code done?" checks.
+  Needs [Claude Code](https://docs.claude.com/claude-code) installed and signed in. `CLAUDE_CODE_PERMISSION_MODE`
+  is `acceptEdits`: it can edit files but skips anything needing more permission.
 - **Share prices** (Yahoo Finance): "what is Nvidia trading at?".
 - **PC control**: "open Spotify", "volume up", "set the volume to 30", "mute", "pause the music", "next song", "lock the PC".
   Apps come from the Start menu or the `APPS` list in `config.py`.

@@ -133,6 +133,11 @@ APPS = {
     "music": r"shell:AppsFolder\AppleInc.AppleMusicWin_nzyj5cx40ttqa!App",
 }
 
+# Claude Code by voice: project name -> folder. Needs Claude Code installed and signed in.
+CLAUDE_CODE_PROJECTS = {"jarvis": os.path.dirname(os.path.abspath(__file__))}
+CLAUDE_CODE_PERMISSION_MODE = "acceptEdits"   # may edit files; asks (so skips) anything riskier
+CLAUDE_CODE_TIMEOUT_MINUTES = 30
+
 # --- Activation ---
 # "enter" = press Enter to talk (easy testing)
 # "wake"  = say "Hey Jarvis"
