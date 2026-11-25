@@ -132,6 +132,10 @@ Jarvis can use tools (all free, no extra API keys):
   my unread email", "check every 15 minutes and tell me when Mom emails" (a watch only speaks up when something
   is new). "What jobs do I have?", "cancel the email job". Jobs can only look things up, never send or click.
   Saved in `memory/jobs.json`.
+- **Dictation**: hold **F9** (`DICTATION_KEY`), talk, let go, and your words are typed into whatever app you're in.
+  Speech is turned into text on your PC; nothing is sent anywhere.
+- **Edit by voice**: highlight text in any app and say "Jarvis, make this more formal" / "fix the grammar" /
+  "translate this to Arabic". He rewrites it and pastes it over the selection. (Ask by voice, so that app keeps focus.)
 - **Share prices** (Yahoo Finance): "what is Nvidia trading at?".
 - **PC control**: "open Spotify", "volume up", "set the volume to 30", "mute", "pause the music", "next song", "lock the PC".
   Apps come from the Start menu or the `APPS` list in `config.py`.
