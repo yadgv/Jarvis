@@ -7,7 +7,7 @@ DIR="$(pwd)"
 
 echo "== System packages"
 sudo apt-get update
-sudo apt-get install -y python3-venv python3-dev portaudio19-dev espeak-ng libatlas-base-dev
+sudo apt-get install -y python3-venv python3-dev python3-tk portaudio19-dev espeak-ng libatlas-base-dev
 
 echo "== Python packages (this takes a while on a Pi)"
 python3 -m venv venv

@@ -9,12 +9,17 @@ openwakeword.utils.download_models()  # one-time download, cached after
 _model = Model(wakeword_models=[config.WAKE_WORD_MODEL], inference_framework="onnx")
 
 
-def wait_for_wake_word(stream):
+def wait_for_wake_word(stream, poll=None):
     """Blocks until the wake word is heard in WAKE_CONSECUTIVE_FRAMES frames in a row.
-    Requiring a few frames filters out one-off spikes from TV, music or coughs."""
+    Requiring a few frames filters out one-off spikes from TV, music or coughs.
+    If poll() returns something (e.g. a message typed in the window), returns that."""
     _model.reset()
     hits = 0
     while True:
+        if poll is not None:
+            request = poll()
+            if request:
+                return request
         data, _ = stream.read(CHUNK)
         scores = _model.predict(data[:, 0])
         score = max(scores.values())

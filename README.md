@@ -36,6 +36,15 @@ Wake word → Whisper → Claude → Piper voice. Runs on Windows now and on a R
    ```
    Say **"Hey Jarvis"**, then talk. Say **"Goodbye Jarvis"** to quit.
 
+## Desktop window
+```
+python gui.py
+```
+Opens a window with the conversation and what Jarvis is doing (listening, thinking, speaking).
+Type a message and press Enter, or press **Talk** to speak without the wake word.
+While he's speaking the button becomes **Stop** (or press Esc). "Hey Jarvis" still works.
+Closing the window turns Jarvis off. `python main.py` still runs him without a window.
+
 ## Tuning
 - Jarvis tells speech from noise with a voice detector (webrtcvad), so quiet talking counts.
 - It says "no speech detected" when you did talk → lower `MIN_SPEECH_LEVEL` (the log shows how loud you were).
@@ -88,6 +97,8 @@ Jarvis to start on boot (and restart if he crashes). On a Pi, Jarvis uses the fa
 ## Structure
 ```
 main.py        main loop
+gui.py         desktop window (python gui.py)
+ui_events.py   connects the window to the voice loop
 tests/         automated tests
 deploy/        Raspberry Pi setup script and service
 config.py      all settings
