@@ -6,7 +6,7 @@ from datetime import datetime
 import anthropic
 
 import config
-from brain import backup, memory
+from brain import backup, memory, settings
 import skills
 
 # The SDK's defaults (10 minute timeout, 2 retries) let one stuck request
@@ -48,7 +48,7 @@ def _system_prompt() -> str:
     now = datetime.now().astimezone()
     hour = now.strftime("%I").lstrip("0") or "12"
     stamp = now.strftime(f"%A %d %B %Y, {hour}:%M %p")
-    prompt = f"{config.SYSTEM_PROMPT}{_HISTORY_NOTE}\nCurrent local date and time: {stamp} ({now.tzname()})."
+    prompt = f"{config.SYSTEM_PROMPT} {settings.prompt_lines()}{_HISTORY_NOTE}\nCurrent local date and time: {stamp} ({now.tzname()})."
     facts = memory.load_facts()
     if facts:
         prompt += "\nThings you know about the user:\n" + "\n".join(f"- {f}" for f in facts)

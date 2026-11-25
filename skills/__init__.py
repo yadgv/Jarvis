@@ -15,6 +15,7 @@ from skills import memory_tools  # noqa: E402
 from skills import music  # noqa: E402
 from skills import news  # noqa: E402
 from skills import pc_control  # noqa: E402
+from skills import personality  # noqa: E402
 from skills import reminders  # noqa: E402
 from skills import screen  # noqa: E402
 from skills import stocks  # noqa: E402
@@ -40,6 +41,7 @@ MODULES = [
     screen,
     computer,
     system,
+    personality,
 ]
 # Counts conversation turns, so a tool can tell "he said yes" (a later turn)
 # from the model confirming its own draft in the same turn.

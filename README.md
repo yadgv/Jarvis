@@ -141,6 +141,10 @@ Jarvis can use tools (all free, no extra API keys):
   - After `COMPUTER_MAX_STEPS` (40) rounds it pauses and asks whether to keep going. Only the last few
     screenshots are kept, so long tasks stay quick, but each task still costs more than a normal question.
   - Needs `pip install pillow pyautogui`.
+- **Personality and voice**: "be more casual", "keep it brief", "call me Ziad", "talk a bit faster",
+  "what are your settings?", "reset your personality". Styles: butler (default), casual, brief, formal, playful;
+  reply length short/normal/long; speed 0.7-1.5. Saved in `memory/settings.json`; defaults are in `config.py`.
+  To add a Fish Audio voice, copy its ID from fish.audio into `VOICES` in `config.py`, then say "use the deep voice".
 - **Interrupt**: say "Hey Jarvis" while he's talking to cut him off and ask something else (`BARGE_IN` in `config.py`).
 - **Shut down**: "okay, shut down", or just tell him you're done for the day.
 - **Memory**: "remember that…", "forget that…".

@@ -46,15 +46,26 @@ MEMORY_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "memory")
 HISTORY_MAX_AGE_HOURS = 6                # pick up the last conversation if it's newer than this
 MAX_FACTS = 100                          # long-term facts kept in memory/facts.json
 SYSTEM_PROMPT = (
-    "You are JARVIS, a witty, concise British AI assistant for Ziad. "
-    "Replies are spoken aloud, so keep them short (1-3 sentences), "
-    "no markdown, no lists, no emojis. Address him as 'sir' occasionally. "
+    "You are JARVIS, a British AI assistant for Ziad. "
+    "Replies are spoken aloud, so no markdown, no lists, no emojis. "
     "When he tells you something worth knowing later, or asks you to remember "
     "something, save it with the remember tool. Use your tools for timers, "
     "alarms, weather, his calendar, share prices, opening apps, volume and music, looking at and using his screen, and anything "
     "current you'd need to look up. "
     "If he wants you to turn off, use the shut_down tool."
 )
+
+# Personality and voice. These are the defaults; he can change them by voice
+# ("be more casual", "talk faster", "call me Ziad"), saved in memory/settings.json.
+STYLE = "butler"                         # butler, casual, brief, formal, playful
+REPLY_LENGTH = "normal"                  # short, normal, long
+CALL_ME = "sir"                          # how Jarvis addresses you; "nothing" for no title
+VOICE_SPEED = 1.0                        # 0.7 (slower) to 1.5 (faster)
+VOICE = "jarvis"                         # a name from VOICES below
+# Fish Audio voices by name: copy a voice's ID from its page on fish.audio to add one.
+VOICES = {
+    "jarvis": "e13fa398a7f445a685316a3de6089ce7",
+}
 
 # --- Skills ---
 # Looking at the screen uses a bigger model than the chat (better at reading screens).
