@@ -138,6 +138,9 @@ CLAUDE_CODE_PROJECTS = {"jarvis": os.path.dirname(os.path.abspath(__file__))}
 CLAUDE_CODE_PERMISSION_MODE = "acceptEdits"   # may edit files; asks (so skips) anything riskier
 CLAUDE_CODE_TIMEOUT_MINUTES = 30
 
+# Hold this key, talk, let go: your words are typed into the app you're in (None = off)
+DICTATION_KEY = "f9"
+
 # --- Activation ---
 # "enter" = press Enter to talk (easy testing)
 # "wake"  = say "Hey Jarvis"

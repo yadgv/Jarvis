@@ -127,6 +127,10 @@ Jarvis can use tools (all free, no extra API keys):
   by default) and he tells you when it's done, with the full reply on Telegram. "Is Claude Code done?" checks.
   Needs [Claude Code](https://docs.claude.com/claude-code) installed and signed in. `CLAUDE_CODE_PERMISSION_MODE`
   is `acceptEdits`: it can edit files but skips anything needing more permission.
+- **Dictation**: hold **F9** (`DICTATION_KEY`), talk, let go, and your words are typed into whatever app you're in.
+  Speech is turned into text on your PC; nothing is sent anywhere.
+- **Edit by voice**: highlight text in any app and say "Jarvis, make this more formal" / "fix the grammar" /
+  "translate this to Arabic". He rewrites it and pastes it over the selection. (Ask by voice, so that app keeps focus.)
 - **Share prices** (Yahoo Finance): "what is Nvidia trading at?".
 - **PC control**: "open Spotify", "volume up", "set the volume to 30", "mute", "pause the music", "next song", "lock the PC".
   Apps come from the Start menu or the `APPS` list in `config.py`.
