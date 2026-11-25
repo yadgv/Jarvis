@@ -17,7 +17,8 @@ class _Tee:
         self.stream, self.file, self.line_start = stream, open(path, "a", encoding="utf-8"), True
 
     def write(self, text):
-        self.stream.write(text)
+        if self.stream is not None:  # None when started without a console (pythonw)
+            self.stream.write(text)
         for part in text.splitlines(keepends=True):
             if self.line_start and part.strip():
                 self.file.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S  "))
@@ -26,7 +27,8 @@ class _Tee:
         self.file.flush()
 
     def flush(self):
-        self.stream.flush()
+        if self.stream is not None:
+            self.stream.flush()
 
 
 if config.LOG_FILE and __name__ == "__main__":
