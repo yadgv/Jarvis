@@ -113,7 +113,7 @@ def test_confirmation_pauses_and_resumes(env):
     first = computer.use_computer({"task": "email Sam"})
     assert first.startswith("CONFIRM:") and computer._pending
     assert computer.use_computer({"confirmed": True}) == "Sent it."
-    assert sent[1][-1] == {"role": "user", "content": "Yes, go ahead."}
+    assert sent[1][-1] == {"role": "user", "content": "Yes, go ahead / keep going."}
     assert computer._pending is None
 
 
@@ -127,8 +127,14 @@ def test_mouse_in_corner_stops(env, monkeypatch):
 def test_step_limit(env, monkeypatch):
     gui, sent, script = env
     monkeypatch.setattr(config, "COMPUTER_MAX_STEPS", 2)
-    script(resp(block("screenshot")), resp(block("screenshot")))
-    assert "stopped after 2 steps" in computer.use_computer({"task": "x"})
+    script(resp(block("screenshot")), resp(block("screenshot")), resp(text("All done."), stop="end_turn"))
+    out = computer.use_computer({"task": "x"})
+    assert "Paused after 2 steps" in out and computer._pending
+    # "keep going": picks up where it left off, without two user turns in a row
+    assert computer.use_computer({"confirmed": True}) == "All done."
+    roles = [m["role"] for m in sent[-1]]
+    assert all(a != b for a, b in zip(roles, roles[1:]))
+    assert sent[-1][-1]["content"][-1] == {"type": "text", "text": "Yes, go ahead / keep going."}
 
 
 def test_key_names():
@@ -141,3 +147,39 @@ def test_screenshots_sent_as_jpeg(env):
     gui = env[0]
     shot = computer.Screen(gui).screenshot()
     assert shot["source"]["media_type"] == "image/jpeg"
+
+
+def test_old_screenshots_are_dropped(env, monkeypatch):
+    gui, sent, script = env
+    script(*[resp(block("screenshot", id_=f"s{i}")) for i in range(5)], resp(text("Done."), stop="end_turn"))
+    computer.use_computer({"task": "long task"})
+    msgs = sent[-1]
+
+    def images(m):
+        found = []
+        for b in m["content"] if isinstance(m["content"], list) else []:
+            if isinstance(b, dict) and b.get("type") == "image":
+                found.append(b)
+            if isinstance(b, dict) and b.get("type") == "tool_result":
+                found += [c for c in b["content"] if c.get("type") == "image"]
+        return found
+    total = sum(len(images(m)) for m in msgs if m["role"] == "user")
+    assert total == computer.KEEP_SCREENSHOTS
+    assert images(msgs[-1])  # the newest one is kept
+
+
+def test_progress_shown_and_cancel(env, monkeypatch):
+    gui, sent, script = env
+    shown = []
+    monkeypatch.setattr(computer.ui_events, "emit", lambda k, t="": shown.append((k, t)))
+
+    def cancel_after_first(*a, **k):
+        computer.ui_events.cancel.set()
+        return (0, 0)
+    script(resp(text("Opening Chrome."), block("left_click", {"coordinate": [5, 5]})),
+           resp(text("never reached"), stop="end_turn"))
+    gui.click = cancel_after_first
+    out = computer.use_computer({"task": "x"})
+    assert out.startswith("Stopped: he clicked the orb")
+    assert ("info", "Opening Chrome.") in shown
+    assert not computer.ui_events.cancel.is_set()

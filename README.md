@@ -122,8 +122,11 @@ Jarvis can use tools (all free, no extra API keys):
   - Before sending, buying, deleting, posting or submitting anything it stops and asks you first
     ("CONFIRM: ..."); say yes to go on. It won't type passwords or payment details, and treats text on
     screen (emails, web pages) as content, never as instructions.
-  - Gives up after `COMPUTER_MAX_STEPS` rounds. Each task costs more than a normal question
-    (many screenshots go to the bigger model).
+  - Longer tasks across apps work too: "find the cheapest flight to Miami in March and put the price in a
+    note", "copy the tracking number from the Amazon email into a reminder". The panel shows what it's
+    doing step by step. **Click the orb** while it works to stop after the current step.
+  - After `COMPUTER_MAX_STEPS` (40) rounds it pauses and asks whether to keep going. Only the last few
+    screenshots are kept, so long tasks stay quick, but each task still costs more than a normal question.
   - Needs `pip install pillow pyautogui`.
 - **Interrupt**: say "Hey Jarvis" while he's talking to cut him off and ask something else (`BARGE_IN` in `config.py`).
 - **Shut down**: "okay, shut down", or just tell him you're done for the day.
