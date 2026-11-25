@@ -9,7 +9,10 @@ import config
 from brain import backup, memory
 import skills
 
-_client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+# The SDK's defaults (10 minute timeout, 2 retries) let one stuck request
+# freeze Jarvis for up to half an hour; seen twice in jarvis.log on 25 Nov.
+# For a stream the timeout is the longest gap between chunks, not the whole reply.
+_client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY, timeout=30.0, max_retries=1)
 
 # Whole user/assistant text pairs, oldest first. Loaded from disk so the
 # conversation survives a restart.

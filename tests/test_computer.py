@@ -23,8 +23,8 @@ class FakeImg:
     def thumbnail(self, size):
         pass
 
-    def save(self, buf, fmt):
-        buf.write(b"png")
+    def save(self, buf, fmt, **options):
+        buf.write(b"img")
 
 
 class FailSafeException(Exception):
@@ -134,3 +134,10 @@ def test_step_limit(env, monkeypatch):
 def test_key_names():
     assert computer._keys("ctrl+Return") == ["ctrl", "enter"]
     assert computer._keys("super") == ["win"]
+
+
+def test_screenshots_sent_as_jpeg(env):
+    """PNG screenshots made every step of a long task slower."""
+    gui = env[0]
+    shot = computer.Screen(gui).screenshot()
+    assert shot["source"]["media_type"] == "image/jpeg"
