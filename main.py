@@ -38,7 +38,7 @@ from audio.recorder import calibrate, chime, open_stream, record_until_silence
 from audio.stt import transcribe
 from audio.tts import speak
 from brain.llm import reset, think_stream
-from skills import system, timers
+from skills import reminders, system, timers
 
 watch_for_interrupt = None
 if config.MODE == "wake":
@@ -210,6 +210,7 @@ def wait_for_trigger(stream):
 
 def main():
     timers.announce = say
+    reminders.start()  # also reads out any that came due while he was off
     print("JARVIS online.")
     say("Jarvis online. At your service, sir.")
 

@@ -105,7 +105,7 @@ SKILLS = [
     },
     {
         "name": "set_alarm",
-        "description": "Set an alarm or reminder for a clock time today (or tomorrow if that time has passed).",
+        "description": "Set an alarm for a clock time today (or tomorrow if that time has passed). For reminders about something, use set_reminder.",
         "parameters": {
             "type": "object",
             "properties": {

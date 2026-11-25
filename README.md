@@ -88,6 +88,9 @@ Jarvis can use tools (all free, no extra API keys):
 - **Timers and alarms**: "set a 10 minute tea timer", "wake me at 7:30", "how long left?", "cancel the timer".
 - **Weather** (Open-Meteo): "what's the weather?", "will it rain this week?". Set `HOME_CITY` in `config.py`.
 - **Web search** (DuckDuckGo): "who won the match last night?".
+- **News** (Google News): "what's in the news?", "any tech news?", "news about the Leafs". Change `NEWS_REGION` in `config.py` for another country.
+- **Reminders**: "remind me to call mum on Friday at 6", "remind me in 20 minutes to check the oven", "what reminders do I have?".
+  They're saved in `memory/reminders.json`, so they survive a restart; any that came due while Jarvis was off are read out when he starts.
 - **Calendar** (read-only): "what's on today?", "am I free tomorrow afternoon?", "what's my week look like?".
   In Google Calendar open Settings, pick your calendar, scroll to *Integrate calendar* and copy the
   **Secret address in iCal format**. Add it to `.env`:
