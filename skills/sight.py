@@ -167,6 +167,11 @@ def read(want_code: bool = False) -> dict:
                 if code and code.get("html"):
                     out["html"] = code["html"]
             return out
+        if hwnd and sys.platform == "win32":
+            got = _fetch_address(hwnd, want_code)
+            if got:
+                out.update(got)
+                return out
     if hwnd:
         text = window_text(hwnd)
         if len(text) >= MIN_USEFUL:
@@ -176,6 +181,27 @@ def read(want_code: bool = False) -> dict:
         if text:
             out.update(text=text, how="Windows OCR")
     return out
+
+
+def _fetch_address(hwnd, want_code=False):
+    """No extension: copy the page's address from the browser and download it (public pages only)."""
+    try:
+        import requests
+        from skills import whiteboard, workspace
+        url = workspace._copy_url(whiteboard._user32(), hwnd)
+        if not url.startswith("http"):
+            return None
+        src = workspace._url_source(url)
+        if len(src.get("text", "").strip()) < MIN_USEFUL:
+            return None
+        got = {"url": url, "text": src["text"][:MAX_TEXT], "how": "downloading the page's address"}
+        if want_code:
+            r = requests.get(url, timeout=20, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+            got["html"] = r.text
+        return got
+    except Exception as e:
+        print(f"[sight] couldn't download the page: {type(e).__name__}: {e}")
+        return None
 
 
 def _save_code(html: str, title: str) -> str:
@@ -215,7 +241,7 @@ def read_screen(a=None):
             parts.append(f"The page's code (HTML, {len(seen['html']):,} characters, saved in full as "
                          f"{files._show(path)}); the start of it:\n<<<\n{_trim_html(seen['html'])}\n>>>")
         else:
-            parts.append("(The page's code wasn't available: that needs the browser extension.)")
+            parts.append("(The page's code wasn't available: the browser extension isn't connected.)")
     if question:
         parts.append(f"Answer his question from this: {question}")
     return "\n".join(parts)

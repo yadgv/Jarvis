@@ -252,10 +252,25 @@ def on_screen():
         if page and len(page.get("text", "")) > 200:
             # The extension already sent the page (works for pages behind a sign-in too).
             return _page_source(page), hwnd
-        url = _copy_url(user32, hwnd)
-        if not url:
-            raise ValueError(f"I couldn't read the address of the page in \"{title}\"")
-        return _url_source(url), hwnd
+        why = f"I couldn't read the address of the page in \"{title}\""
+        try:
+            url = _copy_url(user32, hwnd)
+            if url:
+                src = _url_source(url)
+                if len(src.get("text", "").strip()) >= 200:
+                    return src, hwnd
+                why = "the page came back nearly empty (it may need signing in)"
+        except Exception as e:
+            why = f"couldn't download the page ({type(e).__name__})"
+        # Last resort: the text the browser shows, through UI Automation or OCR.
+        from skills import sight
+        text = sight.window_text(hwnd)
+        if len(text) < 600:
+            text = sight.ocr_screen(hwnd) or text
+        if len(text.strip()) >= 200:
+            print(f"[workspace] {why}; using the window's own text ({len(text)} chars)")
+            return _page_source({"title": title, "url": "", "text": text}), hwnd
+        raise ValueError(why)
     m = DOC_FILE.search(title) or OFFICE.match(title)
     if m:
         name = m.group(1).strip()

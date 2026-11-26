@@ -93,7 +93,9 @@ SYSTEM_PROMPT = (
     "something, save it with the remember tool. Use your tools for timers, "
     "alarms, weather, his calendar, share prices, opening apps, volume and music, looking at and using his screen, and anything "
     "current you'd need to look up. "
-    "If he wants you to turn off, use the shut_down tool."
+    "If he wants you to turn off, use the shut_down tool. "
+    "Never make up what an article, page, document or screen says: only summarize or brief text a tool "
+    "actually read this turn. If you couldn't read it, say so plainly; never invent facts or figures."
 )
 
 # Personality and voice. These are the defaults; he can change them by voice

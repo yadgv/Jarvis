@@ -2,12 +2,24 @@
 // requests for the page's code. Nothing is sent anywhere else.
 const JARVIS = "http://127.0.0.1:47321";
 
+// The toolbar icon shows ON (green) while Jarvis is reachable, OFF (grey) when not.
+let shown = null;
+function badge(on) {
+  if (on === shown) return;
+  shown = on;
+  chrome.action.setBadgeText({text: on ? "ON" : "OFF"});
+  chrome.action.setBadgeBackgroundColor({color: on ? "#1a9e4b" : "#777777"});
+  chrome.action.setTitle({title: on ? "Jarvis eyes: connected to Jarvis"
+                                    : "Jarvis eyes: can't reach Jarvis (is Jarvis running?)"});
+}
+
 async function post(path, body) {
   try {
     const r = await fetch(JARVIS + path, {method: "POST", headers: {"Content-Type": "application/json"},
                                           body: JSON.stringify(body)});
+    badge(r.ok);
     return r.ok ? await r.json() : {};
-  } catch (e) { return {}; }   // Jarvis isn't running
+  } catch (e) { badge(false); return {}; }   // Jarvis isn't running
 }
 
 async function activeTab() {
@@ -56,12 +68,14 @@ async function listen() {
   waiting = true;
   try {
     for (let i = 0; i < 6; i++) {
-      const r = await fetch(JARVIS + "/next");
+      const r = await fetch(JARVIS + "/next", {method: "POST", headers: {"Content-Type": "application/json"},
+                                               body: "{}"});
+      badge(r.ok);
       if (!r.ok) break;
       const j = await r.json();
       if (j.want) await handle(j.want);
     }
-  } catch (e) { /* Jarvis isn't running */ }
+  } catch (e) { badge(false); /* Jarvis isn't running */ }
   waiting = false;
 }
 chrome.alarms.create("jarvis", {periodInMinutes: 0.5});

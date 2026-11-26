@@ -168,3 +168,79 @@ def test_phone_test_without_bot(monkeypatch):
     import telegram_bot
     monkeypatch.setattr(telegram_bot, "_token", lambda: "")
     assert "isn't set up" in phone.test_phone()
+
+
+@pytest.mark.parametrize("said,want", [
+    ("Can you brief this article for me?", True),
+    ("Could you write me a brief?", True),
+    ("Can you breathe this off?", True),
+    ("summarize this page", True),
+    ("brief me on what I'm reading", True),
+    ("give me a brief of my day", False),
+    ("brief me on the weather", False),
+    ("brief https://example.com/story", False),
+    ("what's the weather", False),
+])
+def test_brief_intent(said, want):
+    import skills
+    assert skills.brief_intent(said) is want
+
+
+def test_brief_intent_skips_edits_to_an_open_brief(monkeypatch):
+    import skills
+    from skills import workspace
+    monkeypatch.setitem(workspace._ws, "doc", "# Brief\n")
+    assert not skills.brief_intent("can you make the brief shorter and add a summary")
+    monkeypatch.setitem(workspace._ws, "doc", "")
+    assert skills.brief_intent("write me a brief")
+
+
+def test_brief_request_runs_the_tool_before_the_model(monkeypatch):
+    import skills
+    from brain import llm, local_llm, network
+    ran, seen = [], {}
+    monkeypatch.setattr(network, "online", lambda: True)
+    monkeypatch.setattr(local_llm, "should_use", lambda *a, **k: False)
+    monkeypatch.setattr(skills, "run", lambda name, args: ran.append(name) or "The brief is on the right half.")
+
+    def fake_chain(asked, system, said, tools_used, exclude=(), history=None, can_ask=True):
+        seen.update(asked=asked, exclude=exclude)
+        said.append("It's on screen, sir.")
+        yield "It's on screen, sir."
+    monkeypatch.setattr(llm, "_chain", fake_chain)
+    monkeypatch.setattr(llm.auto_memory, "run_in_background", lambda *a: None)
+    monkeypatch.setattr(llm.memory, "save_history", lambda h: None)
+    out = list(llm.think_stream("Can you brief this article for me?"))
+    assert ran == ["brief_document"] and out == ["It's on screen, sir."]
+    assert "brief_document -> The brief" in seen["asked"] and "brief_document" in seen["exclude"]
+
+
+def test_browser_without_extension_falls_back_to_window_text(monkeypatch):
+    from skills import browser_bridge, sight, whiteboard, workspace
+    monkeypatch.setattr(workspace.sys, "platform", "win32")
+    monkeypatch.setattr(whiteboard, "_user32", lambda: None)
+    monkeypatch.setattr(workspace, "_windows", lambda u: [(5, "Data breaches are coming fast - CBC News - Brave")])
+    monkeypatch.setattr(browser_bridge, "current", lambda hint="": None)
+    monkeypatch.setattr(workspace, "_copy_url", lambda u, h: "")
+    monkeypatch.setattr(sight, "window_text", lambda h: "Data breaches are coming fast and furious. " * 20)
+    monkeypatch.setattr(sight, "ocr_screen", lambda h=None: "")
+    src, hwnd = workspace.on_screen()
+    assert hwnd == 5 and "furious" in src["text"] and src["name"].startswith("Data breaches")
+
+
+def test_nothing_readable_says_why(monkeypatch):
+    from skills import browser_bridge, sight, whiteboard, workspace
+    monkeypatch.setattr(workspace.sys, "platform", "win32")
+    monkeypatch.setattr(whiteboard, "_user32", lambda: None)
+    monkeypatch.setattr(workspace, "_windows", lambda u: [(5, "Some page - Brave")])
+    monkeypatch.setattr(browser_bridge, "current", lambda hint="": None)
+    monkeypatch.setattr(workspace, "_copy_url", lambda u, h: "")
+    monkeypatch.setattr(sight, "window_text", lambda h: "")
+    monkeypatch.setattr(sight, "ocr_screen", lambda h=None: "")
+    with pytest.raises(ValueError):
+        workspace.on_screen()
+
+
+def test_no_made_up_briefs_rule():
+    import config
+    assert "never invent" in config.SYSTEM_PROMPT
