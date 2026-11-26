@@ -27,3 +27,11 @@ python-pptx
 openpyxl
 fpdf2
 playwright  # Canvas sign-in window (skills/canvas.py); uses the Edge already on the PC
+# Windows' own OCR (free, offline) for text in images and videos (skills/sight.py)
+winrt-runtime; sys_platform == "win32"
+winrt-Windows.Media.Ocr; sys_platform == "win32"
+winrt-Windows.Graphics.Imaging; sys_platform == "win32"
+winrt-Windows.Storage.Streams; sys_platform == "win32"
+winrt-Windows.Foundation; sys_platform == "win32"
+winrt-Windows.Foundation.Collections; sys_platform == "win32"
+winrt-Windows.Globalization; sys_platform == "win32"

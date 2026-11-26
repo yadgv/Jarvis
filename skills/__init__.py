@@ -50,6 +50,8 @@ from skills import recap  # noqa: E402
 from skills import vocab  # noqa: E402
 from skills import viewer3d  # noqa: E402
 from skills import workspace  # noqa: E402
+from skills import sight  # noqa: E402
+from skills import browser_bridge  # noqa: E402,F401
 
 MODULES = [
     briefing,
@@ -83,6 +85,7 @@ MODULES = [
     cad,
     viewer3d,
     workspace,
+    sight,
     personality,
     background,
     study,
@@ -192,6 +195,8 @@ _STUDY = re.compile(r"\b(quiz|flash ?cards?|pomodoro|study|studying|revise|revis
 _CANVAS = re.compile(r"\b(canvas|class files|course files|lecture (?:notes|slides|files)|my (?:classes|courses)|"
                      r"due|assignments?|homework|deadlines?)\b", re.I)
 CANVAS_TOOLS = ("canvas_setup", "canvas_sign_in", "canvas_courses", "canvas_download", "canvas_due")
+_SCREEN = re.compile(r"\b(screen|looking at|this page|this site|web ?page|website|tab|selected|selection|"
+                     r"read (?:me )?(?:this|that|it)|error|dialog|inspect|page code|source code|html|the code)\b", re.I)
 _BRIEF = re.compile(r"\b(brief|summari[sz]e|summary|outline|tl;?dr|this (?:article|page|pdf|paper|document|doc)|"
                     r"the brief|section \d|sections?|reader|lab manual)\b", re.I)
 BRIEF_TOOLS = ("brief_document", "edit_brief", "read_brief", "save_brief_as_word", "view_document")
@@ -232,6 +237,8 @@ def pick_tools(text, limit=12, exclude=()):
         keep |= {"quiz_me", "quiz_next", "pomodoro", "find_files"}
     if _CANVAS.search(text or ""):
         keep |= set(CANVAS_TOOLS)
+    if _SCREEN.search(text or ""):
+        keep |= {"read_screen", "look_at_screen"}
     if _BRIEF.search(text or ""):
         keep |= set(BRIEF_TOOLS)
     if _RECAP.search(text or ""):
@@ -252,6 +259,7 @@ PROGRESS_EVERY = 25.0
 FILLERS = {
     "use_computer": "Working on it, sir.",
     "look_at_screen": "Having a look, sir.",
+    "read_screen": "Having a look, sir.",
     "whats_the_buzz": "Seeing what people are saying, sir.",
     "web_search": "Searching now, sir.",
     "find_files": "Looking through your files, sir.",
@@ -319,7 +327,7 @@ NEEDS_INTERNET = {"get_weather", "get_news", "web_search", "whats_the_buzz", "ge
 # (time, timers, memory) show nothing: a chip that flashes is just noise.
 TASK_LABELS = {
     "open_app": "Opening {name}", "open_website": "Opening {url}", "open_file": "Opening the file", "open_folder": "Opening {folder}",
-    "use_computer": "Working on the screen", "look_at_screen": "Looking at the screen",
+    "use_computer": "Working on the screen", "look_at_screen": "Looking at the screen", "read_screen": "Reading the screen",
     "web_search": "Searching the web", "get_weather": "Checking the weather", "get_news": "Getting the news",
     "check_email": "Checking email", "get_calendar_events": "Checking the calendar",
     "show_diagram": "Drawing on the whiteboard", "make_document": "Making the document",

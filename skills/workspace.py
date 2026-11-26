@@ -165,6 +165,15 @@ def _url_source(url: str) -> dict:
             "blocks": blocks[:600]}
 
 
+def _page_source(page: dict) -> dict:
+    """A page the browser extension sent: its text as the source, no download needed."""
+    text = page.get("text", "")
+    blocks = [("p", p.strip()) for p in re.split(r"\n\s*\n", text) if p.strip()][:600]
+    title = re.split(r"\s+[|\u2013\u2014-]\s+", page.get("title") or "")[0] or urlparse(page.get("url", "")).netloc
+    return {"kind": "web", "name": title or "Article", "path": "", "url": page.get("url", ""), "text": text,
+            "blocks": blocks}
+
+
 # ---------- what's on screen (Windows) ----------
 
 def _windows(user32):
@@ -227,6 +236,11 @@ def on_screen():
     if not hwnd:
         raise ValueError("I can't see a window with an article or document in it")
     if BROWSERS.search(title):
+        from skills import browser_bridge
+        page = browser_bridge.current(title)
+        if page and len(page.get("text", "")) > 200:
+            # The extension already sent the page (works for pages behind a sign-in too).
+            return _page_source(page), hwnd
         url = _copy_url(user32, hwnd)
         if not url:
             raise ValueError(f"I couldn't read the address of the page in \"{title}\"")
