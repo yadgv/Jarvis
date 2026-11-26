@@ -90,6 +90,56 @@ def is_acknowledgement(said: str) -> bool:
     return not words or " ".join(words) in ACKNOWLEDGEMENTS
 
 
+# Said during a conversation, these close it politely: he's done for now.
+CLOSERS = {
+    "thanks", "thank you", "thanks a lot", "thank you so much", "cheers", "that's all", "that's it",
+    "that is all", "that'll be all", "that will be all", "i'm good", "im good", "i'm done", "all good",
+    "never mind", "nevermind", "nothing", "no thanks", "no thank you", "that's everything",
+    "bye", "goodbye", "good bye", "see you", "see ya", "later", "talk later", "stop listening",
+}
+CLOSE_WORDS = {"jarvis", "sir", "ok", "okay", "alright", "cool", "great", "perfect", "that's", "for", "now",
+               "then", "so", "yeah", "no", "awesome", "nice", "good"}
+
+
+def is_closer(said: str) -> bool:
+    """ "Thanks", "that's all for now", "okay that's it Jarvis": the conversation is over."""
+    if said in CLOSERS:
+        return True
+    text, found = f" {said} ", False
+    for phrase in sorted(CLOSERS, key=len, reverse=True):   # take out every closing phrase
+        if f" {phrase} " in text:
+            text, found = text.replace(f" {phrase} ", " "), True
+    return found and all(w in CLOSE_WORDS for w in text.split())
+
+
+def sign_off(said: str) -> str:
+    return "Anytime, sir." if "thank" in said or "cheers" in said else "Very good, sir."
+
+
+def conversation_seconds() -> float:
+    """How long he can stay quiet before the conversation ends (wake word needed
+    again). Longer straight after Jarvis asked him something."""
+    secs = float(config.FOLLOWUP_SECONDS)
+    if secs <= 0:
+        return 0.0
+    return secs + (8 if asked_question else 0)
+
+
+def followup_action(said: str, answering: bool) -> str:
+    """What to do with words heard mid-conversation (no wake word):
+    'answer' (think and reply), 'name' (just "Jarvis": chime and listen),
+    'close' (he's done: sign off) or 'quiet' ("ok", "cool": keep listening, say nothing)."""
+    if is_just_name(said):
+        return "name"
+    if answering:
+        return "answer"
+    if is_closer(said) or (is_exit(said) and "jarvis" not in said):
+        return "close"
+    if is_acknowledgement(said):
+        return "quiet"
+    return "answer"
+
+
 # Clears the conversation. Saved facts stay; ask "forget that my..." to drop one.
 RESET_PHRASES = {"new conversation", "start over", "start a new conversation"}
 
@@ -295,6 +345,7 @@ def main():
 
         need_wake = True
         room = None
+        conv_until = 0.0  # in a conversation until then: no wake word needed
         already_woken = False  # you said "Hey Jarvis" (or pressed Stop) to interrupt him
         while True:
             typed = None
@@ -312,6 +363,7 @@ def main():
                     stream.start()
                     need_wake = was_interrupted or config.FOLLOWUP_SECONDS <= 0
                     already_woken = was_interrupted
+                    conv_until = time.time() + conversation_seconds()
                     continue
                 room = room_context.start() if kind == "wake" else None
                 if kind != "text":
@@ -321,9 +373,23 @@ def main():
                     ui_events.emit("status", "listening")
                     audio = record_until_silence(stream, ignore_seconds=beep or 0)
             else:
-                print("[listening for a follow-up...]")
+                left = conv_until - time.time()
+                if left <= 0.5:
+                    print("[conversation over: quiet for a while; say the wake word to start again]")
+                    need_wake = True
+                    ducking.restore()
+                    ui_events.emit("status", "idle")
+                    continue
+                print(f"[listening for a follow-up... {left:.0f}s left in the conversation]")
                 ui_events.emit("status", "listening")
-                audio = record_until_silence(stream, config.FOLLOWUP_SECONDS)
+                audio = record_until_silence(stream, left)
+                if not len(audio):
+                    print("[conversation over: no reply]")
+                    need_wake = True
+                    ducking.restore()
+                    ui_events.emit("status", "idle")
+                    stream.start()
+                    continue
 
             # Pause the mic while we transcribe, think and speak, so stale
             # audio (and Jarvis's own voice) doesn't pile up in the buffer.
@@ -335,9 +401,15 @@ def main():
             else:
                 text = transcribe(audio) if len(audio) else ""
             if not text:
-                if need_wake and typed is None and len(audio):
+                if typed is None and len(audio):
                     print("[heard sound but couldn't make out words]")
-                need_wake = True
+                    if need_wake:
+                        # He woke Jarvis and said something: don't just drop it.
+                        say("Sorry, sir, I didn't catch that.")
+                        conv_until = time.time() + conversation_seconds()
+                    need_wake = conv_until <= time.time() or config.FOLLOWUP_SECONDS <= 0
+                else:
+                    need_wake = True
                 stream.start()
                 continue
             print(f"You: {text}  [{'typed' if typed is not None else f'stt {time.perf_counter() - t_heard:.1f}s'}]")
@@ -348,17 +420,25 @@ def main():
             # Right after he asked a question, whatever is said next is the answer:
             # never dropped as chatter or as the end of the conversation.
             answering = followup and asked_question
-            if followup and is_just_name(said):
+            action = followup_action(said, answering) if followup else "answer"
+            if action == "name":
                 # Just his name: he wants to say something, so chime and listen.
                 print("[follow-up: just my name, listening]")
                 already_woken = True
                 need_wake = True
                 stream.start()
                 continue
-            if followup and not answering and (is_acknowledgement(said) or (is_exit(said) and "jarvis" not in said)):
-                # "I understand", "bye" etc. without his name: end the chat quietly.
-                print("[follow-up ignored: sounded like the end of the conversation]")
-                need_wake = True
+            if action == "close":
+                # "Thanks", "that's all", "bye": the conversation is over.
+                print("[conversation over: he said he's done]")
+                say(sign_off(said))
+                need_wake, conv_until = True, 0.0
+                ducking.restore()
+                stream.start()
+                continue
+            if action == "quiet":
+                # "Ok", "cool": nothing to answer, but he may still go on.
+                print("[follow-up: just an acknowledgement, still listening]")
                 stream.start()
                 continue
             if is_exit(said):
@@ -386,10 +466,16 @@ def main():
             stream.start()
             if was_interrupted:
                 need_wake, already_woken = True, True  # go straight to listening
-            elif typed is not None or last_ignored:
+            elif typed is not None:
                 need_wake = True  # typed chat: wait for the next message or wake word
+            elif last_ignored:
+                # Chatter that wasn't for him: keep the conversation open for
+                # what's left of it, without starting the clock again.
+                need_wake = conv_until <= time.time()
             else:
-                # Keep listening briefly so you can reply without the wake word.
+                # In a conversation: keep listening (no wake word) until he's
+                # quiet for a while or says he's done.
+                conv_until = time.time() + conversation_seconds()
                 need_wake = config.FOLLOWUP_SECONDS <= 0
     ducking.restore()
     ui_events.emit("status", "off")

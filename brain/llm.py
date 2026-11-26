@@ -489,10 +489,11 @@ def _local_turn(user_text, said):
 # Added to what was heard when Jarvis keeps listening after a reply (no wake
 # word), so he stays quiet when it's someone else talking in the room.
 FOLLOWUP_NOTE = (
-    "[Heard without the wake word, a few seconds after your last reply. It may be "
-    "someone else in the room, or him talking to someone else. Answer only if it is "
-    "clearly meant for you: a question or request to you, or a direct reply to what "
-    "you just said. Otherwise answer with exactly [ignore] and nothing else.]\n"
+    "[Heard without the wake word while you and he are in a conversation. Treat it as meant "
+    "for you (a question, a request, more detail, a correction, or a reply to what you just "
+    "said), even if it's short or doesn't name you. Only if it is plainly not for you (him "
+    "talking to another person by name, a phone call, or unrelated chatter from someone else "
+    "in the room) answer with exactly [ignore] and nothing else.]\n"
 )
 IGNORE = "[ignore]"
 

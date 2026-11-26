@@ -173,8 +173,8 @@ class SettingsWindow:
         self._row(card, "Wake word", self._slider("wake_sensitivity", 1, 10),
                   note="higher = hears \"Hey Jarvis\" more easily (and wakes by mistake more)")
         self._row(card, "Chime", self._check("wake_chime", "Beep when he starts listening"))
-        self._row(card, "Keep listening", self._slider("followup_seconds", 0, 15),
-                  note="seconds after a reply to answer without \"Hey Jarvis\" (0 = off)")
+        self._row(card, "Keep listening", self._slider("followup_seconds", 0, 30),
+                  note="seconds of quiet before a conversation ends and \"Hey Jarvis\" is needed again (0 = off)")
         mics = [DEFAULT_MIC] + settings.microphones()
         self.values["mic"] = self.values.get("mic") or DEFAULT_MIC
         self._row(card, "Microphone", self._combo("mic", mics, 22), note="used from the next start")

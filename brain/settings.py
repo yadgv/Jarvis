@@ -86,7 +86,7 @@ def app_defaults() -> dict:
         "ask_paid": bool(_orig("ASK_BEFORE_PAID", True)),   # ask before using Claude (it costs money)        # fewer animations (slower PCs, or if they're distracting)
         "wake_sensitivity": _sensitivity(_orig("WAKE_THRESHOLD", 0.5)),
         "wake_chime": bool(_orig("WAKE_CHIME", True)),
-        "followup_seconds": int(_orig("FOLLOWUP_SECONDS", 5)),
+        "followup_seconds": int(_orig("FOLLOWUP_SECONDS", 12)),
         "offline_mode": bool(_orig("OFFLINE_MODE", False)),
         "local_model": bool(_ORIGINAL["LOCAL_MODEL"]),
         "mic": "",                     # a microphone's name; "" = config.py's MIC_DEVICE
@@ -129,7 +129,7 @@ def _clean(key, value, default):
             v = int(float(value))
         except (TypeError, ValueError):
             return default
-        limits = {"wake_sensitivity": (1, 10), "followup_seconds": (0, 30), "panel_seconds": (2, 60)}
+        limits = {"wake_sensitivity": (1, 10), "followup_seconds": (0, 60), "panel_seconds": (2, 60)}
         lo, hi = limits.get(key, (v, v))
         return max(lo, min(hi, v))
     return str(value or "").strip()[:120]
@@ -184,6 +184,11 @@ def apply():
     saved = memory._read(FILE, {})
     if not isinstance(saved, dict):
         return
+    if saved.get("followup_seconds") == 5 and not saved.get("conversation_v2"):
+        # 5 s was the old default, saved along with everything else: conversations
+        # now stay open longer, so move him to the new default once.
+        saved["followup_seconds"], saved["conversation_v2"] = int(_orig("FOLLOWUP_SECONDS", 12)), True
+        memory._write(FILE, saved)
     s = app()
     plain = {"ask_paid": "ASK_BEFORE_PAID", "wake_chime": "WAKE_CHIME", "followup_seconds": "FOLLOWUP_SECONDS", "offline_mode": "OFFLINE_MODE",
              "room_mode": "ROOM_CONTEXT", "telegram": "TELEGRAM_ON", "morning_briefing": "MORNING_BRIEFING",
