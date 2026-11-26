@@ -35,6 +35,9 @@ if not (ANTHROPIC_API_KEY or GROQ_API_KEY or os.getenv("OPENROUTER_API_KEY")):
 # credit, down) is rested and the next one answers. Claude is paid, so it's
 # last; screen control and looking at the screen always use Claude.
 BRAIN_ORDER = ["groq", "openrouter", "claude"]
+# Browser for links and searches: "" = Windows' default browser; or "brave", "chrome", "edge", "firefox".
+BROWSER = os.getenv("JARVIS_BROWSER", "")
+
 # Groq's free models (console.groq.com, GROQ_API_KEY=gsk_... in .env). Each has
 # its own free limits, so when one is busy the next takes over.
 GROQ_MODELS = [
@@ -50,7 +53,7 @@ GROQ_SMALL_MODELS = ["openai/gpt-oss-20b"]  # tried first for small background j
 # Drawing diagrams on the whiteboard ("show me how to wire a servo"): a big
 # model writes the picture, so these are tried first (then the usual order).
 WHITEBOARD_MODELS = ["openai/gpt-oss-120b", "qwen/qwen3.8-27b"]
-GROQ_HISTORY_TURNS = 4                   # free models have small token limits: send the last few turns only
+GROQ_HISTORY_TURNS = 3                   # free models have small token limits: send the last few turns only
 LLM_MODEL = "claude-haiku-5-5"          # Claude, when it's needed (fast + cheap for voice)
 ASK_BEFORE_PAID = True                   # ask "Shall I use Claude?" before anything that costs money (also in Settings)
 BACKGROUND_TASKS = True                  # long jobs (screen control, sorting files, 3D, documents) run while you talk to him
@@ -61,8 +64,8 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_MODELS = [
     "nvidia/nemotron-3.5-super-vl:free",   # fastest free model with good tool use
     "cohere/north-mini-code:free",         # backup choice
-    "openrouter/free",                     # last resort: whichever free model is up
 ]
+# ("openrouter/free" picked whatever model was up, some took 30s+ and read tool output aloud.)
 # Optional free local model for easy questions (no tools needed), so they
 # cost nothing and work offline. Off when empty. To turn on: install Ollama
 # (ollama.com/download), run `ollama pull llama3.2:3b`, then set it here.

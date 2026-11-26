@@ -398,6 +398,11 @@ Ask "what's on my screen?", "read me this error", "what does this page say?" or
   through Windows UI Automation (`pip install uiautomation`).
 - **Pictures and video**: Windows' built-in OCR (`pip install -r requirements.txt` adds it).
 
+Anything that makes something ("make slides on this article", "quiz me on what I have up") reads the
+screen first and uses the page as its source, and he remembers it for 15 minutes of follow-ups.
+Say "on Brave" (or Chrome, Edge, Firefox) to open a link or search there; `BROWSER = "brave"` in
+config.py (or `JARVIS_BROWSER=brave` in `.env`) makes it the default for every link.
+
 The text goes to the free models. Only for understanding an image itself does he use
 `look_at_screen`, which needs Claude, so he asks first.
 

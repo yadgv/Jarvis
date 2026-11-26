@@ -94,7 +94,7 @@ def test_sort_needs_a_yes_and_can_be_undone(private_files, trash):
     assert (dl / "big.zip.crdownload").exists() and (dl / "just saved.docx").exists()
     assert [os.path.basename(p) for p in trash] == ["copy of b.jpg"]
     out = files.undo_files({})
-    assert "put 5 back" in out and "Recycle Bin" in out
+    assert "put 5 files back" in out and "Recycle Bin" in out
     assert (dl / "a.pdf").exists() and not (dl / "PDFs").exists()
 
 
@@ -125,7 +125,7 @@ def test_one_file(private_files, trash):
 
 def test_undo_a_new_file(private_files, trash):
     files.make_file({"name": "oops.txt", "content": "x"})
-    assert "put 1 back" in files.undo_files({})
+    assert "moved oops.txt (which I'd made) to the Recycle Bin" in files.undo_files({})
     assert trash and not (private_files / "Documents" / "oops.txt").exists()
     assert files.undo_files({}) == "There's nothing to undo."
 

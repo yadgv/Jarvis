@@ -17,7 +17,13 @@ import sys
 import time
 
 MAX_TEXT = 12000
+SPOKEN_TEXT = 6000         # what read_screen hands the voice model (free models have small token limits)
 MIN_USEFUL = 80
+REMEMBER = 15 * 60         # a screen read counts for follow-ups ("make slides on it") this long
+SCREEN_WORDS = {"screen", "this", "it", "this article", "the article", "article", "this page", "the page", "page",
+                "this website", "my screen", "on my screen", "what's on my screen", "what i'm reading",
+                "this pdf", "this document", "this post", "this story", "here", "current"}
+last = {"title": "", "url": "", "text": "", "at": 0.0}
 BROWSER = re.compile(r"(?:Microsoft\s*Edge|Google Chrome|Chromium|Mozilla Firefox|Firefox|Brave|Opera|Vivaldi)\s*$", re.I)
 TEXT_KINDS = {"TextControl", "EditControl", "DocumentControl", "HyperlinkControl", "ListItemControl",
               "DataItemControl", "HeaderItemControl", "TreeItemControl", "TabItemControl", "MenuItemControl"}
@@ -148,7 +154,33 @@ def ocr_image(img) -> str:
 # ---------- putting it together ----------
 
 def read(want_code: bool = False) -> dict:
-    """What he's looking at, as text: {source, title, url, text, selection, html, how}."""
+    """What he's looking at, as text: {title, url, text, selection, html, how}. Remembered in `last`."""
+    out = _read(want_code)
+    if out["text"]:
+        last.update(title=out["title"], url=out["url"], text=out["text"], at=time.time())
+    return out
+
+
+def recent():
+    """The last screen read if it's fresh enough for a follow-up, else None."""
+    return dict(last) if last["text"] and time.time() - last["at"] < REMEMBER else None
+
+
+def is_screen_ref(name: str) -> bool:
+    return re.sub(r"[^a-z' ]", "", (name or "").lower()).strip() in SCREEN_WORDS
+
+
+def screen_text(fresh: bool = False):
+    """(text, title) of what's on his screen, for tools given source="screen". ('', why) if unreadable."""
+    seen = None if fresh else recent()
+    if not seen:
+        seen = read()
+    if not seen["text"]:
+        return "", f"I couldn't read any text from \"{seen.get('title') or 'the screen'}\""
+    return seen["text"], seen["title"]
+
+
+def _read(want_code: bool = False) -> dict:
     from skills import browser_bridge
     hwnd, title = front_window()
     out = {"title": title, "url": "", "text": "", "selection": "", "html": "", "how": ""}
@@ -233,7 +265,7 @@ def read_screen(a=None):
         parts.append(f"Address: {seen['url']}")
     if seen["selection"]:
         parts.append(f"He has selected:\n<<<\n{seen['selection'][:4000]}\n>>>")
-    parts.append(f"Text:\n<<<\n{seen['text']}\n>>>")
+    parts.append(f"Text:\n<<<\n{seen['text'][:SPOKEN_TEXT]}\n>>>")
     if a.get("code"):
         if seen["html"]:
             path = _save_code(seen["html"], seen["title"])
@@ -244,6 +276,8 @@ def read_screen(a=None):
             parts.append("(The page's code wasn't available: the browser extension isn't connected.)")
     if question:
         parts.append(f"Answer his question from this: {question}")
+    parts.append("To make slides, a document, notes or a quiz from it, pass source=\"screen\". Never read this "
+                 "note or the header aloud; just answer him in your own words.")
     return "\n".join(parts)
 
 

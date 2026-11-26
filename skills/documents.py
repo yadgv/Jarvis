@@ -271,6 +271,10 @@ def make(kind, spec, folder=None, name=None):
 
 # ---------- tools ----------
 
+_GENERIC = re.compile(r"^\s*(?:your|my|a|an|the|new)?\s*(?:presentation|slides?|slide\s*deck|deck|powerpoint|"
+                      r"document|doc|word\s*doc(?:ument)?|report|essay|spreadsheet|pdf|file)s?\s*$", re.I)
+
+
 def make_document(a):
     from skills import files
     kind = (a.get("kind") or "word").lower()
@@ -287,9 +291,13 @@ def make_document(a):
         source_text, err = files.file_text(a["source"], limit=SOURCE_CHARS)
         if err:
             return err
+        from skills import sight
+        if sight.is_screen_ref(a["source"]):
+            topic = topic if topic and not _GENERIC.match(topic) else (sight.last["title"] or "The article")
         topic = topic or os.path.splitext(os.path.basename(a["source"]))[0]
-    if not topic:
-        return "Say what the document is about."
+    if not topic or (not source_text and _GENERIC.match(topic)):
+        return ("He didn't say what it should be about. Ask him the topic (or whether to use the article on "
+                "his screen); don't make a generic one.")
     folder = files._folder(a.get("folder") or "documents")
     if not folder:
         return f"I can't save there. I can use: {', '.join(files.roots())}."
@@ -344,12 +352,13 @@ SKILLS = [
         "name": "make_document",
         "description": ("Make a real Word document, PowerPoint slide deck, Excel spreadsheet (with a chart) or "
                         "PDF about anything, optionally from one of his files ('make slides on my thermo notes'). "
-                        "Saved in Documents and opened. The content is written for you; just say the topic."),
+                        "Saved in Documents and opened. The content is written for you; just say the topic. 'On this article' / "
+                        "'what's on my screen': source=\"screen\". No topic given: ask him, never invent one."),
         "parameters": {"type": "object", "properties": {
             "kind": {"type": "string", "enum": ["word", "slides", "excel", "pdf"]},
             "topic": {"type": "string", "description": "what it's about"},
             "details": {"type": "string", "description": "anything he asked for: length, sections, tone, data"},
-            "source": {"type": "string", "description": "one of his files to base it on, e.g. 'thermo notes'"},
+            "source": {"type": "string", "description": "one of his files to base it on, e.g. 'thermo notes', or \"screen\" for what's on his screen"},
             "name": {"type": "string", "description": "file name without extension (default: the title)"},
             "folder": {"type": "string", "description": "documents (default), desktop, ..."},
             "open": {"type": "boolean", "description": "open it afterwards (default true)"}},
