@@ -63,3 +63,18 @@ def private_whiteboard(monkeypatch, tmp_path):
     """The whiteboard saves its last drawing in memory/; keep tests' drawings out of it."""
     from skills import whiteboard
     monkeypatch.setattr(whiteboard, "_saved_path", lambda: str(tmp_path / "whiteboard.json"))
+
+
+@pytest.fixture(autouse=True)
+def private_files(monkeypatch, tmp_path):
+    """File tools only ever see a fake home folder, and keep their undo log there."""
+    home = tmp_path / "home"
+    for name in ("Desktop", "Documents", "Downloads"):
+        (home / name).mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    monkeypatch.setattr(config, "FILE_FOLDERS", ["Desktop", "Documents", "Downloads"])
+    from skills import files
+    monkeypatch.setattr(files, "_undo_path", lambda: str(tmp_path / "file_undo.json"))
+    monkeypatch.setattr(files, "_plan", None)
+    return home

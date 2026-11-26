@@ -281,6 +281,25 @@ cards, colour-coded wires that never share a line, a legend), so it's always
 tidy. Scroll to zoom, drag to move, **Fit** to see it all. Claude only if the
 free models fail. It needs the internet. The page only runs on your PC (127.0.0.1).
 
+## Your files
+
+Jarvis can work with the files in your own folders (Desktop, Documents,
+Downloads, Pictures, Music, Videos, set in `FILE_FOLDERS` in config.py), and
+nowhere else:
+
+- **Make files**: "make me a shopping list", "write an Arduino sketch that blinks pin 13
+  and save it", "make a spreadsheet of my marks" (CSV, which Excel opens).
+- **Find and read**: "find my resume", "what PDFs did I download this week",
+  "summarize my thermo notes". PDFs need `python -m pip install pypdf`.
+- **Tidy up**: "sort my Downloads" (by type, or "by month"), "and bin the duplicates".
+  He tells you the plan first and only does it after you say yes. "Undo that"
+  puts everything back.
+- **One file**: "rename that photo to arduino setup", "move it to Documents",
+  "delete it". Deleting always goes to the Recycle Bin, after you confirm.
+
+Install `send2trash` (it's in requirements.txt) for the Recycle Bin; without it
+Jarvis uses PowerShell for the same thing.
+
 ## Plug in MCP servers (more tools without new code)
 Any [MCP server](https://modelcontextprotocol.io/examples) can give Jarvis new tools: files, a browser,
 Home Assistant, Spotify, GitHub and many more.

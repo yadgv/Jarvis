@@ -25,6 +25,7 @@ OFFLINE_TOOLS = (
     "open_app", "set_volume", "media", "lock_screen", "open_settings", "dark_mode",
     "open_folder", "set_brightness", "app_controls", "start_with_windows",
     "change_setting", "get_settings", "try_offline_voice", "whiteboard_step", "arduino", "shut_down",
+    "make_file", "find_files", "read_file", "open_file", "organize_folder", "file_action", "undo_files",
 )
 
 NEEDS_INTERNET = "I'm offline at the moment, sir, so that one will have to wait for the internet."
@@ -242,6 +243,8 @@ def needs_internet(text: str) -> bool:
     """True when the request clearly needs the internet (weather, news,
     search, email, calendar, prices, scores, the screen, drawing)."""
     t = _clean(text)
+    if skills.mentions_files(t):  # "search my downloads for..." works offline
+        return False
     return bool(t) and not _OFFLINE_ASKS.match(t) and bool(_ONLINE_ONLY.search(t))
 
 

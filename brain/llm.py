@@ -165,6 +165,8 @@ def _openai_turn(user_text, system, said, tools_used, exclude=(), history=None, 
         keep |= set(re.findall(r"(?:\[tools used: |; )([a-z_]+) ->", last))
         if skills.mentions_board(last):  # "yes, go ahead" after he offered to draw it
             keep |= set(skills.BOARD_TOOLS)
+        if skills.mentions_files(last):  # "yes" to a plan to sort a folder
+            keep |= set(skills.FILE_TOOLS)
         exclude = tuple(exclude) + tuple(s["name"] for s in skills.SKILLS if s["name"] not in keep)
     messages = [{"role": "system", "content": system}] + past + [{"role": "user", "content": user_text}]
     t0 = time.perf_counter()
