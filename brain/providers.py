@@ -29,6 +29,7 @@ FREE = {
     "github": ("https://models.github.ai/inference/chat/completions", "GITHUB_MODELS_TOKEN", "GITHUB_MODELS"),
 }
 _resting = {}  # name or model -> time.monotonic() when it may be tried again
+_told = set()
 
 
 def resting(key) -> bool:
@@ -44,7 +45,13 @@ def rest(key, e: Exception):
         m = re.search(r"try again in (?:(\d+)m)?([\d.]+)s", text)
         if m:
             wait = int(m.group(1) or 0) * 60 + float(m.group(2))
-    if status in (401, 403):
+    if status == 402 or "subscription" in text or "billing" in text:
+        seconds = 24 * 3600                  # needs a (free) plan turned on: skip it for the day
+        if key.split(":")[0] not in _told:
+            _told.add(key.split(":")[0])
+            print(f"[brain] {key.split(':')[0]} says the account has no plan for its API. For Mistral: "
+                  "console.mistral.ai > Billing > choose the free 'Experiment' plan. Skipping it for today.")
+    elif status in (401, 403):
         seconds = 3600                       # bad key: don't keep hammering it
     elif status == 404 or "does not exist" in text or "decommissioned" in text:
         seconds = 24 * 3600                  # the model is gone (retired): skip it for the day
@@ -88,7 +95,7 @@ def free_targets(name, small=False, models=None):
             extra = {"reasoning_effort": "low"}   # quick answers for voice
         out.append({"url": url, "model": m, "who": f"{name.title()} {m}", "rest_key": key, "tools": True,
                     "short_tools": True, "max_tokens": 1024, "extra": extra, "drop_empty_params": name == "gemini",
-                    "timeout": (4, 30), "headers": {"Authorization": f"Bearer {getattr(config, key_name)}"}})
+                    "timeout": (4, 15), "headers": {"Authorization": f"Bearer {getattr(config, key_name)}"}})
     return out
 
 

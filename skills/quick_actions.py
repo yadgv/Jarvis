@@ -12,6 +12,7 @@ The tiers (see also skills/ui_automation.py and skills/computer.py):
   3. use_computer: screenshots, only when 1 and 2 can't do it
 """
 import os
+import re
 import subprocess
 import sys
 import urllib.parse
@@ -178,11 +179,29 @@ def open_website(a):
         url = SITES["google"][1].format(urllib.parse.quote_plus(" ".join(x for x in (raw, query) if x)))
     if not url:
         return "Which website, or what should I search for?"
+    note = ""
     if browser and not browser_path(browser_key(browser)):
-        return f"I couldn't find {browser.title()} installed, so nothing opened."
+        note = f" {browser.title()} isn't installed, so I used his usual browser."
+        browser = ""
+    if a.get("play") and "youtube.com/results" in url:
+        url = youtube_video(query) or url   # straight to the top video, which starts playing
     used = open_url(url, browser)
     log_tier(1, f"open {url}" + (f" in {used}" if used else ""))
-    return f"Opened {url}" + (f" in {used}." if used else ".")
+    return f"Opened {url}" + (f" in {used}." if used else ".") + note
+
+
+def youtube_video(query: str) -> str:
+    """The watch link of YouTube's top result for query ('' if it can't be found). Free, no API key."""
+    try:
+        import requests
+        r = requests.get("https://www.youtube.com/results", params={"search_query": query}, timeout=8,
+                         headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                                  "Accept-Language": "en"})
+        m = re.search(r'"videoId":"([\w-]{11})"', r.text)
+        return f"https://www.youtube.com/watch?v={m.group(1)}" if m else ""
+    except Exception as e:
+        print(f"[web] couldn't look up the YouTube video: {e}")
+        return ""
 
 
 def open_folder(a):
@@ -233,11 +252,12 @@ SKILLS = [
         "name": "open_website",
         "description": ("Open a website in the browser, optionally straight to a search: site 'youtube' + search "
                         "'lo-fi music', site 'amazon' + search 'usb c cable', site 'maps' + search 'coffee near "
-                        "me', or any address like 'bbc.co.uk'. 'Pull it up on Brave': browser='brave'. Use this instead of use_computer whenever the "
+                        "me', or any address like 'bbc.co.uk'. 'Pull it up on Brave': browser='brave'. 'Play X on YouTube': site 'youtube', search 'X', play=true. Use this instead of use_computer whenever the "
                         f"task is just opening a page or searching. Known sites: {', '.join(SITES)}."),
         "parameters": {"type": "object", "properties": {
             "site": {"type": "string"}, "search": {"type": "string"},
-            "browser": {"type": "string", "description": "only if he named one: brave, chrome, edge or firefox"}},
+            "browser": {"type": "string", "description": "ONLY if he named a browser; otherwise leave it out"},
+            "play": {"type": "boolean", "description": "YouTube: open the top video so it starts playing"}},
             "required": ["site"]},
         "run": open_website,
     },

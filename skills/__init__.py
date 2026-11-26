@@ -252,6 +252,11 @@ def restyle_intent(text: str) -> bool:
     return documents.last() is not None
 
 
+def phone_test_intent(text: str) -> bool:
+    """ "Test my phone notifications", "send a test alert to my phone"."""
+    return bool(re.search(r"\btest\w*\b.{0,25}\b(?:phone|notifications?|alerts?|telegram|call)\b", text or "", re.I))
+
+
 def brief_intent(text: str) -> bool:
     """He wants what's on his screen briefed ("brief this article", "write me a brief")."""
     t = text or ""

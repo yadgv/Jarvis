@@ -88,7 +88,7 @@ def test_build_errors_are_fixed_once_then_reported(model, monkeypatch):
     tries = []
     monkeypatch.setattr(cad, "_render", lambda *a, **k: tries.append(a) or "ERROR: Parser error in line 3")
     out = cad.make_3d_model({"what": "phone stand"})
-    assert len(tries) == 2                                   # built, fixed by the model, built again
+    assert len(tries) == 1 + cad.FIX_TRIES                   # built, then fixed by the model up to 3 times
     assert "fix it: ERROR: Parser error in line 3" in model[1][1]
     assert "couldn't build it" in out and "Parser error" in out and "in the log" in out
 

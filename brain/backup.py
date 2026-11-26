@@ -80,10 +80,7 @@ def _post(messages, exclude=(), target=None):
     r = requests.post(target["url"], headers=target.get("headers") or {}, json=body, stream=True,
                       timeout=target.get("timeout") or (CONNECT_TIMEOUT, 60))
     if r.status_code != 200:
-        try:
-            detail = r.json().get("error", {}).get("message", r.text)
-        except ValueError:
-            detail = r.text
+        detail = error_text(r)
         retry = None
         try:
             retry = float(r.headers.get("retry-after"))
@@ -98,18 +95,52 @@ def _events(response):
     # These streams are UTF-8, but say "text/event-stream" with no charset, so
     # requests would decode them as Latin-1 and "servo's" becomes "servoâs".
     response.encoding = "utf-8"
+    seen, other = False, []
     for line in response.iter_lines(decode_unicode=True):
         if not line or not line.startswith("data:"):
+            if line and not line.startswith(":"):
+                other.append(line)   # not a stream at all (some servers answer plain JSON)
             continue  # blank lines and ": OPENROUTER PROCESSING" keep-alives
         data = line[5:].strip()
         if data == "[DONE]":
             return
+        seen = True
         chunk = json.loads(data)
-        if "error" in chunk:
-            err = chunk["error"]
-            raise ProviderError(f"Model error: {err.get('message', err) if isinstance(err, dict) else err}",
-                                err.get("code") if isinstance(err, dict) else None)
-        yield chunk
+        for c in (chunk if isinstance(chunk, list) else [chunk]):
+            if not isinstance(c, dict):
+                continue
+            if "error" in c:
+                err = c["error"]
+                raise ProviderError(f"Model error: {err.get('message', err) if isinstance(err, dict) else err}",
+                                    err.get("code") if isinstance(err, dict) else None)
+            yield c
+    if not seen:
+        raw = " ".join(other)[:300]
+        try:   # a plain (non-streamed) answer: use it
+            whole = json.loads(" ".join(other))
+            if isinstance(whole, dict) and whole.get("choices"):
+                msg = whole["choices"][0].get("message") or {}
+                yield {"model": whole.get("model"), "choices": [{"delta": {
+                    "content": msg.get("content") or "",
+                    "tool_calls": [dict(tc, index=i) for i, tc in enumerate(msg.get("tool_calls") or [])]}}]}
+                return
+        except ValueError:
+            pass
+        raise ProviderError(f"no answer in the reply ({raw or 'empty'})")
+
+
+def error_text(r) -> str:
+    """The message in an error answer, whatever its shape (Gemini sends a list: [{"error": {...}}])."""
+    try:
+        j = r.json()
+    except ValueError:
+        return r.text
+    if isinstance(j, list) and j:
+        j = j[0]
+    err = j.get("error") if isinstance(j, dict) else None
+    if isinstance(err, dict):
+        return str(err.get("message") or err)
+    return str(err or j or r.text)
 
 
 def stream_round(messages, exclude=(), target=None):

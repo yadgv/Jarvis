@@ -18,8 +18,13 @@ import config
 
 MAX_TOKENS = 3000
 FOLDER_NAME = "Jarvis 3D"
+BOARDS = ("Common boards (mm): Arduino Uno/Leonardo 68.6 x 53.4, holes 3.2 mm at (14, 2.5), (15.3, 50.7), "
+          "(66.1, 7.6), (66.1, 35.5) from the corner by the USB jack; Arduino Nano 45 x 18; Arduino Mega 101.6 x 53.3; "
+          "Raspberry Pi 4/5 85 x 56, holes 2.7 mm on a 58 x 49 grid 3.5 mm in; ESP32 DevKit about 55 x 28. "
+          "A case for a board fits that board with about 1 mm clearance; never invent a rack size like '3U'. ")
 SYSTEM = (
     "You design parts for 3D printing in OpenSCAD. Reply with ONLY OpenSCAD code, no other text.\n"
+    + BOARDS + "\n"
     "- Units are millimetres. Put every size as a named variable at the top with a short comment, "
     "e.g. `width = 80; // phone width + 2 mm clearance`.\n"
     "- First line: a comment with the part name. Use $fn = 64 for round things.\n"
@@ -84,6 +89,23 @@ def clean(text: str) -> str:
     if code.count("{") != code.count("}") or code.count("(") != code.count(")"):
         raise ValueError("the code was cut off")
     return code + "\n"
+
+
+FIX_TRIES = 3
+
+
+def _bad_line(code: str, err: str) -> str:
+    """The line OpenSCAD complained about, so the model sees exactly what to fix."""
+    m = re.search(r"line (\d+)", err or "")
+    if not m:
+        return ""
+    lines = code.splitlines()
+    n = int(m.group(1))
+    if not 0 < n <= len(lines):
+        return ""
+    near = "\n".join(f"{i}: {lines[i - 1]}" for i in range(max(1, n - 2), min(len(lines), n + 2) + 1))
+    return f"\nThe lines around line {n}:\n{near}\nRemember OpenSCAD has no 'else if' chains without braces, " \
+           "no '+=' and no undefined modules."
 
 
 def design(what: str, details: str = "", change: str = "") -> str:
@@ -180,17 +202,20 @@ def make_3d_model(a):
     if a.get("stl", True):
         stl = os.path.splitext(scad)[0] + ".stl"
         err = _render(exe, scad, stl)
-        if err and "couldn't run" not in err and "printed nothing" not in err:
-            # Usually a mistake in the code: let the model fix it once.
-            print(f"[3d] build failed ({err}); asking the model to fix it")
+        tries = 0
+        while err and "couldn't run" not in err and "printed nothing" not in err and tries < FIX_TRIES:
+            # Usually a mistake in the code: show the model the error and the line, and let it fix it.
+            tries += 1
+            print(f"[3d] build failed ({err}); asking the model to fix it (try {tries} of {FIX_TRIES})")
             try:
-                code = design(_last["what"], "", f"OpenSCAD gave this error, fix it: {err}")
+                code = design(_last["what"], "", f"OpenSCAD gave this error, fix it: {err}{_bad_line(code, err)}")
                 with open(scad, "w", encoding="utf-8") as f:
                     f.write(code)
                 _last.update(code=code)
                 err = _render(exe, scad, stl)
             except Exception as e:
                 print(f"[3d] the fix didn't work: {e}")
+                break
         if err:
             files._log("make", made)
             return (f"Saved {files._show(scad)}, but OpenSCAD couldn't build it: {err}. The full error is in "
@@ -227,7 +252,8 @@ SKILLS = [
         "description": ("Design a 3D printable part ('make me a phone stand', 'a 30 mm box with a lid', 'a bracket "
                         "for my servo'): writes an OpenSCAD file in Documents/Jarvis 3D, exports the STL and shows "
                         "it in Jarvis's 3D viewer if OpenSCAD is installed. To change the last part ('make it 10 mm taller') "
-                        "pass change."),
+                        "pass change. Pass only sizes he actually said; never invent sizes (the designer knows "
+                        "common boards like the Arduino Uno)."),
         "parameters": {"type": "object", "properties": {
             "what": {"type": "string", "description": "the part, with any sizes he gave"},
             "details": {"type": "string", "description": "fit, sizes in mm, what it holds, printer limits"},
