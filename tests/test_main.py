@@ -57,3 +57,12 @@ def test_question_marks_answer_window(monkeypatch):
     monkeypatch.setattr(main, "think_stream", lambda text, **k: iter(["Sent, sir."]))
     main.respond("yes")
     assert not main.asked_question
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("Jarvis.", True), ("Hey Jarvis", True), ("Jarvis?", True),
+    ("thanks", False), ("Jarvis play Drake", False), ("sir", False),
+])
+def test_just_his_name_means_listen(text, expected):
+    """A bare "Jarvis" in the follow-up window starts listening, not ends the chat."""
+    assert main.is_just_name(main.normalize(text)) is expected
