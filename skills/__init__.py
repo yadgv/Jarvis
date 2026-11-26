@@ -27,6 +27,7 @@ from skills import personality  # noqa: E402
 from skills import reminders  # noqa: E402
 from skills import screen  # noqa: E402
 from skills import stocks  # noqa: E402
+from skills import suggestions  # noqa: E402
 from skills import system  # noqa: E402
 from skills import timers  # noqa: E402
 from skills import ui_automation  # noqa: E402
@@ -39,6 +40,7 @@ MODULES = [
     timers,
     reminders,
     jobs,
+    suggestions,
     weather,
     news,
     web_search,
