@@ -39,7 +39,8 @@ def test_timeline_in_order_with_escaped_text():
 
 
 def test_empty_drawings_are_refused():
-    for spec in ({"kind": "mindmap", "branches": []}, {"kind": "timeline", "events": []}):
+    for spec in ({"kind": "mindmap", "branches": []}, {"kind": "timeline", "events": []}, {"kind": "plot"},
+                 {"kind": "forces"}, {"kind": "circuit"}, {"kind": "plot", "functions": ["__import__('os')"]}):
         with pytest.raises(ValueError):
             wb.parse(json.dumps(spec))
 
@@ -71,3 +72,71 @@ def test_mind_maps_and_timelines_go_to_the_whiteboard():
     for ask in ("make a mind map of photosynthesis", "draw a timeline of world war one", "mindmap my notes"):
         assert skills.mentions_board(ask)
         assert {"show_diagram", "whiteboard_step"} <= set(skills.pick_tools(ask))
+
+
+# ---------- maths and physics ----------
+
+import xml.dom.minidom
+
+PLOT = {"kind": "plot", "title": "Parabola", "functions": [{"expr": "y = 2x^2 - 3", "label": "y = 2x^2 - 3"}, "1/x"],
+        "x_range": [-3, 3], "points": [{"x": 0, "y": -3, "label": "vertex"}, {"x": 99, "y": 0}]}
+FORCES = {"kind": "fbd", "title": "Box on a ramp", "object": "5 kg box", "surface": "incline", "angle": 30,
+          "forces": [{"name": "Weight", "value": "49 N", "direction": "down", "magnitude": 49},
+                     {"name": "Normal", "direction": "normal", "magnitude": 42},
+                     {"name": "Friction", "direction": "up the slope", "magnitude": 10}], "net": "14.5 N down the slope"}
+CIRCUIT = {"kind": "circuit", "title": "Two lamps", "source": {"type": "battery", "value": "9 V"},
+           "series": [{"id": "S1", "type": "switch"}, {"id": "R1", "type": "resistor", "value": "100 ohm"},
+                      {"parallel": [[{"id": "L1", "type": "lamp"}], [{"id": "D1", "type": "led"}, {"id": "C", "type": "capacitor"}]]},
+                      {"id": "A", "type": "ammeter"}]}
+
+
+@pytest.mark.parametrize("spec", [MINDMAP, TIMELINE, PLOT, FORCES, CIRCUIT])
+def test_every_drawing_is_valid_svg(spec):
+    svg, _ = diagram.render(spec)
+    xml.dom.minidom.parseString(svg)
+
+
+def test_safe_maths():
+    f = visuals._expr("y = 2x^2 - 3sin(x) + (x+1)(x-1)")
+    assert f(0) == pytest.approx(-1) and f(1) == pytest.approx(2 - 3 * 0.8414709848 + 0)
+    assert visuals._expr("f(x) = sqrt(x)")(-1) is None           # no real value: a gap, not a crash
+    assert visuals._expr("1/x")(0) is None
+    for bad in ("__import__('os').system('calc')", "x.__class__", "open('a')", "[x for x in ()]", "lambda: 1",
+                "9**9**9**9", "x" * 300):
+        f = visuals._expr(bad)
+        assert f is None or f(2) is None
+
+
+def test_plot_steps_and_points():
+    svg, problems = diagram.render(PLOT)
+    assert problems == []
+    assert 'id="step-1"' in svg and 'id="step-2"' in svg and 'id="step-3"' in svg   # two graphs, then points
+    assert "vertex" in svg and "(99" not in svg                                      # off-graph point left out
+    _, problems = diagram.render({"kind": "plot", "functions": ["x", "import os"]})
+    assert problems and "import os" in problems[0]
+
+
+def test_forces_one_step_each():
+    svg, _ = diagram.render(FORCES)
+    for n, name in ((1, "Weight"), (2, "Normal"), (3, "Friction")):
+        assert f'id="step-{n}"' in svg and name in svg
+    assert "Net force: 14.5 N down the slope" in svg and "30°" in svg
+    assert visuals._angle("down the slope", 30) == 210 and visuals._angle("normal", 30) == 120
+    assert visuals._angle("up", 0) == 90 and visuals._angle(45, 0) == 45 and visuals._angle("135°", 0) == 135
+
+
+def test_circuit_symbols():
+    svg, _ = diagram.render(CIRCUIT)
+    for n in (1, 2, 3, 4):
+        assert f'id="step-{n}"' in svg
+    assert "9 V" in svg and "R1 100 ohm" in svg and "<polyline" in svg     # zigzag resistor
+    assert ">A<" in svg                                                      # ammeter
+
+
+def test_worked_problems_go_to_the_whiteboard():
+    import skills
+    for ask in ("graph y = x^2 - 4", "draw a free body diagram of a box on a ramp", "draw the circuit for two lamps in parallel",
+                "plot sin x", "solve this step by step on the whiteboard"):
+        assert skills.mentions_board(ask), ask
+    from brain import local_llm
+    assert not local_llm.is_easy("solve 2x + 3 = 7 step by step")

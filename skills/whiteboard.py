@@ -49,6 +49,24 @@ SYSTEM = (
     "For history, a schedule, a project plan or anything in order of time, use a timeline (up to 14 events, oldest first):\n"
     '{"title": "...", "kind": "timeline",\n'
     ' "events": [{"date": "1914", "text": "War begins", "detail": "optional few words"}, ...], "steps": ["...", "..."]}\n\n'
+    "To graph maths functions of x (y = ... ), use a plot. expr uses x, + - * / ^, brackets, sin cos tan sqrt "
+    "log ln exp abs pi; mark roots, turning points or crossings as points:\n"
+    '{"title": "...", "kind": "plot", "functions": [{"expr": "x^2 - 4", "label": "y = x^2 - 4"}],\n'
+    ' "x_range": [-5, 5], "points": [{"x": 2, "y": 0, "label": "root x = 2"}], "steps": ["...", "..."]}\n\n'
+    "For a free-body diagram (forces on an object), use forces. direction is degrees (0 right, 90 up) or words: "
+    "up, down, left, right, up the slope, down the slope, normal. magnitude is the relative size:\n"
+    '{"title": "...", "kind": "forces", "object": "5 kg box", "surface": "flat|incline|hanging", "angle": 30,\n'
+    ' "forces": [{"name": "Weight", "value": "49 N", "direction": "down", "magnitude": 49}, ...],\n'
+    ' "net": "optional, e.g. 12 N down the slope", "steps": ["...", "..."]}\n\n'
+    "For a circuit schematic (not wiring to an Arduino), use circuit: a source, then the parts in series around "
+    "the loop; a parallel group lists its branches. Types: resistor, lamp, led, diode, capacitor, switch, ammeter, "
+    "voltmeter, motor, fuse, inductor:\n"
+    '{"title": "...", "kind": "circuit", "source": {"type": "battery", "value": "9 V"},\n'
+    ' "series": [{"id": "R1", "type": "resistor", "value": "100 ohm"},\n'
+    '            {"parallel": [[{"id": "L1", "type": "lamp"}], [{"id": "R2", "type": "resistor", "value": "50 ohm"}]]}],\n'
+    ' "steps": ["...", "..."]}\n\n'
+    "For maths and physics problems the steps are the worked solution, one short line each with the numbers "
+    "(\"F = m a = 5 x 2 = 10 N\"), ending with the answer.\n\n"
     "Rules:\n"
     f"- Part types: {PART_TYPES}. A part with other pins can list them: \"pins\": [\"VCC\", \"DATA\", \"GND\"].\n"
     "- Arduino Uno pins are named exactly: 5V, 3.3V, VIN, GND, D0-D13, A0-A5, AREF, SDA, SCL. "
@@ -125,8 +143,6 @@ def parse(text: str) -> dict:
     if not isinstance(spec, dict) or not (spec.get("wires") or spec.get("nodes") or kind in visuals.KINDS):
         raise ValueError("the description had nothing to draw")
     svg, skipped = diagram.render(spec)
-    if kind in visuals.KINDS and skipped:
-        raise ValueError(f"the description had nothing to draw ({skipped[0]})")
     from brain import textfix
     steps = [textfix.fix(s).strip() for s in spec.get("steps") or visuals.default_steps(spec) if str(s).strip()][:16]
     if skipped:
@@ -519,7 +535,8 @@ SKILLS = [
         "description": (
             "Draw a diagram on the whiteboard window and walk him through it step by step: how to wire "
             "something to his Arduino or breadboard, a circuit, a flowchart, how parts connect, a mind map of a "
-            "topic or of his notes, a timeline of events or a plan. Use when he "
+            "topic or of his notes, a timeline of events or a plan, a graph of a maths function (y = x^2), a "
+            "free-body diagram, a circuit schematic, or a maths/physics problem worked step by step. Use when he "
             "says 'show me', 'draw', 'visualize' or 'how do I wire/connect'. To change the current drawing "
             "('use pin 6 instead', 'add an LED'), pass change. To clear, close or reopen the board use whiteboard_step "
             "(or action here)."
