@@ -7,26 +7,23 @@ import pytest
 import config
 from skills import whiteboard as wb
 
-ANSWER = """Sure! Here it is.
-TITLE: Servo on an Arduino Uno
-```svg
-<svg viewBox="0 0 1000 640" xmlns="http://www.w3.org/2000/svg">
-  <g id="base"><rect x="50" y="50" width="300" height="200" fill="#0f6f73"/><text x="60" y="80">Arduino Uno</text></g>
-  <g id="step-1"><line x1="350" y1="100" x2="600" y2="100" stroke="#ff5a5a" stroke-width="5"/></g>
-  <g id="step-2"><line x1="350" y1="140" x2="600" y2="140" stroke="#9aa4b2" stroke-width="5"/></g>
-  <g id="step-3" onclick="steal()"><line x1="350" y1="180" x2="600" y2="180" stroke="#ffd23f"/>
-    <script>alert(1)</script><a href="javascript:alert(2)"><text>x</text></a></g>
-</svg>
-```
-STEP 1: Connect the servo's red wire to 5V.
-STEP 2: Connect the brown wire to GND.
-STEP 3: Connect the orange signal wire to pin 9.
-"""
+ANSWER = """Here you go:
+```json
+{"title": "Servo on an Arduino Uno", "kind": "wiring",
+ "parts": [{"id": "uno", "type": "arduino_uno"}, {"id": "servo", "type": "servo", "label": "SG90 <servo>"}],
+ "wires": [{"from": "uno.5V", "to": "servo.V+", "step": 1},
+           {"from": "uno.GND", "to": "servo.GND", "step": 2},
+           {"from": "uno.pin 9", "to": "servo.SIG", "step": 3, "label": "signal -> PWM"},
+           {"from": "uno.D99", "to": "servo.SIG", "step": 3}],
+ "steps": ["Connect the servo's red wire to 5V.", "Connect the brown wire to GND.",
+           "Connect the orange signal wire to pin 9."]}
+```"""
 
 
 @pytest.fixture
 def board(monkeypatch):
-    monkeypatch.setattr(wb, "_board", {"version": 0, "title": "", "svg": "", "steps": [], "step": 0, "topic": ""})
+    monkeypatch.setattr(wb, "_board", {"version": 0, "title": "", "svg": "", "steps": [], "step": 0, "topic": "",
+                                       "spec": None})
     opened = []
     monkeypatch.setattr(wb, "open_window", lambda: opened.append(1))
     asked = []
@@ -39,15 +36,20 @@ def board(monkeypatch):
     return asked, opened
 
 
-def test_parse_and_clean():
+def test_parse_and_draw():
     b = wb.parse(ANSWER)
     assert b["title"] == "Servo on an Arduino Uno"
     assert len(b["steps"]) == 3 and b["steps"][2].endswith("pin 9.")
-    assert 'id="step-3"' in b["svg"] and "<rect" in b["svg"]
-    for bad in ("<script", "alert(1)", "onclick", "javascript:", "<a ", "</a>", "</script>"):
-        assert bad not in b["svg"], bad
-    with pytest.raises(ValueError):
-        wb.parse("Sorry, I can't draw.")
+    svg = b["svg"]
+    for n in (1, 2, 3):
+        assert f'id="step-{n}"' in svg
+    assert "Arduino Uno" in svg and "SG90 &lt;servo&gt;" in svg   # text is escaped, never markup
+    assert "#e03131" in svg and "#111111" in svg                  # red power, black ground
+    assert "→" not in svg and "signal -&gt; PWM" in svg
+    assert b["skipped"] == ["uno.D99 -> servo.SIG"]               # a made-up pin is left out
+    for bad in ("Sorry, I can't draw.", '{"title": "x"}', "{not json"):
+        with pytest.raises(ValueError):
+            wb.parse(bad)
 
 
 def test_show_diagram_uses_the_big_free_model(board):
@@ -75,7 +77,7 @@ def test_changes_redraw_from_the_current_drawing(board):
     wb.show_diagram({"topic": "servo"})
     out = wb.show_diagram({"change": "use pin 6 instead"})
     assert out.startswith("Redrawn")
-    assert "use pin 6 instead" in asked[1]["user"] and 'id="step-1"' in asked[1]["user"]
+    assert "use pin 6 instead" in asked[1]["user"] and '"uno.pin 9"' in asked[1]["user"]
     assert wb._board["topic"] == "servo" and wb._board["version"] == 2
 
 
