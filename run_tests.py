@@ -111,8 +111,22 @@ def rest_wait(delay, most=120):
     return max(delay * 4, min(min(soon) + 1, most) if soon else 0)
 
 
+BRAIN_ERRORS = []   # (model, error) for every free model that failed, so the report says who and why
+
+
+def _watch_rests():
+    real = providers.rest
+
+    def rest(key, e):
+        BRAIN_ERRORS.append(f"{key}: {str(e)[:160]}")
+        return real(key, e)
+    providers.rest = rest
+    return real
+
+
 def check_live(turn, request, rec, followup, delay):
     want = as_list(turn.get("tool"))
+    BRAIN_ERRORS.clear()
     for attempt in (1, 2):
         start, n = time.perf_counter(), len(rec.calls)
         spoken, error = [], ""
@@ -144,8 +158,10 @@ def check_live(turn, request, rec, followup, delay):
         problems.append(f"said something it shouldn't (matches {turn['says_not']!r})")
     if not text and not error:
         problems.append("said nothing")
+    if problems and BRAIN_ERRORS:
+        problems.append("models that failed: " + " | ".join(dict.fromkeys(BRAIN_ERRORS)))
     return {"tools": used, "args": [c[1] for c in calls], "spoken": text, "seconds": round(took, 1),
-            "problems": problems}
+            "problems": problems, "brain_errors": list(BRAIN_ERRORS)}
 
 
 def go_live():
@@ -159,6 +175,7 @@ def go_live():
 def run(cases, live, delay):
     rec = fakes.Recorder()
     real = (skills.run, sight.read, documents.last)
+    real_rest = _watch_rests()
     skills.run = rec
     results = []
     try:
@@ -191,6 +208,7 @@ def run(cases, live, delay):
                     print(f"        - {p}")
     finally:
         skills.run, sight.read, documents.last = real
+        providers.rest = real_rest
         sight.last.update(title="", url="", text="", at=0.0)
     return results
 
@@ -236,6 +254,8 @@ def main_cli(argv=None):
     a = ap.parse_args(argv)
     cases = [c for c in CASES if not a.only or a.only.lower() in c["id"]][:a.limit or None]
     live = not a.offline and go_live()
+    if live:
+        print(f"Free models to use: {', '.join(providers.order())}")
     if not a.offline and not live:
         print("No free AI model is set up (GROQ_API_KEY, GEMINI_API_KEY...), so this is an offline run.")
     results = run(cases, live, a.delay)

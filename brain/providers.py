@@ -28,6 +28,7 @@ FREE = {
     "mistral": ("https://api.mistral.ai/v1/chat/completions", "MISTRAL_API_KEY", "MISTRAL_MODELS"),
     "github": ("https://models.github.ai/inference/chat/completions", "GITHUB_MODELS_TOKEN", "GITHUB_MODELS"),
 }
+_empty = {}    # key -> how many empty replies in a row (rests grow: 2 min, 8 min, 32 min, 1 h)
 _resting = {}  # name or model -> time.monotonic() when it may be tried again
 _told = set()
 
@@ -61,6 +62,10 @@ def rest(key, e: Exception):
         seconds = min(3600, (wait or 60) + 1)
         if "per day" in text or "tokens per day" in text or "requests per day" in text:
             seconds = 3600
+    elif status == "empty" or "no answer in the reply" in text:
+        # A 200 with nothing in it ("OK"): it keeps doing it, so rest it longer each time.
+        _empty[key] = _empty.get(key, 0) + 1
+        seconds = min(3600, 120 * 4 ** (_empty[key] - 1))
     else:
         seconds = 60
     if seconds:
