@@ -39,6 +39,7 @@ except ImportError:  # pragma: no cover - depends on the Python install
 
 import config
 import ui_events
+from orb_motion import Roamer
 
 IS_WINDOWS = sys.platform == "win32"
 # On Windows this colour is see-through, so the orb's dots float straight on
@@ -222,6 +223,7 @@ class JarvisWidget:
 
         self.load_settings()
         self.right, self.top = self._start_position()
+        self.roamer = Roamer()
         self._build()
         self.set_status("starting")
         self.set_expanded(False, force=True)
@@ -242,7 +244,8 @@ class JarvisWidget:
     def _frame_ms(self):
         """60 frames a second while something moves; 30 while he stands by (the
         slow idle drift looks the same and it halves the work)."""
-        busy = self.status in ACTIVE or self.task or 0 < self.reveal < 1
+        busy = (self.status in ACTIVE or self.task or 0 < self.reveal < 1
+                or not getattr(getattr(self, "roamer", None), "resting", True))
         return 1000 // (FPS if busy and not self.calm else CALM_FPS)
 
     def _corner(self, corner=None):
@@ -264,6 +267,7 @@ class JarvisWidget:
         if moved_corner or self.size != old_size:
             if moved_corner or not self.prefs.get("position"):
                 self.right, self.top = self._corner()
+            self.roamer.place(self.right - self.size, self.top)
         self._rebuild()
         if self.status in STATES:
             self.set_status(self.status)
@@ -459,7 +463,7 @@ class JarvisWidget:
             self._show_items(False)
             self._place()
 
-    def _place(self):
+    def _place(self, lift=True):
         # Keep the orb on screen whatever happens (e.g. a different screen size).
         S = self.size
         sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
@@ -483,11 +487,37 @@ class JarvisWidget:
         self.root.geometry(f"{w}x{h}+{int(left)}+{int(top)}")
         if getattr(self, "hit", None):
             self.hit.geometry(f"{S}x{S}+{int(self.right - S)}+{int(self.top)}")
-            self.root.lift()
+            if lift:
+                self.root.lift()
+
+    def _home(self):
+        """Where the orb lives (top-left): where he put it, or its corner."""
+        right, top = self._start_position()
+        return right - self.size, top
+
+    def _roam(self, dt):
+        """While he's active the orb wanders near the screen edges; then it glides home."""
+        if self.drag or not self.prefs.get("roam", True):
+            return
+        active = (self.status in ACTIVE or bool(self.task and not self.task["done"])) and not self.typing
+        try:
+            pointer = self.root.winfo_pointerxy()
+        except tk.TclError:
+            pointer = None
+        screen = (self.root.winfo_screenwidth(), self.root.winfo_screenheight())
+        if self.roamer.x is None:
+            self.roamer.place(self.right - self.size, self.top)
+        pos = self.roamer.step(dt, active, self._home(), self.size, screen, pointer, calm=self.calm)
+        if pos is not None:
+            x, y = pos
+            if (int(x + self.size), int(y)) != (int(self.right), int(self.top)):
+                self.right, self.top = x + self.size, y
+                self._place(lift=False)
 
     def to_corner(self):
         self.right, self.top = self._corner()
         self._save_position(None)
+        self.roamer.place(self.right - self.size, self.top)
         if self._flips() != (self.flip_x, self.flip_y):
             self._rebuild()
         self._place()
@@ -521,6 +551,7 @@ class JarvisWidget:
             self.talk()
             return
         self._save_position([int(self.right), int(self.top)])  # he's there next time too
+        self.roamer.place(self.right - self.size, self.top)
         if self._flips() != (self.flip_x, self.flip_y):  # crossed the middle: panel to the other side
             self.root.after(10, self._rebuild)
 
@@ -612,6 +643,7 @@ class JarvisWidget:
         except tk.TclError:
             pass
 
+        self._roam(dt)
         self._animate_panel(dt)
         self._animate_chip()
         if self.task or self.status in ACTIVE or (self.typing and (self.entry.get() or self.root.focus_get() == self.entry)):

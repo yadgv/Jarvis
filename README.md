@@ -126,6 +126,10 @@ never fight over the mic. `python install_app.py remove` takes the shortcuts awa
   where he clicks; the whiteboard fades drawings in and out, draws each step's lines and glides the view to
   the step he's on. Settings > **Reduce animations** turns the extras off and runs the orb at 30 frames a
   second (it already drops to 30 while standing by, to save CPU).
+- **He moves around:** while he's listening, thinking or talking, the orb glides around near the edges of
+  the screen on its own side (it never crosses to the middle, waits while your mouse is near it, and
+  doesn't take focus), then glides back to its corner when he's done. Settings > **Move around** turns
+  it off; Reduce animations keeps him still too.
 - While you talk to him a panel slides out with what you said and his reply, then tucks away
   after a few seconds. Click the panel (or right-click > Type a message) to open the text box; Esc closes it.
 - The orb is silver when standing by, green while listening, amber while thinking, blue while speaking.

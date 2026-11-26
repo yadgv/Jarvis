@@ -154,6 +154,7 @@ class SettingsWindow:
         self._row(card, "Position", self._combo("corner_choice", corners, 18))
         self._row(card, "Colours", self._colours)
         self._row(card, "Animations", self._check("reduce_motion", "Reduce animations"))
+        self._row(card, "Move around", self._check("roam", "Glide around while he's active, then home"))
 
     def _colours(self, parent):
         f = tk.Frame(parent, bg=CARD)
