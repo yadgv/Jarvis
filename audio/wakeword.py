@@ -5,18 +5,36 @@ him only if it was his name. Ordinary talking never gets transcribed."""
 import collections
 import os
 import re
+import time
 
 import numpy as np
 import openwakeword
 from openwakeword.model import Model
 
 import config
+import startup
 from audio.recorder import CHUNK, is_speech
 
-try:
-    openwakeword.utils.download_models()  # one-time download (also the voice detector), cached after
-except Exception as e:  # no internet: the copies already downloaded are used
-    print(f"[wake] couldn't check for wake word models ({type(e).__name__}); using the ones on disk")
+_t_load = time.perf_counter()
+
+
+def _have_models() -> bool:
+    """The wake word and its helper models are already downloaded."""
+    folder = os.path.join(os.path.dirname(getattr(openwakeword, "__file__", "") or "."), "resources", "models")
+    try:
+        names = os.listdir(folder)
+    except OSError:
+        return False
+    return (any(n.startswith(config.WAKE_WORD_MODEL) for n in names)
+            and any(n.startswith("melspectrogram") for n in names)
+            and any(n.startswith("embedding_model") for n in names))
+
+
+if not _have_models():
+    try:
+        openwakeword.utils.download_models()  # one-time download (also the voice detector)
+    except Exception as e:  # no internet: the copies already downloaded are used
+        print(f"[wake] couldn't download wake word models ({type(e).__name__}); using the ones on disk")
 
 
 def _options():
@@ -53,6 +71,7 @@ def _load():
 
 
 _model = _load()
+startup.mark("wake word loaded", _t_load)
 
 
 # "Third person in the room" (off by default, config.ROOM_CONTEXT): keep the

@@ -303,7 +303,9 @@ def _prepare():
         _load_piper(os.path.basename(config.PIPER_VOICE)[:-5])  # the fallback, ready to go
 
 
+_t = __import__("time").perf_counter()
 _prepare()
+__import__("startup").mark("voice ready", _t)
 
 
 # ---------- pyttsx3 (last resort) ----------

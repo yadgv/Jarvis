@@ -34,11 +34,28 @@ def _download(path):
     os.replace(path + ".tmp", path)
 
 
-def load() -> bool:
-    """Loads the model; False (and a printed reason) if it can't."""
+def load(wait=True) -> bool:
+    """Loads the model; False (and a printed reason) if it can't.
+    wait=False: False straight away if it's still loading in the background
+    (that turn just uses the plain pause)."""
     global _session, _features, _failed
     if _session is not None:
         return True
+    if not _load_lock.acquire(blocking=wait):
+        return False
+    try:
+        if _session is not None:
+            return True
+        return _load()
+    finally:
+        _load_lock.release()
+
+
+_load_lock = __import__("threading").Lock()
+
+
+def _load() -> bool:
+    global _session, _features, _failed
     if _failed or not config.SMART_TURN:
         return False
     try:
@@ -81,7 +98,7 @@ def predict(audio: np.ndarray) -> float:
 
 def is_finished(audio: np.ndarray):
     """True/False, or None if the model isn't available."""
-    if not load():
+    if not load(wait=False):
         return None
     try:
         p = predict(audio)
