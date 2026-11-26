@@ -59,3 +59,26 @@ def test_reduce_animations_keeps_it_home():
 
 def test_setting_defaults_on():
     assert settings.app_defaults()["roam"] is True
+
+
+def test_glides_off_screen_when_away_and_back_when_needed():
+    r = Roamer(seed=6)
+    path = [p for p in _run_away(r, 6) if p]
+    assert r.hidden(SIZE, SCREEN) and r.x > SCREEN[0]           # tucked past the right edge (home side)
+    steps = [math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(path, path[1:])]
+    assert max(steps) <= Roamer.MAX_SPEED / 60 + 0.5             # a glide, not a jump
+    assert _run_away(r, 1)[-1] is None                           # parked: nothing to move
+    _run(r, 6, active=False)                                     # not away any more: home again
+    assert (r.x, r.y) == HOME
+
+
+def test_left_corner_hides_to_the_left():
+    r = Roamer(seed=7)
+    home = (24, 24)
+    for _ in range(400):
+        r.step(1 / 60, False, home, SIZE, SCREEN, away=True)
+    assert r.x < -SIZE
+
+
+def _run_away(r, seconds, dt=1 / 60):
+    return [r.step(dt, False, HOME, SIZE, SCREEN, None, False, away=True) for _ in range(int(seconds / dt))]
