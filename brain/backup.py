@@ -52,7 +52,9 @@ class ProviderError(RuntimeError):
 
 def openrouter_target():
     models = list(config.OPENROUTER_MODELS)
-    t = {"url": URL, "model": models[0], "who": "OpenRouter", "tools": True, "max_tokens": 1500,
+    # Short tool list and history, like Groq: fewer tokens is faster and leaves free limits for later.
+    t = {"url": URL, "model": models[0], "who": "OpenRouter", "tools": True, "short_tools": True, "max_tokens": 1500,
+         "timeout": (CONNECT_TIMEOUT, 20),
          "headers": {"Authorization": f"Bearer {config.OPENROUTER_API_KEY}", "X-Title": "Jarvis"}}
     if len(models) > 1:
         t["extra"] = {"models": models}  # OpenRouter tries these in order if the first one is busy or gone

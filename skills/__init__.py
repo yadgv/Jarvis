@@ -217,6 +217,22 @@ BRIEF_INTENT = re.compile(
 _BRIEF_EDIT = re.compile(r"\b(?:change|edit|add|remove|shorter|longer|save|read|rewrite|update|fix)\b", re.I)
 
 
+_SCREEN_REF = re.compile(
+    r"\b(?:this|that)\s+(?:article|page|web\s?page|website|site|story|post|pdf|document|doc|paper|tab|thing\s+here)\b"
+    r"|\bon\s+(?:my|the)\s+screen\b|\b(?:i\s+have|i've\s+got|that's)\s+(?:up|open)\b|\barticle\s+(?:here|up)\b"
+    r"|\bwhat\s+i(?:'m|\s+am)\s+(?:reading|looking\s+at)\b|\b(?:off|from)\s+(?:of\s+)?my\s+screen\b", re.I)
+_SCREEN_FOLLOWUP = re.compile(r"\b(?:it|this|that|the article|the page|on it|about it|from it)\b", re.I)
+
+
+def screen_intent(text: str) -> bool:
+    """He refers to what's on his screen ("make slides on this article", "use what I have up")."""
+    return bool(_SCREEN_REF.search(text or ""))
+
+
+def mentions_screen_followup(text: str) -> bool:
+    return bool(_SCREEN_FOLLOWUP.search(text or ""))
+
+
 def brief_intent(text: str) -> bool:
     """He wants what's on his screen briefed ("brief this article", "write me a brief")."""
     t = text or ""
@@ -264,6 +280,8 @@ def pick_tools(text, limit=12, exclude=()):
         keep |= set(CANVAS_TOOLS)
     if re.search(r"\b(?:test|try)\b.*\b(?:phone|call|telegram|alerts?)\b", text or "", re.I):
         keep.add("test_phone_alerts")
+    if screen_intent(text):
+        keep |= {"read_screen", "make_document", "quiz_me"}
     if _SCREEN.search(text or "") or _BRIEF.search(text or ""):
         keep.add("read_screen")
     if _VISUAL.search(text or ""):

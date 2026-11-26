@@ -220,7 +220,11 @@ def _pdf_text(path):
 
 
 def file_text(name: str, limit: int = MAX_READ * 2):
-    """(text, None) for a file he named, or (None, why not)."""
+    """(text, None) for a file he named, or (None, why not). "screen"/"this article" = what's on his screen."""
+    from skills import sight
+    if sight.is_screen_ref(name):
+        text, why = sight.screen_text()
+        return (text[:limit], None) if text else (None, why)
     path, err = _find_one(name)
     if err:
         return None, err
@@ -614,13 +618,13 @@ def undo_files(a):
     if not history:
         return "There's nothing to undo."
     last = history.pop()
-    back, problems = 0, []
+    back, binned, problems = 0, [], []
     for src, dst in reversed(last["moves"]):
         try:
             if not src:  # a file Jarvis made: to the Recycle Bin
                 if os.path.exists(dst):
                     recycle(dst)
-                back += 1
+                binned.append(os.path.basename(dst))
                 continue
             if os.path.exists(src):
                 raise OSError("something else is there now")
@@ -636,7 +640,11 @@ def undo_files(a):
             pass
     with open(_undo_path(), "w", encoding="utf-8") as f:
         json.dump(history, f, indent=1)
-    out = f"Undid \"{last['what']}\": put {back} back."
+    out = f"Undid \"{last['what']}\":"
+    if binned:
+        out += f" moved {', '.join(binned[:3])}{' and others' if len(binned) > 3 else ''} (which I'd made) to the Recycle Bin."
+    if back:
+        out += f" put {back} file{'s' if back != 1 else ''} back where they were."
     if last.get("trashed"):
         out += f" {len(last['trashed'])} went to the Recycle Bin; he can restore them from there."
     if problems:

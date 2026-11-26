@@ -62,6 +62,10 @@ def open_app(a):
         return whiteboard.whiteboard_step({"action": "open"})
     apps = {_norm(k): v for k, v in config.APPS.items()}
     target = apps.get(name)
+    from skills import quick_actions
+    key = quick_actions.browser_key(name)
+    if target is None and key and quick_actions.browser_path(key):
+        target = quick_actions.browser_path(key)
     if target is None and IS_WINDOWS:
         shortcuts = _start_menu_shortcuts()
         target = shortcuts.get(name)
@@ -140,7 +144,7 @@ def lock_screen(a=None):
 SKILLS = [
     {
         "name": "open_app",
-        "description": "Open an installed app on the user's computer by name, e.g. Chrome, Spotify, Apple Music, Notepad, Calculator, VS Code. Websites (YouTube, Gmail, Netflix...) use open_website instead.",
+        "description": "Open an installed app on the user's computer by name, e.g. Brave, Chrome, Spotify, Apple Music, Notepad, Calculator, VS Code. Websites (YouTube, Gmail, Netflix...) use open_website instead.",
         "parameters": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]},
         "run": open_app,
     },

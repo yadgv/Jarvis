@@ -19,6 +19,51 @@ import webbrowser
 
 IS_WINDOWS = sys.platform == "win32"
 
+# Browsers he can name ("pull it up on Brave"). Paths are the usual Windows installs.
+BROWSERS = {
+    "brave": [r"%ProgramFiles%\BraveSoftware\Brave-Browser\Application\brave.exe",
+              r"%ProgramFiles(x86)%\BraveSoftware\Brave-Browser\Application\brave.exe",
+              r"%LOCALAPPDATA%\BraveSoftware\Brave-Browser\Application\brave.exe"],
+    "chrome": [r"%ProgramFiles%\Google\Chrome\Application\chrome.exe",
+               r"%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe",
+               r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"],
+    "edge": [r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe",
+             r"%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"],
+    "firefox": [r"%ProgramFiles%\Mozilla Firefox\firefox.exe", r"%ProgramFiles(x86)%\Mozilla Firefox\firefox.exe"],
+}
+_BROWSER_NAMES = {"brave": "brave", "brave browser": "brave", "the brave browser": "brave", "brave web browser": "brave",
+                  "braves": "brave", "chrome": "chrome", "google chrome": "chrome", "edge": "edge",
+                  "microsoft edge": "edge", "firefox": "firefox", "mozilla firefox": "firefox"}
+
+
+def browser_key(name: str) -> str:
+    """'Brave browser', 'on brave' -> 'brave'; '' if it isn't a browser he named."""
+    n = " ".join((name or "").lower().replace("-", " ").split())
+    n = n[3:] if n.startswith("on ") else n
+    return _BROWSER_NAMES.get(n) or _BROWSER_NAMES.get(n.removesuffix(" browser"), "")
+
+
+def browser_path(key: str) -> str:
+    """The browser's .exe, or ''."""
+    import shutil
+    for p in BROWSERS.get(key, []):
+        p = os.path.expandvars(p)
+        if os.path.isfile(p):
+            return p
+    return shutil.which({"brave": "brave", "chrome": "chrome", "edge": "msedge", "firefox": "firefox"}.get(key, key)) or ""
+
+
+def open_url(url: str, browser: str = "") -> str:
+    """Open a link in the browser he named, else config.BROWSER, else his default browser. Returns which."""
+    import config
+    key = browser_key(browser) or browser_key(getattr(config, "BROWSER", "") or "")
+    exe = browser_path(key) if key else ""
+    if exe:
+        subprocess.Popen([exe, url] if url else [exe])
+        return key.title()
+    webbrowser.open(url)
+    return ""
+
 SETTINGS = {
     "display": "display", "screen": "display", "brightness": "display", "night light": "nightlight",
     "sound": "sound", "audio": "sound", "bluetooth": "bluetooth", "wifi": "network-wifi",
@@ -112,6 +157,15 @@ def open_website(a):
     raw = " ".join(str(a.get("site", "")).split())
     site = raw.lower()
     query = (a.get("search") or "").strip()
+    browser = str(a.get("browser") or "")
+    if browser_key(site):        # "open Brave" / "search cats on Brave" with the browser as the site
+        browser, raw, site = site, "", ""
+        if not query:
+            exe = browser_path(browser_key(browser))
+            if not exe:
+                return f"I couldn't find {browser.title()} installed."
+            subprocess.Popen([exe])
+            return f"Opened {browser_key(browser).title()}."
     url = None
     if site in SITES:
         home, search = SITES[site]
@@ -124,9 +178,11 @@ def open_website(a):
         url = SITES["google"][1].format(urllib.parse.quote_plus(" ".join(x for x in (raw, query) if x)))
     if not url:
         return "Which website, or what should I search for?"
-    webbrowser.open(url)
-    log_tier(1, f"open {url}")
-    return f"Opened {url}."
+    if browser and not browser_path(browser_key(browser)):
+        return f"I couldn't find {browser.title()} installed, so nothing opened."
+    used = open_url(url, browser)
+    log_tier(1, f"open {url}" + (f" in {used}" if used else ""))
+    return f"Opened {url}" + (f" in {used}." if used else ".")
 
 
 def open_folder(a):
@@ -177,10 +233,12 @@ SKILLS = [
         "name": "open_website",
         "description": ("Open a website in the browser, optionally straight to a search: site 'youtube' + search "
                         "'lo-fi music', site 'amazon' + search 'usb c cable', site 'maps' + search 'coffee near "
-                        "me', or any address like 'bbc.co.uk'. Use this instead of use_computer whenever the "
+                        "me', or any address like 'bbc.co.uk'. 'Pull it up on Brave': browser='brave'. Use this instead of use_computer whenever the "
                         f"task is just opening a page or searching. Known sites: {', '.join(SITES)}."),
         "parameters": {"type": "object", "properties": {
-            "site": {"type": "string"}, "search": {"type": "string"}}, "required": ["site"]},
+            "site": {"type": "string"}, "search": {"type": "string"},
+            "browser": {"type": "string", "description": "only if he named one: brave, chrome, edge or firefox"}},
+            "required": ["site"]},
         "run": open_website,
     },
     {
