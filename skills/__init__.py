@@ -32,6 +32,7 @@ from skills import system  # noqa: E402
 from skills import timers  # noqa: E402
 from skills import ui_automation  # noqa: E402
 from skills import weather  # noqa: E402
+from skills import whiteboard  # noqa: E402
 from skills import web_search  # noqa: E402
 
 MODULES = [
@@ -59,6 +60,7 @@ MODULES = [
     edit_text,
     system,
     arduino,
+    whiteboard,
     personality,
 ]
 # Counts conversation turns, so a tool can tell "he said yes" (a later turn)
@@ -148,6 +150,7 @@ FILLERS = {
     "web_search": "Searching now, sir.",
     "check_email": "Checking your email, sir.",
     "daily_briefing": "Pulling that together, sir.",
+    "show_diagram": "Drawing that up for you, sir.",
 }
 _local = threading.local()
 
@@ -196,7 +199,7 @@ def _guard():
 NEEDS_INTERNET = {"get_weather", "get_news", "web_search", "whats_the_buzz", "get_calendar_events",
                   "check_email", "reply_email", "add_calendar_event", "delete_calendar_event", "stock_price", "look_at_screen",
                   "use_computer", "plan_claude_code_task", "start_claude_code_task", "edit_selected_text",
-                  "daily_briefing", "open_website"}
+                  "daily_briefing", "open_website", "show_diagram"}
 
 
 def run(name: str, args: dict) -> str:

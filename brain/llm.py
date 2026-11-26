@@ -238,9 +238,10 @@ def _chain(asked, system, said, tools_used, exclude=(), history=None):
                        "or ANTHROPIC_API_KEY to the .env file.")
 
 
-def complete(system: str, user: str, max_tokens: int = 400, small: bool = True) -> str:
+def complete(system: str, user: str, max_tokens: int = 400, small: bool = True, models=None) -> str:
     """A one-off text answer with no tools (fact extraction, rewriting text),
-    from the cheapest brain that works. Raises if none does."""
+    from the cheapest brain that works. Raises if none does.
+    models: Groq models to try first (e.g. a bigger one for drawing diagrams)."""
     if not network.online():
         raise RuntimeError("offline: no internet for the cloud models")
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
@@ -248,7 +249,7 @@ def complete(system: str, user: str, max_tokens: int = 400, small: bool = True) 
     for name in providers.order():
         targets = []
         if name == "groq":
-            targets = [dict(t, tools=False, max_tokens=max_tokens) for t in providers.groq_targets(small=small)]
+            targets = [dict(t, tools=False, max_tokens=max_tokens) for t in providers.groq_targets(small=small, models=models)]
         elif name == "openrouter":
             targets = [dict(backup.openrouter_target(), tools=False, max_tokens=max_tokens)]
         for target in targets:
