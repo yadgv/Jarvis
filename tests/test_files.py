@@ -49,8 +49,11 @@ def test_make_files(private_files):
     out = files.make_file({"name": "marks.xlsx", "rows": [["Course", "Mark"], ["Thermo", "88"]], "folder": "desktop"})
     assert "Desktop/marks.csv" in out and "Excel" in out
     assert (private_files / "Desktop" / "marks.csv").read_text(encoding="utf-8-sig") == "Course,Mark\nThermo,88\n"
-    out = files.make_file({"name": "letter.docx", "content": "Dear Sir"})
-    assert "letter.rtf" in out and (private_files / "Documents" / "letter.rtf").read_text().startswith("{\\rtf1")
+    out = files.make_file({"name": "letter.docx", "content": "# Letter\nDear Sir\n- point one"})
+    import docx
+    d = docx.Document(str(private_files / "Documents" / "letter.docx"))
+    assert "letter.docx" in out and [p.text for p in d.paragraphs] == ["Letter", "Dear Sir", "point one"]
+    assert d.paragraphs[2].style.name == "List Bullet"
     files.make_file({"name": "blink.ino", "content": "void setup(){}", "folder": "documents/arduino"})
     assert (private_files / "Documents" / "arduino" / "blink.ino").exists()
 

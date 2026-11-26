@@ -99,12 +99,20 @@ def _num(v):
         return v
 
 
-def build_word(spec, path):
+def build_word(spec, path, theme=None):
     import docx
-    from docx.shared import Pt
+    from docx.shared import Pt, RGBColor
     d = docx.Document()
     d.styles["Normal"].font.name = "Calibri"
     d.styles["Normal"].font.size = Pt(11)
+    t = THEMES.get(theme or "", THEMES["corporate"])
+    colour = t["accent"] if not t["dark"] else t["bg"]
+    for name in ("Title", "Heading 1", "Heading 2"):
+        try:
+            d.styles[name].font.color.rgb = RGBColor.from_string(colour)
+            d.styles[name].font.name = t["font"]
+        except KeyError:
+            pass
     d.add_heading(spec["title"], 0)
     if spec.get("subtitle"):
         d.add_paragraph(spec["subtitle"]).italic = True
@@ -128,29 +136,155 @@ def build_word(spec, path):
     d.save(path)
 
 
-def build_slides(spec, path):
+# Slide designs. "pretty it up" / "make it corporate" restyle the last deck in place (restyle_document).
+THEMES = {
+    "modern":    {"dark": True,  "bg": "0F172A", "title": "FFFFFF", "text": "CBD5E1", "accent": "22D3EE",
+                  "accent2": "6366F1", "card": "1E293B", "font": "Segoe UI"},
+    "corporate": {"dark": False, "bg": "FFFFFF", "title": "FFFFFF", "text": "1F2937", "accent": "1F3A5F",
+                  "accent2": "2E86DE", "card": "EEF3F9", "font": "Calibri", "band": True},
+    "minimal":   {"dark": False, "bg": "FAFAFA", "title": "111827", "text": "374151", "accent": "111827",
+                  "accent2": "9CA3AF", "card": "F1F1F1", "font": "Segoe UI Light"},
+    "vibrant":   {"dark": False, "bg": "FFFFFF", "title": "1A1A2E", "text": "333344", "accent": "FF4D6D",
+                  "accent2": "FFB703", "card": "FFF1F3", "font": "Segoe UI"},
+    "nature":    {"dark": False, "bg": "F4F7F2", "title": "1B4332", "text": "2D3B33", "accent": "40916C",
+                  "accent2": "95D5B2", "card": "E3EFE6", "font": "Georgia"},
+    "grape":     {"dark": True,  "bg": "24163A", "title": "F5EDFF", "text": "DDD0F5", "accent": "B26BFF",
+                  "accent2": "FF7AC6", "card": "33224F", "font": "Segoe UI"},
+    "sunset":    {"dark": False, "bg": "FFF8F0", "title": "7C2D12", "text": "44291A", "accent": "F97316",
+                  "accent2": "E11D48", "card": "FDEBDD", "font": "Segoe UI"},
+    "ocean":     {"dark": True,  "bg": "06283D", "title": "FFFFFF", "text": "C9E4F2", "accent": "47B5FF",
+                  "accent2": "DFF6FF", "card": "0B3A57", "font": "Segoe UI"},
+}
+DEFAULT_THEME = "modern"
+_THEME_WORDS = {
+    "corporate": "corporate", "business": "corporate", "professional": "corporate", "formal": "corporate",
+    "clean": "minimal", "minimal": "minimal", "simple": "minimal", "white": "minimal", "plain": "minimal",
+    "colorful": "vibrant", "colourful": "vibrant", "vibrant": "vibrant", "fun": "vibrant", "bright": "vibrant",
+    "red": "vibrant", "pink": "vibrant", "green": "nature", "nature": "nature", "natural": "nature",
+    "purple": "grape", "grape": "grape", "violet": "grape", "orange": "sunset", "warm": "sunset",
+    "sunset": "sunset", "blue": "ocean", "ocean": "ocean", "dark": "modern", "modern": "modern",
+    "sleek": "modern", "techy": "modern", "tech": "modern", "futuristic": "modern",
+}
+_PRETTY_ORDER = ["modern", "ocean", "grape", "corporate", "vibrant", "nature", "sunset", "minimal"]
+
+
+def pick_theme(said: str = "", current: str = "") -> str:
+    """A theme from what he said ("corporate", "more colourful", "purple"); a new one for "prettier"."""
+    words = re.findall(r"[a-z]+", (said or "").lower())
+    for w in words:
+        if w in THEMES:
+            return w
+        if w in _THEME_WORDS:
+            return _THEME_WORDS[w]
+    order = [t for t in _PRETTY_ORDER if t != current]
+    return order[0] if order else DEFAULT_THEME
+
+
+def _rgb(hexcode):
+    from pptx.dml.color import RGBColor
+    return RGBColor.from_string(hexcode)
+
+
+def _box(slide, x, y, w, h, fill, shape=1):
+    from pptx.util import Inches
+    sh = slide.shapes.add_shape(shape, Inches(x), Inches(y), Inches(w), Inches(h))
+    sh.fill.solid()
+    sh.fill.fore_color.rgb = _rgb(fill)
+    sh.line.fill.background()
+    sh.shadow.inherit = False
+    return sh
+
+
+def _text(slide, x, y, w, h, text, size, color, font, bold=False, align=None):
+    from pptx.util import Inches, Pt
+    tb = slide.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h))
+    tf = tb.text_frame
+    tf.word_wrap = True
+    para = tf.paragraphs[0]
+    if align is not None:
+        para.alignment = align
+    run = para.add_run()
+    run.text = str(text)
+    run.font.size, run.font.bold, run.font.name = Pt(size), bold, font
+    run.font.color.rgb = _rgb(color)
+    return tf
+
+
+def build_slides(spec, path, theme=None):
     from pptx import Presentation
     from pptx.chart.data import CategoryChartData
     from pptx.enum.chart import XL_CHART_TYPE
+    from pptx.enum.shapes import MSO_SHAPE
+    from pptx.enum.text import PP_ALIGN
     from pptx.util import Inches, Pt
+    t = THEMES.get(theme or "", THEMES[DEFAULT_THEME])
+    font = t["font"]
     p = Presentation()
     p.slide_width, p.slide_height = Inches(13.333), Inches(7.5)
-    s = p.slides.add_slide(p.slide_layouts[0])
-    s.shapes.title.text = spec["title"]
-    s.placeholders[1].text = spec.get("subtitle") or datetime.now().strftime("%B %Y")
-    for sec in spec["sections"]:
-        s = p.slides.add_slide(p.slide_layouts[1])
-        s.shapes.title.text = sec.get("heading") or spec["title"]
-        body = s.placeholders[1].text_frame
-        items = list(sec.get("bullets") or []) or ([sec["text"]] if sec.get("text") else [])
-        for i, b in enumerate(items):
-            para = body.paragraphs[0] if i == 0 else body.add_paragraph()
-            para.text = str(b)
-            para.font.size = Pt(24)
+    blank = p.slide_layouts[6]
+
+    def background(s):
+        s.background.fill.solid()
+        s.background.fill.fore_color.rgb = _rgb(t["bg"])
+
+    def header(s, heading):
+        if t.get("band"):
+            _box(s, 0, 0, 13.333, 1.45, t["accent"])
+            _text(s, 0.8, 0.3, 10.8, 0.9, heading, 32, t["title"], font, bold=True)
+            _box(s, 0, 1.45, 13.333, 0.07, t["accent2"])
+        else:
+            _box(s, 0.55, 0.55, 0.12, 0.85, t["accent"])
+            _text(s, 0.85, 0.4, 10.8, 1.0, heading, 34, t["title"], font, bold=True)
+
+    # Title slide: big title on a colour block, decorative circles.
+    s = p.slides.add_slide(blank)
+    background(s)
+    _box(s, 0, 0, 7.9, 7.5, t["accent"] if not t["dark"] else t["card"])
+    _box(s, 9.2, -1.2, 5.5, 5.5, t["accent2"], MSO_SHAPE.OVAL)
+    _box(s, 10.6, 4.4, 3.6, 3.6, t["accent"], MSO_SHAPE.OVAL)
+    _box(s, 0.8, 2.25, 1.4, 0.09, t["accent2"])
+    on_block = "FFFFFF" if not t["dark"] else t["title"]
+    _text(s, 0.8, 2.5, 6.8, 2.4, spec["title"], 44, on_block, font, bold=True)
+    _text(s, 0.8, 5.0, 6.8, 1.0, spec.get("subtitle") or datetime.now().strftime("%B %Y"), 20,
+          on_block if t["dark"] else "F1F5F9", font)
+    total = len(spec["sections"])
+    for i, sec in enumerate(spec["sections"], 1):
+        s = p.slides.add_slide(blank)
+        background(s)
+        header(s, sec.get("heading") or spec["title"])
+        _text(s, 11.3, 0.25, 1.8, 1.0, f"{i:02d}", 40, t["accent2"] if not t.get("band") else "FFFFFF", font,
+              bold=True, align=PP_ALIGN.RIGHT)
+        items = list(sec.get("bullets") or [])
+        side = sec.get("text") if items else ""
+        if not items and sec.get("text"):
+            items = [sec["text"]]
+        width = 7.4 if side else 11.6
+        tb = s.shapes.add_textbox(Inches(0.9), Inches(1.95), Inches(width), Inches(4.8))
+        tf = tb.text_frame
+        tf.word_wrap = True
+        for j, b in enumerate(items):
+            para = tf.paragraphs[0] if j == 0 else tf.add_paragraph()
+            para.space_after = Pt(14)
+            mark = para.add_run()
+            mark.text = "■  "
+            mark.font.size, mark.font.color.rgb, mark.font.name = Pt(14), _rgb(t["accent"]), font
+            run = para.add_run()
+            run.text = str(b)
+            run.font.size, run.font.name = Pt(22 if len(items) <= 4 else 19), font
+            run.font.color.rgb = _rgb(t["text"])
+        if side:
+            card = _box(s, 8.7, 1.95, 3.9, 4.6, t["card"], MSO_SHAPE.ROUNDED_RECTANGLE)
+            card.adjustments[0] = 0.08
+            _box(s, 8.7, 1.95, 3.9, 0.1, t["accent2"])
+            _text(s, 9.0, 2.25, 3.3, 4.1, side, 15, t["text"], font)
+        _text(s, 0.9, 6.85, 8, 0.4, spec["title"], 11, t["accent2"] if t["dark"] else "8A8F98", font)
+        _text(s, 11.4, 6.85, 1.3, 0.4, f"{i} / {total}", 11, t["accent2"] if t["dark"] else "8A8F98", font,
+              align=PP_ALIGN.RIGHT)
     chart = spec.get("chart") or {}
     if chart.get("labels") and chart.get("series"):
-        s = p.slides.add_slide(p.slide_layouts[5])
-        s.shapes.title.text = chart.get("title") or "Chart"
+        s = p.slides.add_slide(blank)
+        background(s)
+        header(s, chart.get("title") or "Chart")
         data = CategoryChartData()
         data.categories = [str(l) for l in chart["labels"]]
         for ser in chart["series"]:
@@ -158,7 +292,20 @@ def build_slides(spec, path):
                                                         for v in ser.get("values") or []])
         kind = {"line": XL_CHART_TYPE.LINE_MARKERS, "pie": XL_CHART_TYPE.PIE}.get(
             chart.get("type"), XL_CHART_TYPE.COLUMN_CLUSTERED)
-        s.shapes.add_chart(kind, Inches(1), Inches(1.5), Inches(11.3), Inches(5.5), data)
+        g = s.shapes.add_chart(kind, Inches(1), Inches(1.6), Inches(11.3), Inches(5.4), data).chart
+        g.font.color.rgb, g.font.size, g.font.name = _rgb(t["text"]), Pt(14), font
+        if kind != XL_CHART_TYPE.PIE:
+            for k, ser in enumerate(g.series):
+                ser.format.fill.solid()
+                ser.format.fill.fore_color.rgb = _rgb((t["accent"], t["accent2"])[k % 2])
+    # Closing slide.
+    s = p.slides.add_slide(blank)
+    background(s)
+    _box(s, 0, 6.9, 13.333, 0.6, t["accent"])
+    _text(s, 0.8, 2.6, 11.7, 1.4, "Thank you", 54, t["title"] if t["dark"] or not t.get("band") else t["accent"],
+          font, bold=True, align=PP_ALIGN.CENTER)
+    _text(s, 0.8, 4.0, 11.7, 0.8, "Questions?", 24, t["accent2"] if t["dark"] else t["text"], font,
+          align=PP_ALIGN.CENTER)
     p.save(path)
 
 
@@ -257,16 +404,69 @@ def build_pdf(spec, path):
 BUILD = {"word": build_word, "slides": build_slides, "excel": build_excel, "pdf": build_pdf}
 
 
-def make(kind, spec, folder=None, name=None):
+def _build(kind, spec, path, theme):
+    if kind in ("slides", "word"):
+        BUILD[kind](spec, path, theme)
+    else:
+        BUILD[kind](spec, path)
+
+
+def _remember(kind, spec, path, theme):
+    """The last document he made, so "make it prettier" restyles it instead of making a new one."""
+    try:
+        os.makedirs(config.MEMORY_DIR, exist_ok=True)
+        with open(os.path.join(config.MEMORY_DIR, "last_document.json"), "w", encoding="utf-8") as f:
+            json.dump({"kind": kind, "spec": spec, "path": path, "theme": theme}, f)
+    except OSError as e:
+        print(f"[documents] couldn't remember the document: {e}")
+
+
+def last():
+    try:
+        with open(os.path.join(config.MEMORY_DIR, "last_document.json"), encoding="utf-8") as f:
+            doc = json.load(f)
+        return doc if os.path.exists(doc.get("path", "")) else None
+    except (OSError, ValueError):
+        return None
+
+
+def make(kind, spec, folder=None, name=None, theme=None):
     from skills import files
     folder = folder or files._folder("documents")
     os.makedirs(folder, exist_ok=True)
     stem = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "", name or spec["title"])
     stem = re.sub(r"\s+", " ", stem).strip()[:80] or "Jarvis document"
     path = files._unique(os.path.join(folder, stem + KINDS[kind]))
-    BUILD[kind](spec, path)
+    theme = theme or (DEFAULT_THEME if kind == "slides" else "corporate")
+    _build(kind, spec, path, theme)
     files._log("make", [("", path)])
+    _remember(kind, spec, path, theme)
     return path
+
+
+def restyle_document(a):
+    """New look for the last deck or Word document he made, same content, same file."""
+    from skills import files
+    doc = last()
+    if not doc or doc["kind"] not in ("slides", "word"):
+        return "There's no recent slide deck or Word document of mine to restyle. Ask which file he means."
+    theme = pick_theme(a.get("style") or "", doc.get("theme") or "")
+    path = doc["path"]
+    try:
+        _build(doc["kind"], doc["spec"], path, theme)
+        where = f"the same file, {files._show(path)}"
+    except PermissionError:
+        # PowerPoint/Word has it open (Windows locks it): save the new look beside it.
+        stem, ext = os.path.splitext(path)
+        path = files._unique(f"{stem} ({theme}){ext}")
+        _build(doc["kind"], doc["spec"], path, theme)
+        files._log("make", [("", path)])
+        where = f"{files._show(path)} (the old one was open, so it couldn't be replaced)"
+    _remember(doc["kind"], doc["spec"], path, theme)
+    if a.get("open", True):
+        files.open_file({"path": path})
+    return (f"Restyled it with the {theme} design, same content, saved as {where}. Tell him in one short sentence; "
+            f"other looks: {', '.join(t for t in THEMES if t != theme)}.")
 
 
 # ---------- tools ----------
@@ -303,7 +503,8 @@ def make_document(a):
         return f"I can't save there. I can use: {', '.join(files.roots())}."
     try:
         spec = plan(kind, topic, a.get("details") or "", source_text)
-        path = make(kind, spec, folder, a.get("name"))
+        style = a.get("style") or ""
+        path = make(kind, spec, folder, a.get("name"), pick_theme(style) if style else None)
     except ValueError as e:
         return f"Couldn't make it: {e}. Offer to try again."
     except Exception as e:
@@ -314,7 +515,8 @@ def make_document(a):
             "pdf": "PDF"}[kind]
     return (f"Saved {files._show(path)} ({what}) and opened it. Sections: "
             + "; ".join(s.get("heading", "") for s in spec["sections"][:10])
-            + ". Tell him briefly; he can say \"undo that\" to bin it.")
+            + ". Tell him briefly; he can say \"undo that\" to bin it, \"make it prettier\" or \"make it corporate\" "
+              "for another look (restyle_document), or \"split the screen\" to put it beside the article (split_screen).")
 
 
 def show_chart(a):
@@ -361,9 +563,21 @@ SKILLS = [
             "source": {"type": "string", "description": "one of his files to base it on, e.g. 'thermo notes', or \"screen\" for what's on his screen"},
             "name": {"type": "string", "description": "file name without extension (default: the title)"},
             "folder": {"type": "string", "description": "documents (default), desktop, ..."},
-            "open": {"type": "boolean", "description": "open it afterwards (default true)"}},
+            "open": {"type": "boolean", "description": "open it afterwards (default true)"},
+            "style": {"type": "string", "description": "a look if he asked: corporate, modern, minimal, colorful, "
+                                                       "purple, green, blue, warm"}},
             "required": ["kind"]},
         "run": make_document,
+    },
+    {
+        "name": "restyle_document",
+        "description": ("Change the LOOK of the slide deck (or Word document) you just made, keeping its content "
+                        "and file: 'pretty it up', 'make it prettier', 'make it corporate', 'darker', 'more "
+                        "colourful', 'purple theme'. Never make_document for a style change."),
+        "parameters": {"type": "object", "properties": {
+            "style": {"type": "string", "description": "his words: corporate, modern, minimal, colorful, purple, "
+                                                       "green, blue, warm, or 'prettier'"}}},
+        "run": restyle_document,
     },
     {
         "name": "show_chart",

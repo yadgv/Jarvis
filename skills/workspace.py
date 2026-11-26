@@ -33,8 +33,9 @@ FOLDER_NAME = "Jarvis Docs"
 SOURCE_CHARS = 16000
 GONE_AFTER = 6.0
 BROWSERS = re.compile(r"(?:Microsoft\s*Edge|Google Chrome|Chromium|Mozilla Firefox|Firefox|Brave|Opera|Vivaldi)\s*$", re.I)
-DOC_FILE = re.compile(r"([^\\/:*?\"<>|]+?\.(?:pdf|docx|pptx|txt|md))\b", re.I)
+DOC_FILE = re.compile(r"([^\\/:*?\"<>|]+?\.(?:pdf|docx|pptx|txt|md|rtf))\b", re.I)
 OFFICE = re.compile(r"^(.*?)\s+-\s+(?:Word|PowerPoint)\s*$")
+COMPAT = re.compile(r"\s*(?:-\s*|\[)(?:Compatibility Mode|Protected View|Read-Only|AutoRecovered)\]?", re.I)
 
 BRIEF_SYSTEM = (
     "You write a brief of a document for a university engineering student, in Markdown:\n"
@@ -137,6 +138,10 @@ def _file_source(path: str) -> dict:
     else:
         with open(path, encoding="utf-8", errors="replace") as f:
             text, kind = f.read(400_000), "text"
+        if ext == ".rtf":   # plain text out of the RTF codes
+            text = re.sub(r"\\par[d]?\s?", "\n", text)
+            text = re.sub(r"\\u(\d+)\??", lambda m: chr(int(m.group(1))), text)
+            text = re.sub(r"\{\\fonttbl[^}]*\}|\\[a-z]+-?\d* ?|[{}]", "", text)
     blocks = [("p", p.strip()) for p in re.split(r"\n\s*\n|\n(?=[A-Z0-9•\-])", text or "") if p.strip()]
     return {"kind": kind, "name": name, "path": path, "url": "", "text": text or "", "blocks": blocks[:600]}
 
@@ -271,6 +276,7 @@ def on_screen():
             print(f"[workspace] {why}; using the window's own text ({len(text)} chars)")
             return _page_source({"title": title, "url": "", "text": text}), hwnd
         raise ValueError(why)
+    title = COMPAT.sub("", title)
     m = DOC_FILE.search(title) or OFFICE.match(title)
     if m:
         name = m.group(1).strip()
@@ -660,7 +666,75 @@ def view_document(a):
     return f"\"{source['name']}\" is open in the reader. He can ask for a brief of it."
 
 
+# ---------- split screen: any two windows side by side ----------
+
+_KINDS = [
+    (re.compile(r"\b(?:slides?|slideshow|deck|powerpoint|presentation)\b", re.I), re.compile(r"PowerPoint\s*$|\.pptx\b", re.I)),
+    (re.compile(r"\b(?:doc|dock|docs|document|word|outline|essay|report|notes?)\b", re.I),
+     re.compile(r"\bWord\s*$|\.(?:docx|rtf)\b", re.I)),
+    (re.compile(r"\b(?:article|page|browser|brave|chrome|edge|firefox|website|site|tab)\b", re.I), BROWSERS),
+    (re.compile(r"\b(?:pdf)\b", re.I), re.compile(r"\.pdf\b|Acrobat", re.I)),
+    (re.compile(r"\b(?:code|vs ?code|editor)\b", re.I), re.compile(r"Visual Studio Code", re.I)),
+    (re.compile(r"\b(?:files?|folder|explorer)\b", re.I), re.compile(r"File Explorer|^(?:Documents|Downloads|Desktop)$", re.I)),
+]
+
+
+def find_window(what: str, windows, skip=()):
+    """(hwnd, title) of the front-most window matching what he called it ("the slides", "Brave", "my essay")."""
+    what = (what or "").strip()
+    pattern = next((title_re for said_re, title_re in _KINDS if said_re.search(what)), None)
+    words = [w for w in re.findall(r"[a-z0-9]+", what.lower()) if w not in ("the", "my", "a", "on", "one", "side")]
+    for hwnd, title in windows:
+        if hwnd in skip or not title.strip() or "jarvis" in re.sub(r"[^a-z]", "", title.lower()):
+            continue
+        if title in ("Program Manager", "Windows Input Experience", "Settings"):
+            continue
+        if pattern is not None and pattern.search(title):
+            return hwnd, title
+        if pattern is None and words and all(w in title.lower() for w in words):
+            return hwnd, title
+    return None, ""
+
+
+def split_screen(a):
+    """Snap two of his windows side by side, left and right halves."""
+    if sys.platform != "win32":
+        return "Splitting the screen only works on Windows."
+    from skills import hudwin, whiteboard
+    user32 = whiteboard._user32()
+    wins = _windows(user32)
+    left, right = (a or {}).get("left") or "", (a or {}).get("right") or ""
+    chosen = []
+    for what in (left, right):
+        if what:
+            hwnd, title = find_window(what, wins, skip=[h for h, _ in chosen])
+            if not hwnd:
+                return f"I can't see a window for \"{what}\". Open it first, then ask again."
+            chosen.append((hwnd, title))
+    for hwnd, title in wins:                       # not named: the windows he used last
+        if len(chosen) >= 2:
+            break
+        if hwnd not in [h for h, _ in chosen] and his_window([(hwnd, title)])[0]:
+            chosen.append((hwnd, title))
+    if len(chosen) < 2:
+        return "There's only one window open to arrange."
+    for (hwnd, _), side in zip(chosen, ("left", "right")):
+        hudwin.place(user32, hwnd, hudwin.half_rect(side))
+        whiteboard._raise(user32, hwnd, False)
+    return f"Split the screen: \"{chosen[0][1]}\" on the left, \"{chosen[1][1]}\" on the right. Tell him in a few words."
+
+
 SKILLS = [
+    {
+        "name": "split_screen",
+        "description": ("Put two of his windows side by side (left and right halves of the screen): 'split the "
+                        "screen, the doc on one side and the slides on the other', 'put the article next to my "
+                        "essay'. You CAN do this; never say you can't split the screen."),
+        "parameters": {"type": "object", "properties": {
+            "left": {"type": "string", "description": "what he calls the left window: 'the doc', 'slides', 'Brave'"},
+            "right": {"type": "string", "description": "the right window"}}},
+        "run": split_screen,
+    },
     {
         "name": "brief_document",
         "description": ("Brief an article or document: 'brief this', 'brief this article', 'summarise this PDF', "

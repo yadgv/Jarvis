@@ -417,6 +417,19 @@ config.py (or `JARVIS_BROWSER=brave` in `.env`) makes it the default for every l
 The text goes to the free models. Only for understanding an image itself does he use
 `look_at_screen`, which needs Claude, so he asks first.
 
+## Split screen
+
+"Split the screen, the doc on one side and the slides on the other", "put the article next to my
+essay": Jarvis snaps the two windows to the left and right halves. With no names, it uses the two
+windows you used last.
+
+## Slide designs
+
+New decks get a designed look (title slide, numbered sections, side cards, styled charts, a closing
+slide). "Make it prettier", "make it corporate", "purple", "more colourful" restyle the deck he just
+made in place, same content and same file. Looks: modern, corporate, minimal, vibrant, nature, grape,
+sunset, ocean. If PowerPoint has the file open, the new look is saved beside it.
+
 ## Brief an article (split screen)
 
 Say "brief this article" (or "summarise this PDF") while it's on screen. Jarvis

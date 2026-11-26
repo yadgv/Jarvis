@@ -44,7 +44,7 @@ def test_each_kind(model, private_files, kind, ext):
     if kind == "slides":
         import pptx
         deck = pptx.Presentation(str(path))
-        assert len(deck.slides) == 4  # title, 2 sections, chart
+        assert len(deck.slides) == 5  # title, 2 sections, chart, thank you
         assert any(sh.has_chart for sh in deck.slides[3].shapes)
     if kind == "excel":
         import openpyxl

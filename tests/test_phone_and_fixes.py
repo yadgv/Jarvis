@@ -381,3 +381,54 @@ def test_free_vision_before_claude(monkeypatch):
     monkeypatch.setattr(vision, "look", lambda img, q, s: "A cat on a sofa.")
     monkeypatch.setattr(screen, "_ask", lambda *a: (_ for _ in ()).throw(AssertionError("Claude was called")))
     assert screen.look_at_screen({"question": "what's in this picture"}) == "A cat on a sofa."
+
+
+def test_restyle_keeps_content_and_file(monkeypatch, tmp_path):
+    from skills import documents, files
+    monkeypatch.setattr(config, "MEMORY_DIR", str(tmp_path / "mem"))
+    monkeypatch.setattr(files, "_folder", lambda name=None: str(tmp_path))
+    monkeypatch.setattr(files, "open_file", lambda a: None)
+    monkeypatch.setattr(files, "_log", lambda *a: None)
+    spec = {"title": "Data breaches", "sections": [{"heading": "Why", "bullets": ["AI phishing", "Old software"]}]}
+    path = documents.make("slides", spec, str(tmp_path), "Deck")
+    assert documents.last()["theme"] == documents.DEFAULT_THEME
+    out = documents.restyle_document({"style": "make it corporate"})
+    assert "corporate" in out and documents.last()["path"] == path
+    from pptx import Presentation
+    texts = " ".join(sh.text_frame.text for sl in Presentation(path).slides for sh in sl.shapes if sh.has_text_frame)
+    assert "AI phishing" in texts
+    out = documents.restyle_document({"style": "prettier"})
+    assert documents.last()["theme"] != "corporate"
+    assert len(list(tmp_path.glob("*.pptx"))) == 1        # no new decks
+
+
+def test_restyle_intent(monkeypatch):
+    import skills
+    from skills import documents
+    monkeypatch.setattr(documents, "last", lambda: {"kind": "slides"})
+    assert skills.restyle_intent("Can you pretty up the slideshow?")
+    assert skills.restyle_intent("Make it a corporate.")
+    assert skills.restyle_intent("Make it look prettier.")
+    assert not skills.restyle_intent("make a corporate presentation about cyber security")
+    assert not skills.restyle_intent("what's the weather")
+    monkeypatch.setattr(documents, "last", lambda: None)
+    assert not skills.restyle_intent("make it prettier")
+
+
+def test_split_screen_finds_named_windows(monkeypatch):
+    from skills import hudwin, whiteboard, workspace
+    wins = [(1, "J.A.R.V.I.S."), (2, "Data breaches are coming fast - CBC News - Brave"),
+            (3, "CBC Data Breach Presentation.pptx - PowerPoint"), (4, "CBC Outline - Compatibility Mode - Word")]
+    placed = []
+    monkeypatch.setattr(workspace.sys, "platform", "win32")
+    monkeypatch.setattr(whiteboard, "_user32", lambda: None)
+    monkeypatch.setattr(whiteboard, "_raise", lambda u, h, pin: None)
+    monkeypatch.setattr(workspace, "_windows", lambda u: wins)
+    monkeypatch.setattr(hudwin, "half_rect", lambda side: side)
+    monkeypatch.setattr(hudwin, "place", lambda u, h, rect: placed.append((h, rect)))
+    out = workspace.split_screen({"left": "the dock", "right": "the slides"})
+    assert placed == [(4, "left"), (3, "right")] and "PowerPoint" in out
+    placed.clear()
+    workspace.split_screen({})
+    assert placed == [(2, "left"), (3, "right")]       # the two he used last, never Jarvis
+    assert "can't see" in workspace.split_screen({"left": "spotify"})
