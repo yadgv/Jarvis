@@ -132,6 +132,7 @@ def test_music_plays_by_name_without_screenshots(desktop, monkeypatch):
 
 
 def test_music_falls_back_to_screenshots(desktop, monkeypatch):
+    monkeypatch.setattr(music.config, "MUSIC_SCREEN_CONTROL", True, raising=False)
     monkeypatch.setattr(music.pc_control, "open_app", lambda a: "Opened apple music.")
     monkeypatch.setattr(music.time, "sleep", lambda s: None)
     monkeypatch.setattr(music.computer, "use_computer", lambda a: "Playing via screen.")

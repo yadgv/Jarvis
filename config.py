@@ -50,6 +50,9 @@ GITHUB_MODELS = ["openai/gpt-4.1-mini"]
 FREE_VISION = ["gemini", "github"]
 # Browser for links and searches: "" = Windows' default browser; or "brave", "chrome", "edge", "firefox".
 BROWSER = os.getenv("JARVIS_BROWSER", "")
+# If Apple Music's own buttons can't play a song: False = play it on YouTube (free);
+# True = let Claude click through Apple Music (paid, asks first).
+MUSIC_SCREEN_CONTROL = False
 
 # Groq's free models (console.groq.com, GROQ_API_KEY=gsk_... in .env). Each has
 # its own free limits, so when one is busy the next takes over.

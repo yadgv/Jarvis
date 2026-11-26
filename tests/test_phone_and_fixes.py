@@ -432,3 +432,93 @@ def test_split_screen_finds_named_windows(monkeypatch):
     workspace.split_screen({})
     assert placed == [(2, "left"), (3, "right")]       # the two he used last, never Jarvis
     assert "can't see" in workspace.split_screen({"left": "spotify"})
+
+
+def test_gemini_list_errors_and_plain_json(monkeypatch):
+    from brain import backup
+
+    class R:
+        status_code = 400
+        text = "[...]"
+
+        def json(self):
+            return [{"error": {"code": 400, "message": "Invalid JSON payload"}}]
+    assert backup.error_text(R()) == "Invalid JSON payload"
+
+    class Plain:
+        encoding = None
+
+        def iter_lines(self, decode_unicode=True):
+            yield '{"model": "gpt-4.1-mini", "choices": [{"message": {"content": "Hello, sir."}}]}'
+    assert [c["choices"][0]["delta"]["content"] for c in backup._events(Plain())] == ["Hello, sir."]
+
+    class Empty:
+        encoding = None
+
+        def iter_lines(self, decode_unicode=True):
+            return iter([])
+    with pytest.raises(backup.ProviderError):
+        list(backup._events(Empty()))
+
+
+def test_empty_answer_falls_to_next_model(monkeypatch):
+    from brain import backup, llm, providers
+    monkeypatch.setattr(config, "GROQ_API_KEY", "g")
+    monkeypatch.setattr(config, "CEREBRAS_API_KEY", "c")
+    for k in ("GEMINI_API_KEY", "MISTRAL_API_KEY", "GITHUB_MODELS_TOKEN", "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY"):
+        monkeypatch.setattr(config, k, None, raising=False)
+    monkeypatch.setattr(config, "GROQ_MODELS", ["g1"])
+    providers._resting.clear()
+
+    def fake_round(messages, exclude, target):
+        if target["who"].startswith("Groq"):
+            yield "done", ("", [], None)          # nothing at all
+            return
+        yield "text", "Hello, sir."
+        yield "done", ("Hello, sir.", [], target["model"])
+    monkeypatch.setattr(backup, "stream_round", fake_round)
+    assert list(llm._chain("hi", "sys", [], [])) == ["Hello, sir."]
+    providers._resting.clear()
+
+
+def test_mistral_402_rests_for_the_day(capsys):
+    from brain import backup, providers
+    providers._resting.clear()
+    providers._told.clear()
+    providers.rest("mistral:mistral-small-latest", backup.ProviderError("You need a subscription", 402))
+    assert providers._resting["mistral:mistral-small-latest"] - time.monotonic() > 20 * 3600
+    assert "Experiment" in capsys.readouterr().out
+    providers._resting.clear()
+
+
+def test_tool_notes_and_lone_names_never_spoken():
+    from brain import llm
+    assert not llm._speakable("Ziad.")
+    assert not llm._speakable("Started in the background: Making the document. Tell him in one short sentence")
+    assert llm._speakable("Ziad, the case is ready.")
+
+
+def test_phone_test_intent():
+    import skills
+    assert skills.phone_test_intent("Can you test my phone notifications?")
+    assert skills.phone_test_intent("test my phone alerts")
+    assert not skills.phone_test_intent("call my mom")
+
+
+def test_uninstalled_browser_uses_default_and_youtube_plays(monkeypatch):
+    from skills import quick_actions as q
+    opened = []
+    monkeypatch.setattr(q, "browser_path", lambda key: "")
+    monkeypatch.setattr(q.webbrowser, "open", lambda url: opened.append(url))
+    monkeypatch.setattr(q, "log_tier", lambda *a: None)
+    monkeypatch.setattr(q, "youtube_video", lambda query: "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+    out = q.open_website({"site": "youtube", "search": "never gonna give you up", "browser": "firefox", "play": True})
+    assert opened == ["https://www.youtube.com/watch?v=dQw4w9WgXcQ"] and "isn't installed" in out
+
+
+def test_cad_shows_the_bad_line():
+    from skills import cad
+    code = "a = 1;\nb = 2;\ncube([a,b,]);\nsphere(1);"
+    hint = cad._bad_line(code, "ERROR: Parser error: syntax error in file x.scad, line 3")
+    assert "3: cube([a,b,]);" in hint
+    assert "Arduino Uno" in cad.SYSTEM and "68.6" in cad.SYSTEM

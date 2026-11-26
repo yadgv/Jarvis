@@ -6,6 +6,7 @@ If that can't find the song, it falls back to screen control (use_computer),
 which needs Claude and takes several seconds. Pause/skip/volume use the media
 keys instead (the 'media' skill), which is instant.
 """
+import re
 import time
 
 import config
@@ -22,14 +23,19 @@ def play_music(a):
     kind = (a.get("kind") or "song").strip().lower()
     if kind not in KINDS:
         kind = "song"
+    if re.search(r"\byoutube\b", query, re.I) or a.get("where") == "youtube":
+        return _on_youtube(re.sub(r"\s*\b(?:on|in)?\s*youtube\b", "", query, flags=re.I))
     opened = pc_control.open_app({"name": config.MUSIC_APP})
     if not opened.startswith("Opened"):
-        return opened
+        return _on_youtube(query)
     time.sleep(config.MUSIC_OPEN_WAIT)  # give the app a moment to come to the front
     # Tier 2: the app's own buttons by name (no screenshots, no big model).
     played = ui_automation.play_in_app(config.MUSIC_APP, query)
     if played:
         return f"Playing: {played}."
+    if not getattr(config, "MUSIC_SCREEN_CONTROL", False):
+        # Screen control costs money (Claude): play it on YouTube in his browser instead, for free.
+        return _on_youtube(query)
     log_tier(3, f"play_music '{query}' falls back to screen control")
     where = ("Look in his Library > Playlists first; if it isn't there, search Apple Music. "
              if kind == "playlist" else "")
@@ -43,12 +49,19 @@ def play_music(a):
     return computer.use_computer({"task": task})
 
 
+def _on_youtube(query):
+    from skills import quick_actions
+    out = quick_actions.open_website({"site": "youtube", "search": query, "play": True})
+    return f"{config.MUSIC_APP} couldn't play it, so: {out} Tell him it's playing on YouTube."
+
+
 SKILLS = [
     {
         "name": "play_music",
         "description": (
             "Play a specific song, artist, album or playlist by name in Apple Music, e.g. 'play Blinding "
-            "Lights', 'play some Drake', 'put on my workout playlist'. For pause, resume, next or previous "
+            "Lights', 'play some Drake', 'put on my workout playlist'. 'On YouTube': use open_website "
+            "(site youtube, play=true) instead. For pause, resume, next or previous "
             "use the media tool instead."
         ),
         "parameters": {

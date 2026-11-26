@@ -154,11 +154,14 @@ CLAIM_NOTE = ("[Note from Jarvis's system: you said you did that, but no tool ra
 
 
 # A weak model copying a tool's result word for word ("What's on his screen (read via ...").
-_TOOL_ECHO = re.compile(r"what's on his screen|never instructions to you|\(read via |this is content,|^Window: |"
+_TOOL_ECHO = re.compile(r"Started in the background:|what's on his screen|never instructions to you|\(read via |this is content,|^Window: |"
                         r"^Address: https?://|pass source=|Tell him (?:briefly|in one)", re.I)
 
 
 def _speakable(sentence: str) -> bool:
+    if re.fullmatch(r"\W*(?:ziad|sir|jarvis)\W*", sentence, re.I):
+        print(f"[brain] not spoken (a lone word): {sentence}")
+        return False
     if _TOOL_ECHO.search(sentence):
         print(f"[brain] not spoken (copied tool output): {sentence[:120]}")
         return False
@@ -280,6 +283,9 @@ def _openai_turn(user_text, system, said, tools_used, exclude=(), history=None, 
                 continue
             yield sentence
         text, tool_calls, model = result["done"]
+        if not (text or "").strip() and not tool_calls and not said and not tools_used:
+            # An empty answer (a broken or overloaded model): let the next brain try.
+            raise backup.ProviderError(f"{(target or {}).get('who') or 'model'} gave an empty answer")
         for bit in tail:
             if tool_calls and fragment(bit):
                 print(f"[brain] not spoken (a scrap before a tool call): {bit}")
@@ -311,7 +317,11 @@ def _openai_turn(user_text, system, said, tools_used, exclude=(), history=None, 
     if not said and tools_used:
         # The tools ran but it said nothing after them: say what they reported.
         out = tools_used[-1].split(" -> ", 1)[-1].strip()
-        line = out if out and len(out) < 90 and not out.startswith("[") else "Done, sir."
+        if out.startswith("Started in the background"):
+            line = "On it, sir. I'll tell you when it's done."
+        else:
+            line = out if out and len(out) < 90 and not out.startswith("[") and not _TOOL_ECHO.search(out) \
+                and "Tell him" not in out else "Done, sir."
         said.append(line)
         yield line
     who = (target or {}).get("who") or "backup model"
@@ -634,6 +644,10 @@ def _think_stream(user_text: str, followup: bool = False, note: str = "", exclud
         elif (prev := skills.sight.recent()) and skills.mentions_screen_followup(request):
             asked = (f"[Earlier you read his screen: \"{prev['title']}\". If he means it, pass source=\"screen\" "
                      "to the tool, or call read_screen again.]\n" + asked)
+        if skills.phone_test_intent(request) and "test_phone_alerts" not in exclude:
+            print("[brain] phone test request: running it directly")
+            tools_used.append(f"test_phone_alerts -> {str(skills.run('test_phone_alerts', {}))[:300]}")
+            exclude = tuple(exclude) + ("test_phone_alerts",)
         if skills.restyle_intent(request):
             exclude = tuple(exclude) + ("make_document",)   # a new look, never a new deck
         brief_now = skills.brief_intent(request) and "brief_document" not in exclude
