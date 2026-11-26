@@ -43,6 +43,7 @@ from skills import web_search  # noqa: E402
 from skills import background  # noqa: E402
 from skills import study  # noqa: E402
 from skills import clipboard_tools  # noqa: E402
+from skills import sticky  # noqa: E402
 
 MODULES = [
     briefing,
@@ -77,6 +78,7 @@ MODULES = [
     background,
     study,
     clipboard_tools,
+    sticky,
 ]
 # Counts conversation turns, so a tool can tell "he said yes" (a later turn)
 # from the model confirming its own draft in the same turn.

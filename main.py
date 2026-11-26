@@ -266,7 +266,8 @@ def _start_extras():
     """The parts that don't need to be ready for the first "Hey Jarvis": started
     in the background once he's online, each timed in the log."""
     for name, start in (("phone bot (Telegram)", telegram_bot.start), ("dictation key", dictation.start),
-                        ("MCP tools", mcp_tools.start), ("end-of-sentence model", smart_turn.load)):
+                        ("MCP tools", mcp_tools.start), ("end-of-sentence model", smart_turn.load),
+                        ("notes for when you're back", skills.sticky.start)):
         t = time.perf_counter()
         try:
             start()

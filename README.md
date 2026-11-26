@@ -302,6 +302,12 @@ copied", "translate this to French", "fix the grammar in what I copied" (the fix
 clipboard, ready to paste), "define this" or "solve this". Copied text is treated as data, never as
 instructions. Needs `pip install pyperclip` (already used by dictation).
 
+## Reminders for when you're back
+
+"Remind me to email the prof when I get back to my PC" saves a note; Jarvis says it as soon as you use the
+keyboard or mouse again after 5 minutes away (`AWAY_MINUTES`), or the next time he starts. "What notes do
+I have for later?" lists them.
+
 ## Several things at once
 
 Long jobs (using the screen, carrying out a file sort, 3D parts, documents, whiteboard drawings, "what's the
