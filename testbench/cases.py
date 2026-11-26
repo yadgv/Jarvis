@@ -13,6 +13,9 @@ Setup per case:
   last_doc   a slide deck he just made (for "make it prettier")
 """
 
+# His screen is read before the model answers "what's on my screen", so answering straight
+# from it (no tool) is right; saying he can't see it is not. Brackets are notes, never speech.
+SCREEN_BLIND = r"(?i)can't see|cannot see|don't have access|paste|share (?:the|a) link|\["
 CASES = [
     # ---------- briefs and the screen ----------
     {"id": "brief-article", "screen": "cbc", "turns": [
@@ -25,9 +28,11 @@ CASES = [
     {"id": "brief-of-the", "screen": "cbc", "turns": [
         {"say": "Can you give me a brief of the article on my screen?", "tool": "brief_document"}]},
     {"id": "screen-what-is-up", "screen": "cbc", "turns": [
-        {"say": "What's on my screen right now?", "tool": "read_screen", "hide": ["look_at_screen", "web_search"]}]},
+        {"say": "What's on my screen right now?", "tool": ["read_screen", "none"], "hide": ["look_at_screen", "web_search"],
+         "says_not": SCREEN_BLIND}]},
     {"id": "screen-read-off", "screen": "cbc", "turns": [
-        {"say": "Can you read it off of my screen?", "tool": "read_screen", "hide": ["web_search"]}]},
+        {"say": "Can you read it off of my screen?", "tool": ["read_screen", "none"], "hide": ["web_search"],
+         "says_not": SCREEN_BLIND}]},
     {"id": "screen-code", "screen": "cbc", "turns": [
         {"say": "Check the code of this page", "tool": "read_screen", "not": ["web_search"]}]},
     {"id": "screen-picture", "screen": "cbc", "turns": [
@@ -36,7 +41,8 @@ CASES = [
         {"say": "Can you make me a presentation on this article here?", "tool": "make_document",
          "hide": ["web_search"], "says_not": r"(?i)link|paste"}]},
     {"id": "slides-follow-up", "screen": "cbc", "turns": [
-        {"say": "What's this article about?", "tool": "read_screen", "not": ["web_search"]},
+        {"say": "What's this article about?", "tool": ["read_screen", "none"], "hide": ["web_search"],
+         "says_not": SCREEN_BLIND},
         {"say": "Now make slides on it", "tool": "make_document", "hide": ["web_search"]}]},
     {"id": "quiz-on-screen", "screen": "cbc", "turns": [
         {"say": "Quiz me on what I have up", "tool": "quiz_me", "hide": ["web_search"]}]},
