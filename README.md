@@ -130,6 +130,10 @@ never fight over the mic. `python install_app.py remove` takes the shortcuts awa
   the screen on its own side (it never crosses to the middle, waits while your mouse is near it, and
   doesn't take focus), then glides back to its corner when he's done. Settings > **Move around** turns
   it off; Reduce animations keeps him still too.
+- The text panel stays in its corner while the orb roams (the orb has its own little window).
+- **Out of the way when idle:** after 2 minutes with nothing going on he glides off the edge of the screen,
+  and comes back for "Hey Jarvis", a reminder or a finished task, or when you push the mouse against that
+  edge. Settings > **Hide when idle** sets the time (0 = never).
 - While you talk to him a panel slides out with what you said and his reply, then tucks away
   after a few seconds. Click the panel (or right-click > Type a message) to open the text box; Esc closes it.
 - The orb is silver when standing by, green while listening, amber while thinking, blue while speaking.

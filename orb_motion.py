@@ -58,9 +58,18 @@ class Roamer:
             y = self.rand.uniform(y0, y1)
         return min(max(x, x0), x1), min(max(y, y0), y1)
 
-    def step(self, dt, active, home, size, screen, pointer=None, calm=False):
+    def offscreen(self, home, size, screen):
+        """Just past the nearest side edge of the screen, level with home."""
+        sw, _ = screen
+        hx, hy = home
+        return (sw + 12.0, hy) if hx + size / 2 >= sw / 2 else (-size - 12.0, hy)
+
+    def hidden(self, size, screen) -> bool:
+        return self.x is not None and (self.x >= screen[0] - 2 or self.x <= -size + 2)
+
+    def step(self, dt, active, home, size, screen, pointer=None, calm=False, away=False):
         """Advance by dt seconds. Returns the orb's new top-left, or None when it's
-        resting at home (nothing to move)."""
+        resting (at home, or tucked off screen when away)."""
         if self.x is None:
             self.place(*home)
         self.t += dt
@@ -75,13 +84,13 @@ class Roamer:
             ty += 5 * math.sin(self.t * 2.3 + 1.0)
         else:
             self.target = None
-            tx, ty = hx, hy
-            if calm or (abs(self.x - hx) < 0.6 and abs(self.y - hy) < 0.6
+            tx, ty = self.offscreen(home, size, screen) if (away and not active) else (hx, hy)
+            if calm or (abs(self.x - tx) < 0.6 and abs(self.y - ty) < 0.6
                         and abs(self.vx) + abs(self.vy) < 2):
-                if not self.resting or (self.x, self.y) != (hx, hy):
-                    self.place(hx, hy)
+                if not self.resting or (self.x, self.y) != (tx, ty):
+                    self.place(tx, ty)
                     self.resting = True
-                    return hx, hy
+                    return tx, ty
                 return None
         if pointer is not None and active:
             px, py = pointer

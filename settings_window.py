@@ -155,6 +155,8 @@ class SettingsWindow:
         self._row(card, "Colours", self._colours)
         self._row(card, "Animations", self._check("reduce_motion", "Reduce animations"))
         self._row(card, "Move around", self._check("roam", "Glide around while he's active, then home"))
+        self._row(card, "Hide when idle", self._slider("hide_after", 0, 600, step=30),
+                  note="seconds of quiet before he slips off screen (0 = never); touch that edge to bring him back")
 
     def _colours(self, parent):
         f = tk.Frame(parent, bg=CARD)

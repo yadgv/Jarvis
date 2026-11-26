@@ -196,11 +196,12 @@ class JarvisWidget:
         self.you_text, self.jarvis_text, self.jarvis_turn_open = "", "", False
         self.drag = None
         self.typing = False
-        self.canvas = self.entry = self.hit = None
+        self.canvas = self.entry = self.hit = self.orbwin = None
         self.settings_window = None
         self.reveal, self.slid = 0.0, 0.0      # panel animation: 0 hidden .. 1 shown
         self.task = None                       # {"label", "step", "total", "done", "ok", "at"}
         self.last_tick = time.perf_counter()
+        self.started = time.time()
 
         root.overrideredirect(True)          # no title bar
         root.attributes("-topmost", True)    # stays above other windows
@@ -224,6 +225,7 @@ class JarvisWidget:
         self.load_settings()
         self.right, self.top = self._start_position()
         self.roamer = Roamer()
+        self.orb_xy = (self.right - self.size, self.top)   # the orb's own window (top-left); it roams
         self._build()
         self.set_status("starting")
         self.set_expanded(False, force=True)
@@ -267,7 +269,8 @@ class JarvisWidget:
         if moved_corner or self.size != old_size:
             if moved_corner or not self.prefs.get("position"):
                 self.right, self.top = self._corner()
-            self.roamer.place(self.right - self.size, self.top)
+            self.orb_xy = (self.right - self.size, self.top)
+            self.roamer.place(*self.orb_xy)
         self._rebuild()
         if self.status in STATES:
             self.set_status(self.status)
@@ -288,13 +291,13 @@ class JarvisWidget:
         return cx < sw / 2, cy > sh / 2
 
     def _rebuild(self):
-        for w in (self.canvas, self.entry, self.hit):
+        for w in (self.canvas, self.entry, self.hit, self.orbwin):
             if w is not None:
                 try:
                     w.destroy()
                 except tk.TclError:
                     pass
-        self.canvas = self.entry = self.hit = None
+        self.canvas = self.entry = self.hit = self.orbwin = None
         self._build()
         self.set_expanded(self.expanded, force=True)
         self._show_text(quiet=True)
@@ -352,16 +355,24 @@ class JarvisWidget:
         self.panel_items += [self.status_item, self.you_item, self.jarvis_item, self.entry_item, self.hint_item,
                              self.tick_mark]
         self.panel_items += [s for group in self.shadows.values() for s in group]
-        # Orb: just the particles and ring, no disc behind them
-        self.orb = Orb(c, self.ox, self.oy, S * 0.28)
+        # The orb has its own small window, so it can glide around the screen
+        # while the text panel stays put in its corner.
+        self.orbwin = ow = tk.Toplevel(self.root)
+        ow.overrideredirect(True)
+        ow.attributes("-topmost", True)
+        ow.configure(bg=KEY)
+        if IS_WINDOWS:
+            ow.attributes("-transparentcolor", KEY)
+        oc = self.orb_canvas = tk.Canvas(ow, width=S, height=S, bg=KEY, highlightthickness=0)
+        oc.pack()
+        self.orb = Orb(oc, S / 2, S / 2, S * 0.28)
         self.orb.colours = self.colours
-        for item in [self.orb.ring] + self.orb.glow + self.orb.dots:
-            c.addtag_withtag("orb", item)
-        c.tag_bind("orb", "<ButtonPress-1>", self._press)
-        c.tag_bind("orb", "<B1-Motion>", self._move)
-        c.tag_bind("orb", "<ButtonRelease-1>", self._release)
-        c.bind("<Button-3>", lambda e: self.menu.tk_popup(e.x_root, e.y_root))
-        c.bind("<Button-2>", lambda e: self.menu.tk_popup(e.x_root, e.y_root))  # macOS right-click
+        oc.bind("<ButtonPress-1>", self._press)
+        oc.bind("<B1-Motion>", self._move)
+        oc.bind("<ButtonRelease-1>", self._release)
+        for w in (oc, c):
+            w.bind("<Button-3>", lambda e: self.menu.tk_popup(e.x_root, e.y_root))
+            w.bind("<Button-2>", lambda e: self.menu.tk_popup(e.x_root, e.y_root))  # macOS right-click
         self.hit = self._hit_area() if IS_WINDOWS else None
 
     OUTLINE = ((-1, 0), (1, 0), (0, -1), (0, 1), (1, 1))
@@ -469,55 +480,89 @@ class JarvisWidget:
         sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
         self.right = min(max(self.right, S), sw)
         self.top = min(max(self.top, 0), max(0, sh - S))
-        if FIXED_SIZE or self.expanded or self.reveal > 0:
-            # On Windows the window never changes size: the panel area is
-            # see-through and clicks pass through it, so opening the panel can't move the orb.
-            w, h = self.W, self.H
-            x0, y0 = 0, 0
-        else:
-            # Collapsed elsewhere: a window just the orb's size, scrolled to it.
-            w, h = S, S
-            x0, y0 = self.ox - S / 2, self.oy - S / 2
+        if not FIXED_SIZE:
+            # No see-through colour here: hide the panel's window while it's tucked away.
+            if not (self.expanded or self.reveal > 0):
+                if self.root.state() != "withdrawn":
+                    self.root.withdraw()
+                self._place_orb(lift)
+                return
+            if self.root.state() == "withdrawn":
+                self.root.deiconify()
+                self.root.after(40, lambda: self._place(lift=False))   # some window systems drop the first move
+        # The panel's window stays one size; its orb slot is left empty (the orb
+        # has its own window) and the see-through colour lets clicks pass through.
+        w, h = self.W, self.H
+        x0, y0 = 0, 0
         self.canvas.configure(width=w, height=h, scrollregion=(x0, y0, x0 + w, y0 + h))
         self.canvas.xview_moveto(0)
         self.canvas.yview_moveto(0)
-        # where the canvas's (x0, y0) goes so the orb lands at (right - S, top)
+        # where the canvas goes so its orb slot lines up with the orb's home (right - S, top)
         left = self.right - S - (self.ox - S / 2 - x0)
         top = self.top - (self.oy - S / 2 - y0)
         self.root.geometry(f"{w}x{h}+{int(left)}+{int(top)}")
+        self._place_orb(lift)
+
+    def _place_orb(self, lift=True):
+        """The orb's window (and its click area) where the orb is now."""
+        S = self.size
+        x, y = int(self.orb_xy[0]), int(self.orb_xy[1])
+        if self.orbwin is not None:
+            self.orbwin.geometry(f"{S}x{S}+{x}+{y}")
         if getattr(self, "hit", None):
-            self.hit.geometry(f"{S}x{S}+{int(self.right - S)}+{int(self.top)}")
-            if lift:
-                self.root.lift()
+            self.hit.geometry(f"{S}x{S}+{x}+{y}")
+        if lift:
+            self.root.lift()
+            if self.orbwin is not None:
+                self.orbwin.lift()
 
     def _home(self):
         """Where the orb lives (top-left): where he put it, or its corner."""
         right, top = self._start_position()
         return right - self.size, top
 
+    def _away(self, pointer, screen) -> bool:
+        """After a while with nothing going on, the orb slips off the edge of the
+        screen (Settings > Hide when idle). It comes back for "Hey Jarvis", a
+        reply or a task, or when the mouse touches that edge of the screen."""
+        after = int(self.prefs.get("hide_after", 120) or 0)
+        if after <= 0 or self.status != "idle" or self.task or self.typing:
+            return False
+        if pointer is not None and self.roamer.hidden(self.size, screen):
+            px, py = pointer
+            home_x, home_y = self._home()
+            right_side = home_x + self.size / 2 >= screen[0] / 2
+            at_edge = px >= screen[0] - 3 if right_side else px <= 2
+            if at_edge and abs(py - (home_y + self.size / 2)) < 160:
+                self.last_activity = time.time()   # he's reaching for it
+                return False
+        return time.time() - max(self.last_activity, self.started) > after
+
     def _roam(self, dt):
-        """While he's active the orb wanders near the screen edges; then it glides home."""
-        if self.drag or not self.prefs.get("roam", True):
+        """While he's active the orb wanders near the screen edges; then it glides
+        home, and after a quiet while it slips off screen. The text panel stays put."""
+        if self.drag:
             return
-        active = (self.status in ACTIVE or bool(self.task and not self.task["done"])) and not self.typing
+        roam = self.prefs.get("roam", True)
+        active = roam and (self.status in ACTIVE or bool(self.task and not self.task["done"])) and not self.typing
         try:
             pointer = self.root.winfo_pointerxy()
         except tk.TclError:
             pointer = None
         screen = (self.root.winfo_screenwidth(), self.root.winfo_screenheight())
         if self.roamer.x is None:
-            self.roamer.place(self.right - self.size, self.top)
-        pos = self.roamer.step(dt, active, self._home(), self.size, screen, pointer, calm=self.calm)
-        if pos is not None:
-            x, y = pos
-            if (int(x + self.size), int(y)) != (int(self.right), int(self.top)):
-                self.right, self.top = x + self.size, y
-                self._place(lift=False)
+            self.roamer.place(*self.orb_xy)
+        away = self._away(pointer, screen)
+        pos = self.roamer.step(dt, active, self._home(), self.size, screen, pointer, calm=self.calm, away=away)
+        if pos is not None and (int(pos[0]), int(pos[1])) != (int(self.orb_xy[0]), int(self.orb_xy[1])):
+            self.orb_xy = pos
+            self._place_orb(lift=False)
 
     def to_corner(self):
         self.right, self.top = self._corner()
         self._save_position(None)
-        self.roamer.place(self.right - self.size, self.top)
+        self.orb_xy = (self.right - self.size, self.top)
+        self.roamer.place(*self.orb_xy)
         if self._flips() != (self.flip_x, self.flip_y):
             self._rebuild()
         self._place()
@@ -532,7 +577,7 @@ class JarvisWidget:
 
     # ----- mouse -----
     def _press(self, e):
-        self.drag = (e.x_root, e.y_root, self.right, self.top, False)
+        self.drag = (e.x_root, e.y_root, self.orb_xy[0] + self.size, self.orb_xy[1], False)
 
     def _move(self, e):
         if not self.drag:
@@ -542,6 +587,7 @@ class JarvisWidget:
         if moved or abs(dx) + abs(dy) > 5:
             self.drag = (x0, y0, r0, b0, True)
             self.right, self.top = r0 + dx, b0 + dy
+            self.orb_xy = (self.right - self.size, self.top)
             self._place()
 
     def _release(self, e):
@@ -551,7 +597,7 @@ class JarvisWidget:
             self.talk()
             return
         self._save_position([int(self.right), int(self.top)])  # he's there next time too
-        self.roamer.place(self.right - self.size, self.top)
+        self.roamer.place(*self.orb_xy)
         if self._flips() != (self.flip_x, self.flip_y):  # crossed the middle: panel to the other side
             self.root.after(10, self._rebuild)
 
