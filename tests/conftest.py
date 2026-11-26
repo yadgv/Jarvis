@@ -35,7 +35,8 @@ config.MODE = "enter"  # main.py then skips loading the wake-word model
 config.SMART_TURN = False  # tests that want it patch audio.smart_turn
 config.DUCK_APPS = []
 config.AUTO_MEMORY = False  # tests that want it turn it on
-config.LOCAL_VOICE = "piper"  # no Kokoro download during tests
+config.OFFLINE_VOICE = "alan"  # Piper: no Kokoro during tests
+config.VOICE_DOWNLOADS = False  # and no voice downloads
 
 
 import pytest  # noqa: E402

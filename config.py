@@ -236,8 +236,25 @@ FISH_MODEL = "s2.1-pro-free"             # free tier
 
 # Fallback voice: Piper voice files (.onnx + .onnx.json) go in ./voices
 PIPER_VOICE = os.path.join(os.path.dirname(__file__), "voices", "en_GB-alan-medium.onnx")
-# Backup voice when Fish Audio is down: "kokoro" (sounds more natural; needs
-# pip install kokoro-onnx, and downloads ~120 MB into ./voices once) or "piper".
-# Kokoro falls back to Piper by itself if it isn't ready.
-LOCAL_VOICE = "kokoro"
-KOKORO_VOICE = "bm_george"               # British: bm_george, bm_lewis, bm_daniel, bm_fable, bf_emma, bf_alice
+# Offline voice: used when Fish Audio is down or there's no internet. Pick one
+# name from OFFLINE_VOICES (or say "use the fable voice offline"). Hear them all
+# first with:  python try_voices.py     (or just one: python try_voices.py fable)
+# Kokoro voices sound the most natural (needs pip install kokoro-onnx); Piper
+# ones are lighter but more robotic. Each downloads into ./voices the first time.
+OFFLINE_VOICE = "fable"
+OFFLINE_VOICE_QUALITY = "best"           # Kokoro model: "best" (~310 MB, smoothest) or "small" (~90 MB)
+OFFLINE_VOICES = {
+    # Kokoro, British men (the Jarvis-like ones)
+    "fable": "bm_fable",                 # warm, storyteller; the most natural British man
+    "george": "bm_george",               # older, deeper, a bit formal
+    "lewis": "bm_lewis",                 # deep, slower
+    "daniel": "bm_daniel",               # lighter, plainer
+    # Kokoro, the most natural overall (American)
+    "michael": "am_michael",             # calm American man
+    "fenrir": "am_fenrir",               # fuller American man
+    "heart": "af_heart",                 # American woman, Kokoro's best-sounding voice
+    "emma": "bf_emma",                   # British woman
+    # Piper (lighter, more robotic)
+    "alan": "en_GB-alan-medium",
+    "northern": "en_GB-northern_english_male-medium",
+}

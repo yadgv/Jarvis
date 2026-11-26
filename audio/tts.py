@@ -69,14 +69,87 @@ def _synth_fish(text: str):
         return None
 
 
-# ---------- Piper (local) ----------
-_piper = None
-if os.path.exists(config.PIPER_VOICE):
+# ---------- the offline voice (Kokoro or Piper, on this PC) ----------
+# One setting picks it: OFFLINE_VOICE in config.py, or "use the fable voice
+# offline" by voice (saved in settings.json). A name from OFFLINE_VOICES, a
+# Kokoro voice id ("bm_daniel") or a Piper voice ("en_GB-alan-medium").
+# Hear them all with: python try_voices.py
+VOICE_DIR = os.path.dirname(config.PIPER_VOICE)
+SAMPLE = "Good evening, sir. All systems are running, and your tea will be ready in five minutes."
+
+
+def offline_voice():
+    """("kokoro" or "piper", voice id) for the chosen offline voice."""
+    name = str(settings.get("offline_voice") or "").strip()
+    voice = (getattr(config, "OFFLINE_VOICES", {}) or {}).get(name.lower(), name)
+    if not voice:
+        voice = os.path.basename(config.PIPER_VOICE)[:-5]
+    return ("piper" if "-" in voice else "kokoro"), voice
+
+
+def voice_names():
+    return list((getattr(config, "OFFLINE_VOICES", {}) or {}))
+
+
+def _download(url, path):
+    print(f"[tts] downloading {os.path.basename(path)} for the offline voice...")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with requests.get(url, stream=True, timeout=60) as r:
+        r.raise_for_status()
+        with open(path + ".part", "wb") as f:
+            for block in r.iter_content(1 << 20):
+                f.write(block)
+    os.replace(path + ".part", path)
+
+
+# ---------- Piper ----------
+PIPER_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/{lang}/{locale}/{name}/{quality}/{voice}{ext}"
+_pipers = {}  # voice -> PiperVoice
+_fetching = set()  # downloads already started in the background
+
+
+def _in_background(key, target, *args):
+    if key in _fetching or not getattr(config, "VOICE_DOWNLOADS", True):
+        return
+    _fetching.add(key)
+    threading.Thread(target=target, args=args, daemon=True, name=f"voice-download-{key}").start()
+
+
+def _piper_path(voice):
+    return os.path.join(VOICE_DIR, voice + ".onnx")
+
+
+def _download_piper(voice):
+    """en_GB-alan-medium -> its two files from the Piper voice library."""
+    try:
+        locale, name, quality = voice.split("-", 2)
+        for ext in (".onnx", ".onnx.json"):
+            path = os.path.join(VOICE_DIR, voice + ext)
+            if not os.path.exists(path):
+                _download(PIPER_URL.format(lang=locale.split("_")[0], locale=locale, name=name,
+                                           quality=quality, voice=voice, ext=ext), path)
+        return True
+    except Exception as e:
+        print(f"[tts] couldn't download the Piper voice {voice} ({e}).")
+        return False
+
+
+def _load_piper(voice, wait=False):
+    if voice in _pipers:
+        return _pipers[voice]
+    if not os.path.exists(_piper_path(voice)):
+        if not wait:
+            _in_background(voice, _download_piper, voice)
+            return None
+        if not _download_piper(voice):
+            return None
     try:
         from piper import PiperVoice
-        _piper = PiperVoice.load(config.PIPER_VOICE)
+        _pipers[voice] = PiperVoice.load(_piper_path(voice))
     except Exception as e:
-        print(f"[tts] Piper failed to load ({e}).")
+        print(f"[tts] Piper failed to load {voice} ({e}).")
+        _pipers[voice] = None
+    return _pipers[voice]
 
 
 def _piper_options():
@@ -90,13 +163,18 @@ def _piper_options():
         return {}
 
 
-def _synth_piper(text: str):
-    if _piper is None:
+def _synth_piper(text: str, voice: str = None, wait=False):
+    """The chosen Piper voice, or the PIPER_VOICE fallback when Kokoro is chosen."""
+    if voice is None:
+        engine, chosen = offline_voice()
+        voice = chosen if engine == "piper" else os.path.basename(config.PIPER_VOICE)[:-5]
+    model = _load_piper(voice, wait)
+    if model is None:
         return None
     try:
         buf = io.BytesIO()
         with wave.open(buf, "wb") as wf:
-            _piper.synthesize_wav(text, wf, **_piper_options())
+            model.synthesize_wav(text, wf, **_piper_options())
         buf.seek(0)
         with wave.open(buf, "rb") as wf:
             rate = wf.getframerate()
@@ -107,66 +185,73 @@ def _synth_piper(text: str):
         return None
 
 
-# ---------- Kokoro (local, better-sounding backup) ----------
+# ---------- Kokoro (sounds the most natural) ----------
 # Idea from OpenJarvis (github.com/open-jarvis/OpenJarvis, Apache-2.0), which
 # offers Kokoro as its local voice. Uses kokoro-onnx (github.com/thewh1teagle/kokoro-onnx, MIT).
-# The two model files (about 120 MB) download into voices/ in the background the
-# first time; until then Piper is used.
-KOKORO_DIR = os.path.dirname(config.PIPER_VOICE)
-KOKORO_FILES = {
-    "kokoro-v1.0.int8.onnx": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.int8.onnx",
-    "voices-v1.0.bin": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin",
-}
+# OFFLINE_VOICE_QUALITY "best" is the full model (about 310 MB, smoother and
+# less robotic); "small" is the compressed one (about 90 MB). They download
+# into voices/ the first time; until then Piper is used.
+KOKORO_DIR = VOICE_DIR
+KOKORO_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/"
+KOKORO_MODELS = {"best": "kokoro-v1.0.onnx", "small": "kokoro-v1.0.int8.onnx"}
+KOKORO_VOICES = "voices-v1.0.bin"
 _kokoro = None
 _kokoro_lock = threading.Lock()
 
 
 def _kokoro_wanted() -> bool:
-    return getattr(config, "LOCAL_VOICE", "piper") == "kokoro"
+    return offline_voice()[0] == "kokoro"
+
+
+def _kokoro_model_names():
+    """Model files to use, the chosen quality first."""
+    want = getattr(config, "OFFLINE_VOICE_QUALITY", "best")
+    first = KOKORO_MODELS.get(want, KOKORO_MODELS["best"])
+    return [first] + [m for m in KOKORO_MODELS.values() if m != first]
 
 
 def _download_kokoro():
     try:
-        os.makedirs(KOKORO_DIR, exist_ok=True)
-        for name, url in KOKORO_FILES.items():
+        for name in (_kokoro_model_names()[0], KOKORO_VOICES):
             path = os.path.join(KOKORO_DIR, name)
-            if os.path.exists(path):
-                continue
-            print(f"[tts] downloading {name} for the Kokoro voice...")
-            with requests.get(url, stream=True, timeout=60) as r:
-                r.raise_for_status()
-                with open(path + ".part", "wb") as f:
-                    for block in r.iter_content(1 << 20):
-                        f.write(block)
-            os.replace(path + ".part", path)
+            if not os.path.exists(path):
+                _download(KOKORO_URL + name, path)
         print("[tts] Kokoro voice ready.")
+        return True
     except Exception as e:
         print(f"[tts] couldn't download the Kokoro voice ({e}); using Piper.")
+        return False
 
 
 def _load_kokoro():
     global _kokoro
     if _kokoro is not None:
         return _kokoro
-    paths = [os.path.join(KOKORO_DIR, n) for n in KOKORO_FILES]
-    if not all(os.path.exists(p) for p in paths):
+    voices = os.path.join(KOKORO_DIR, KOKORO_VOICES)
+    models = [os.path.join(KOKORO_DIR, m) for m in _kokoro_model_names()]
+    model = next((m for m in models if os.path.exists(m)), None)
+    if model is None or not os.path.exists(voices):
         return None
     with _kokoro_lock:
         if _kokoro is None:
             from kokoro_onnx import Kokoro
-            _kokoro = Kokoro(*paths)
+            _kokoro = Kokoro(model, voices)
+            print(f"[tts] offline voice: Kokoro {offline_voice()[1]} ({os.path.basename(model)})")
     return _kokoro
 
 
-def _synth_kokoro(text: str):
-    if not _kokoro_wanted():
-        return None
+def _synth_kokoro(text: str, voice: str = None):
+    if voice is None:
+        engine, voice = offline_voice()
+        if engine != "kokoro":
+            return None
     try:
         model = _load_kokoro()
         if model is None:
             return None
-        samples, rate = model.create(text, voice=getattr(config, "KOKORO_VOICE", "bm_george"),
-                                     speed=settings.speed(), lang="en-gb")
+        # bm_/bf_ voices are British, am_/af_ American.
+        samples, rate = model.create(text, voice=voice, speed=settings.speed(),
+                                     lang="en-gb" if voice.startswith("b") else "en-us")
         audio = (np.clip(np.asarray(samples, dtype=np.float32), -1, 1) * 32767).astype(np.int16)
         return audio, rate
     except Exception as e:
@@ -175,17 +260,50 @@ def _synth_kokoro(text: str):
 
 
 def _synth_local(text: str):
-    """Best voice that runs on this PC: Kokoro if set up, else Piper."""
+    """The chosen offline voice; Piper if Kokoro isn't ready."""
     return _synth_kokoro(text) or _synth_piper(text)
 
 
-if _kokoro_wanted():
-    try:
-        import kokoro_onnx  # noqa: F401
-        if not all(os.path.exists(os.path.join(KOKORO_DIR, n)) for n in KOKORO_FILES):
-            threading.Thread(target=_download_kokoro, daemon=True, name="kokoro-download").start()
-    except ImportError:
-        print("[tts] LOCAL_VOICE is kokoro but kokoro-onnx isn't installed: pip install kokoro-onnx")
+def preview(name: str, text: str = SAMPLE) -> str:
+    """Say a sample in one offline voice (downloading it first if needed),
+    whatever voice is chosen now. Returns what happened, for the log or a tool."""
+    voice = (getattr(config, "OFFLINE_VOICES", {}) or {}).get(name.lower().strip(), name.strip())
+    if "-" in voice:
+        clip = _synth_piper(text, voice, wait=True)
+    else:
+        try:
+            import kokoro_onnx  # noqa: F401
+        except ImportError:
+            return "Kokoro voices need: pip install kokoro-onnx"
+        if _load_kokoro() is None and not (_download_kokoro() and _load_kokoro()):
+            return "The Kokoro voice couldn't be downloaded (needs the internet the first time)."
+        clip = _synth_kokoro(text, voice)
+    if clip is None:
+        return f"Couldn't make the voice {name}."
+    play(clip)
+    return f"Played a sample of the {name} voice."
+
+
+def _prepare():
+    """At startup: fetch the chosen offline voice in the background if it isn't here yet."""
+    engine, voice = offline_voice()
+    if engine == "kokoro":
+        try:
+            import kokoro_onnx  # noqa: F401
+        except ImportError:
+            print("[tts] the offline voice is Kokoro but kokoro-onnx isn't installed: "
+                  "pip install kokoro-onnx (using the robotic system voice until then)")
+            return
+        if not os.path.exists(os.path.join(KOKORO_DIR, _kokoro_model_names()[0])) or \
+                not os.path.exists(os.path.join(KOKORO_DIR, KOKORO_VOICES)):
+            _in_background("kokoro", _download_kokoro)
+    if engine == "piper":
+        _load_piper(voice)
+    elif os.path.exists(config.PIPER_VOICE):
+        _load_piper(os.path.basename(config.PIPER_VOICE)[:-5])  # the fallback, ready to go
+
+
+_prepare()
 
 
 # ---------- pyttsx3 (last resort) ----------

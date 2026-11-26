@@ -38,9 +38,7 @@ Wake word → Whisper → Claude → Piper voice. Runs on Windows now and on a R
    ```
    Close and reopen the terminal afterwards.
    If Fish Audio fails (no key, no internet, no credits), Jarvis falls back to the
-   local Kokoro voice (British "George", downloads ~120 MB into `voices/` the first
-   time), then the Piper "Alan" voice, then the Windows system voice. Set
-   `LOCAL_VOICE = "piper"` in config.py to skip Kokoro.
+   offline voice (see "Offline voice" below), then the Windows system voice.
    Optional second free brain: make a free account at openrouter.ai, create a key at
    openrouter.ai/keys, and add it to the same `.env`:
    ```
@@ -79,6 +77,21 @@ on the PC, so the whole loop works offline:
   looking at the screen) gets a short "that needs the internet" instead of a long wait.
 
 Set `OFFLINE_MODE = True` in config.py to try it without unplugging anything.
+
+### Offline voice
+
+One setting picks it: `OFFLINE_VOICE` in config.py, a name from `OFFLINE_VOICES`.
+Hear them all first:
+```
+python try_voices.py          # every voice, one after another
+python try_voices.py fable    # just one
+```
+Or by voice: "let me hear the George voice", then "use that one offline".
+Kokoro voices (fable, george, lewis, daniel, michael, fenrir, heart, emma) sound the
+most natural and need `pip install kokoro-onnx`. `OFFLINE_VOICE_QUALITY = "best"`
+uses the full Kokoro model (~310 MB, smoothest); `"small"` is ~90 MB. Piper voices
+(alan, northern) are lighter but more robotic. Each downloads into `voices/` the
+first time it's used, so try them while you're online.
 Start Jarvis online once first so the speech and wake word models are downloaded.
 
 ## Desktop widget

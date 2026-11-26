@@ -28,6 +28,7 @@ def defaults():
         "call_me": getattr(config, "CALL_ME", "sir"),
         "speed": float(getattr(config, "VOICE_SPEED", 1.0)),
         "voice": getattr(config, "VOICE", "jarvis"),
+        "offline_voice": getattr(config, "OFFLINE_VOICE", "fable"),
     }
 
 
@@ -74,7 +75,7 @@ def change(key: str, value) -> str:
         memory._write(FILE, {})
         return "All voice and personality settings are back to the defaults."
     if key not in s:
-        return f"Unknown setting {key}. Settings: style, length, call_me, speed, voice."
+        return f"Unknown setting {key}. Settings: style, length, call_me, speed, voice, offline_voice."
     if key == "style":
         value = str(value).lower().strip()
         if value not in STYLES:
@@ -94,6 +95,11 @@ def change(key: str, value) -> str:
         if value not in voices:
             return (f"Unknown voice. Voices set up in config.py: {', '.join(voices) or 'none'}. "
                     "New Fish Audio voices are added to VOICES in config.py.")
+    elif key == "offline_voice":
+        voices = getattr(config, "OFFLINE_VOICES", {}) or {}
+        value = str(value).lower().strip().removesuffix(" voice")
+        if value not in voices:
+            return f"Unknown offline voice. Choose from: {', '.join(voices)}."
     else:
         value = str(value).strip()[:40]
     saved = memory._read(FILE, {})
@@ -108,4 +114,5 @@ def describe() -> str:
     voices = ", ".join(getattr(config, "VOICES", {}) or {}) or "jarvis"
     return (f"Style {s['style']} (options: {', '.join(STYLES)}); length {s['length']} (short, normal, long); "
             f"calls him '{s['call_me']}'; speaking speed {s['speed']} ({MIN_SPEED}-{MAX_SPEED}); "
-            f"voice {s['voice']} (available: {voices}).")
+            f"voice {s['voice']} (available: {voices}); offline voice {s['offline_voice']} "
+            f"(available: {', '.join(getattr(config, 'OFFLINE_VOICES', {}) or {})}).")
