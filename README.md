@@ -274,9 +274,12 @@ a button" or "draw a flowchart of my morning routine". A whiteboard window opens
 (an Edge/Chrome app window, or your browser) with a labelled drawing, and each
 step lights up its wires while he explains it. Say "next step", "go back",
 "step 3" or "show it all" (or click / use the arrow keys), and ask for changes
-like "use pin 6 instead" to redraw it. The drawing is made by a big free model
-on Groq (`WHITEBOARD_MODELS` in config.py), so it costs nothing; Claude only if
-those fail. It needs the internet. The page only runs on your PC (127.0.0.1).
+like "use pin 6 instead" to redraw it. A big free model on Groq
+(`WHITEBOARD_MODELS` in config.py) only lists the parts, pins and wires; Jarvis
+draws them himself from accurate templates (a real Arduino Uno pin layout, part
+cards, colour-coded wires that never share a line, a legend), so it's always
+tidy. Scroll to zoom, drag to move, **Fit** to see it all. Claude only if the
+free models fail. It needs the internet. The page only runs on your PC (127.0.0.1).
 
 ## Plug in MCP servers (more tools without new code)
 Any [MCP server](https://modelcontextprotocol.io/examples) can give Jarvis new tools: files, a browser,
