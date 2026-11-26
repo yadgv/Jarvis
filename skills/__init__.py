@@ -48,6 +48,7 @@ from skills import calculator  # noqa: E402
 from skills import canvas  # noqa: E402
 from skills import recap  # noqa: E402
 from skills import vocab  # noqa: E402
+from skills import viewer3d  # noqa: E402
 
 MODULES = [
     briefing,
@@ -79,6 +80,7 @@ MODULES = [
     files,
     documents,
     cad,
+    viewer3d,
     personality,
     background,
     study,
@@ -161,7 +163,7 @@ _DOCS = _re.compile(r"\b(word doc(?:ument)?|docx|power ?point|slides?|slide deck
 DOC_TOOLS = ("make_document", "show_chart")
 _CAD = _re.compile(r"\b(3d|three d|print(?:able)?|printer|openscad|scad|stl|cad|bracket|enclosure|phone stand|"
                    r"mount|model (?:of|for)|taller|shorter|wider|thicker|thinner)\b", _re.I)
-CAD_TOOLS = ("make_3d_model",)
+CAD_TOOLS = ("make_3d_model", "show_3d_model", "open_in_openscad")
 _APPS = _re.compile(r"\b(claude code|(?:build|make|code|write|create) (?:me )?(?:a |an )?(?:little |small |simple |quick )?"
                     r"[\w -]{0,25}?\b(?:app|application|website|web ?page|web ?site|game|tool|program|widget|tracker|"
                     r"calculator|timer app)|my [\w -]{1,25} app)\b", _re.I)
