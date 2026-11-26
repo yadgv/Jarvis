@@ -136,7 +136,63 @@ def test_pick_tools():
 def test_yes_keeps_last_turns_tool(brain):
     brain.llm._history += [{"role": "user", "content": "reply to Sam"},
                            {"role": "assistant", "content": "Shall I send it? [tools used: reply_email -> DRAFT]"}]
-    brain.replies.append(says("Sent."))
+    brain.replies.append(says("Right away, sir."))
     list(brain.llm.think_stream("yes"))
     names = {t["function"]["name"] for t in brain.sent[0][1]["tools"]}
     assert "reply_email" in names
+
+
+def test_never_claims_an_action_no_tool_did(brain, monkeypatch):
+    """"Saved and opened, sir" with no tool call: asked again, and it has to use the tool."""
+    ran = []
+    monkeypatch.setitem(skills._BY_NAME, "open_file", dict(skills._BY_NAME["open_file"], run=lambda a: ran.append(a) or "Opened it."))
+    brain.replies += [says("Saved and opened, sir."), calls_tool("open_file", {"path": "phone stand.scad"}),
+                      says("Opened it, sir.")]
+    out = list(brain.llm.think_stream("open my phone stand file"))
+    assert out == ["Opened it, sir."] and ran
+    assert any("no tool ran" in str(m.get("content")) for m in brain.sent[1][1]["messages"])
+
+
+def test_owns_up_if_it_still_does_nothing(brain):
+    brain.replies += [says("Done, sir."), says("Done, sir.")]
+    out = list(brain.llm.think_stream("open my phone stand file"))
+    assert out == ["I haven't actually done that yet, sir. Ask me once more and I will."]
+
+
+def test_code_and_self_talk_are_never_spoken(brain):
+    brain.replies.append(says("Here's the part. ```sc", "ad\ncube([1,2,3]);\n``", "` It is a ",
+                              "simple box. I should treat this as him speaking. The open parameter is wrong. ",
+                              "<think>hmm</think>Anything else?"))
+    out = list(brain.llm.think_stream("show me the code for a box"))
+    assert out == ["Here's the part.", "It is a simple box.", "Anything else?"]
+
+
+def test_model_list_and_lean_models(brain, monkeypatch):
+    import ast, os
+    src = open(os.path.join(os.path.dirname(config.__file__), "config.py")).read()
+    lists = {n.targets[0].id: ast.literal_eval(n.value) for n in ast.parse(src).body
+             if isinstance(n, ast.Assign) and getattr(n.targets[0], "id", "") in ("GROQ_MODELS", "WHITEBOARD_MODELS")}
+    assert all("llama-3.3-70b-versatile" not in v for v in lists.values())          # retired by Groq
+    monkeypatch.setattr(config, "GROQ_MODELS", ["openai/gpt-oss-120b", "qwen/qwen3.8-27b"])
+    monkeypatch.setattr(config, "GROQ_LEAN_MODELS", ["qwen/qwen3.8-27b"])
+    big, qwen = providers.groq_targets()
+    assert not big["lean"] and qwen["lean"] and qwen["extra"] == {"reasoning_format": "hidden"}
+
+
+def test_gone_model_rests_a_day(monkeypatch):
+    monkeypatch.setattr(providers, "_resting", {})
+    e = RuntimeError("Groq x error 404: The model `x` does not exist or you do not have access to it.")
+    providers.rest("x", e)
+    import time
+    assert providers._resting["x"] - time.monotonic() > 23 * 3600
+
+
+def test_lean_model_gets_fewer_tools_and_turns(brain, monkeypatch):
+    monkeypatch.setattr(config, "GROQ_LEAN_MODELS", ["groq-big"])
+    for i in range(6):
+        brain.llm._history += [{"role": "user", "content": f"q{i}"}, {"role": "assistant", "content": f"a{i}"}]
+    brain.replies.append(says("Fine, sir."))
+    list(brain.llm.think_stream("what's the weather and remind me to call mum"))
+    sent = brain.sent[0][1]
+    assert len([m for m in sent["messages"] if m["role"] == "user"]) == 3      # 2 past turns + this one
+    assert len(sent["tools"]) <= 6 + len(skills.CORE_TOOLS)

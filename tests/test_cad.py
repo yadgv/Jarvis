@@ -141,3 +141,35 @@ def test_3d_printing_asks_get_the_tool():
                 "export an stl of a box"):
         assert "make_3d_model" in skills.pick_tools(ask), ask
     assert "make_3d_model" in skills.NEEDS_INTERNET
+
+
+def test_open_file_uses_openscad_for_scad(monkeypatch, private_files):
+    path = private_files / "Documents" / "Jarvis 3D"
+    path.mkdir()
+    (path / "phone stand.scad").write_text("cube(1);")
+    monkeypatch.setattr(cad, "_exe", lambda: "C:/OpenSCAD/openscad.com")
+    launched = []
+    monkeypatch.setattr(files.subprocess, "Popen", lambda cmd, **k: launched.append(cmd))
+    out = files.open_file({"path": "phone stand.scad"})
+    assert "in OpenSCAD" in out and launched[0][1].endswith("phone stand.scad")
+
+
+def test_design_skips_chatty_models_and_falls_back_to_claude(monkeypatch):
+    """A free model that answers with chat instead of code is skipped; Claude writes it last."""
+    import types
+    from brain import llm, providers, backup, network
+    monkeypatch.setattr(network, "online", lambda: True)
+    monkeypatch.setattr(providers, "order", lambda: ["groq", "claude"])
+    monkeypatch.setattr(providers, "groq_targets", lambda **k: [{"model": "free-a", "who": "free-a"},
+                                                                 {"model": "free-b", "who": "free-b"}])
+    answers = {"free-a": "Here's a phone stand you can paste into OpenSCAD!",
+               "free-b": "<think>let me think about cube( sizes</think>Sure, sir."}
+    monkeypatch.setattr(backup, "stream_round", lambda m, e, t: iter([("text", answers[t["model"]])]))
+    monkeypatch.setattr(llm, "_use_claude", lambda: True)
+    asked = []
+    msg = types.SimpleNamespace(content=[types.SimpleNamespace(type="text", text=CODE)])
+    monkeypatch.setattr(llm, "_client", types.SimpleNamespace(messages=types.SimpleNamespace(
+        create=lambda **k: asked.append(k) or msg)))
+    monkeypatch.setattr(cad, "_last", {"path": None, "code": None, "what": None})
+    code = cad.design("phone stand")
+    assert code.startswith("// Phone stand") and asked and asked[0]["model"] == config.LLM_MODEL

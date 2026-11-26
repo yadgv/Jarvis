@@ -292,6 +292,16 @@ def open_file(a):
     path, err = _find_one(a.get("path") or a.get("name") or "")
     if err:
         return err
+    if path.lower().endswith(".scad"):
+        # An OpenSCAD design opens in OpenSCAD (when it's installed), not a text editor.
+        from skills import cad
+        exe = cad._exe()
+        if exe:
+            try:
+                subprocess.Popen([cad._gui(exe), path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return f"Opened {_show(path)} in OpenSCAD."
+            except OSError as e:
+                return f"Couldn't open it in OpenSCAD: {e}"
     try:
         if IS_WINDOWS:
             os.startfile(path)

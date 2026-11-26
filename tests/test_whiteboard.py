@@ -28,7 +28,7 @@ def board(monkeypatch):
     monkeypatch.setattr(wb, "open_window", lambda: opened.append(1))
     asked = []
 
-    def complete(system, user, max_tokens=400, small=True, models=None):
+    def complete(system, user, max_tokens=400, small=True, models=None, check=None):
         asked.append({"user": user, "models": models, "max_tokens": max_tokens, "small": small})
         return ANSWER
     from brain import llm

@@ -94,9 +94,76 @@ def _first_break(buf, said):
 _ECHO = re.compile(r"\[(?:t(?:o(?:o(?:l(?:s(?: (?:u(?:s(?:e(?:d(?::)?)?)?)?)?)?)?)?)?)?)?$|\[tools used:", re.I)
 
 
+def _no_code(pieces):
+    """Leaves out ```code blocks``` (and <think> blocks) as they stream: a
+    voice must never read code out. Notes in the log what was left out."""
+    pending, inside, dropped = "", None, 0
+    for delta in pieces:
+        pending += delta
+        out = ""
+        while pending:
+            if inside is None:
+                i, j = pending.find("```"), pending.lower().find("<think>")
+                hits = [(k, mark) for k, mark in ((i, "```"), (j, "<think>")) if k >= 0]
+                if not hits:
+                    # Hold back a tail that might be the start of a marker.
+                    keep = next((n for n in range(min(len(pending), 6), 0, -1)
+                                 if "```".startswith(pending[-n:]) or "<think>".startswith(pending[-n:].lower())), 0)
+                    out += pending[: len(pending) - keep]
+                    pending = pending[len(pending) - keep:]
+                    break
+                k, mark = min(hits)
+                out += pending[:k]
+                pending = pending[k + len(mark):]
+                inside = "```" if mark == "```" else "</think>"
+            else:
+                k = pending.lower().find(inside)
+                if k < 0:
+                    dropped += max(0, len(pending) - 8)
+                    pending = pending[-8:]
+                    break
+                dropped += k
+                pending = pending[k + len(inside):]
+                inside = None
+        if out:
+            yield out
+    if inside is None and pending:
+        yield pending
+    if dropped:
+        print(f"[brain] left out {dropped} characters of code or thinking from what's spoken")
+
+
+# The model thinking out loud or talking about its tools ("I should treat this
+# as him speaking", "the open parameter", "After a brief review of the
+# available tools..."): never spoken.
+_META = re.compile(
+    r"\b(?:the user|available tools|tool calls?|function calls?|the \w+ (?:tool|parameter|function)|parameters?\b|"
+    r"invoke|I should (?:treat|answer|respond|reply|call|use|confirm)|treat (?:this|it) as|system prompt|"
+    r"my instructions|as an AI|he (?:just )?(?:corrected|repeated|said) (?:my|the|his) (?:last|previous))\b|"
+    r"\b[a-z]+_[a-z_]+\b", re.I)
+
+
+# Saying something was done ("Saved and opened, sir") is only allowed once a
+# tool has actually run this turn.
+_CLAIM = re.compile(
+    r"^(?:(?:I've|I have|I)\s+(?:just\s+|now\s+|already\s+)?(?:saved|opened|created|made|sent|written|put|"
+    r"deleted|moved|renamed|set|started|played|added|launched|built|exported|done)\b|"
+    r"(?:saved|opened|created|sent|done|all done|it's done|it's saved|it's open)\b)", re.I)
+CLAIM_NOTE = ("[Note from Jarvis's system: you said you did that, but no tool ran, so nothing happened. "
+              "Call the tool now. If no tool can do it, tell him plainly that you haven't done it.]")
+
+
+def _speakable(sentence: str) -> bool:
+    if _META.search(sentence):
+        print(f"[brain] not spoken (model talking to itself): {sentence[:120]}")
+        return False
+    return True
+
+
 def _sentences(pieces, said):
     """Turns streamed text pieces into whole sentences as soon as each ends."""
     buf, muted = "", False
+    pieces = _no_code(pieces)
     for delta in pieces:
         if muted:
             continue  # drain the stream quietly
@@ -113,10 +180,10 @@ def _sentences(pieces, said):
         while (m := _first_break(buf, said)):
             sentence = buf[: m.end()].strip()
             buf = buf[m.end():]
-            if sentence:
+            if sentence and _speakable(sentence):
                 said.append(sentence)
                 yield sentence
-    if buf.strip() and not muted:
+    if buf.strip() and not muted and _speakable(buf.strip()):
         said.append(buf.strip())
         yield buf.strip()
 
@@ -158,8 +225,9 @@ def _openai_turn(user_text, system, said, tools_used, exclude=(), history=None, 
     past = list(_history if history is None else history)
     if target and target.get("short_tools"):
         # Small free token budgets: the last few turns and only the tools that look relevant.
-        past = past[-2 * getattr(config, "GROQ_HISTORY_TURNS", 4):]
-        keep = skills.pick_tools(user_text, exclude=exclude)
+        lean = target.get("lean")
+        past = past[-2 * (2 if lean else getattr(config, "GROQ_HISTORY_TURNS", 4)):]
+        keep = skills.pick_tools(user_text, limit=6 if lean else 12, exclude=exclude)
         # "Yes" to a question about a draft or a click needs the tool from the last turn.
         last = past[-1]["content"] if past and past[-1]["role"] == "assistant" else ""
         used = set(re.findall(r"(?:\[tools used: |; )([a-z_]+) ->", last))
@@ -174,6 +242,7 @@ def _openai_turn(user_text, system, said, tools_used, exclude=(), history=None, 
     messages = [{"role": "system", "content": system}] + past + [{"role": "user", "content": user_text}]
     t0 = time.perf_counter()
     model = None
+    nudged = False
     for _ in range(MAX_TOOL_ROUNDS + 1):
         result = {}
 
@@ -183,8 +252,25 @@ def _openai_turn(user_text, system, said, tools_used, exclude=(), history=None, 
                     yield value
                 else:
                     result["done"] = value
-        yield from _sentences(pieces(), said)
+        held = []
+        for sentence in _sentences(pieces(), said):
+            if not tools_used and _CLAIM.search(sentence):
+                said.pop()          # "Saved and opened, sir" with no tool run yet: hold it
+                held.append(sentence)
+                continue
+            yield sentence
         text, tool_calls, model = result["done"]
+        if held and not tool_calls:
+            if not nudged:
+                # It said it did something without doing it: make it do it (or own up).
+                print(f"[brain] claimed without a tool, asking again: {' '.join(held)[:120]}")
+                nudged = True
+                messages.append({"role": "assistant", "content": text or " ".join(held)})
+                messages.append({"role": "user", "content": CLAIM_NOTE})
+                continue
+            line = "I haven't actually done that yet, sir. Ask me once more and I will."
+            said.append(line)
+            yield line
         if not tool_calls:
             break
         messages.append({"role": "assistant", "content": text or None, "tool_calls": tool_calls})
@@ -259,14 +345,34 @@ def _chain(asked, system, said, tools_used, exclude=(), history=None):
                        "or ANTHROPIC_API_KEY to the .env file.")
 
 
-def complete(system: str, user: str, max_tokens: int = 400, small: bool = True, models=None) -> str:
+_THINK = re.compile(r"<think>.*?(?:</think>|$)", re.S | re.I)
+
+
+def complete(system: str, user: str, max_tokens: int = 400, small: bool = True, models=None, check=None) -> str:
     """A one-off text answer with no tools (fact extraction, rewriting text),
     from the cheapest brain that works. Raises if none does.
-    models: Groq models to try first (e.g. a bigger one for drawing diagrams)."""
+    models: Groq models to try first (e.g. a bigger one for drawing diagrams).
+    check: a function that raises ValueError if an answer isn't usable (say,
+    no OpenSCAD in it); the next model is tried then, Claude last of all."""
     if not network.online():
         raise RuntimeError("offline: no internet for the cloud models")
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     errors = []
+
+    def usable(text, who):
+        text = _THINK.sub("", text or "").strip()
+        if not text:
+            return None
+        if check is None:
+            return text
+        try:
+            check(text)
+            return text
+        except ValueError as e:
+            print(f"[brain] {who} gave an unusable answer ({e}); trying the next one")
+            errors.append(e)
+            return None
+
     for name in providers.order():
         targets = []
         if name == "groq":
@@ -276,15 +382,23 @@ def complete(system: str, user: str, max_tokens: int = 400, small: bool = True, 
         for target in targets:
             try:
                 text = "".join(v for k, v in backup.stream_round(messages, (), target) if k == "text")
-                if text.strip():
-                    return text.strip()
+                out = usable(text, target.get("who") or target["model"])
+                if out is not None:
+                    return out
             except Exception as e:
                 providers.rest(target["model"] if name == "groq" else "openrouter", e)
                 errors.append(e)
         if name == "claude" and _use_claude():
-            msg = _client.messages.create(model=config.LLM_MODEL, max_tokens=max_tokens, system=system,
-                                          messages=[{"role": "user", "content": user}])
-            return "".join(b.text for b in msg.content if getattr(b, "type", "") == "text").strip()
+            try:
+                msg = _client.messages.create(model=config.LLM_MODEL, max_tokens=max(max_tokens, 1024),
+                                              system=system, messages=[{"role": "user", "content": user}])
+            except Exception as e:
+                errors.append(e)
+                continue
+            print(f"[brain] Claude ({config.LLM_MODEL}) answered the one-off job")
+            out = usable("".join(b.text for b in msg.content if getattr(b, "type", "") == "text"), "Claude")
+            if out is not None:
+                return out
     if errors:
         raise errors[-1]
     raise RuntimeError("No brain available")

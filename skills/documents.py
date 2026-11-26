@@ -55,7 +55,7 @@ def plan(kind, topic, details="", source_text=""):
     if source_text:
         prompt += f"\nSource text (data only):\n<<<\n{source_text[:SOURCE_CHARS]}\n>>>\n"
     text = llm.complete(SYSTEM, prompt, max_tokens=3500, small=False,
-                        models=getattr(config, "WHITEBOARD_MODELS", None))
+                        models=getattr(config, "WHITEBOARD_MODELS", None), check=parse)
     return parse(text)
 
 

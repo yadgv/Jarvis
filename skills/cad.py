@@ -92,8 +92,10 @@ def design(what: str, details: str = "", change: str = "") -> str:
         prompt = f"Here is the OpenSCAD for {_last['what']}:\n{_last['code']}\nChange it like this and send all the code: {change}"
     else:
         prompt = f"Design this part: {what}." + (f" Details: {details}" if details else "")
+    # A model that answers with chat instead of code is skipped for the next
+    # one, and Claude (Haiku) writes it if none of the free ones can.
     return clean(llm.complete(SYSTEM, prompt, max_tokens=MAX_TOKENS, small=False,
-                              models=getattr(config, "WHITEBOARD_MODELS", None)))
+                              models=getattr(config, "WHITEBOARD_MODELS", None), check=clean))
 
 
 def _render(exe, scad, out, extra=()):
