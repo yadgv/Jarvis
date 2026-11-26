@@ -204,6 +204,7 @@ WAKE_CONSECUTIVE_FRAMES = 2              # frames in a row above threshold (rais
 WAKE_CHIME = True                        # beep when Jarvis starts listening
 WAKE_DEBUG = False                       # print wake-word scores to help tuning
 BARGE_IN = True                          # say "Hey Jarvis" while he's talking to cut him off
+BARGE_IN_ON_NAME = True                  # just "Jarvis" (said on its own) cuts him off too
 BARGE_IN_THRESHOLD = 0.6                 # stricter than WAKE_THRESHOLD (the mic hears his voice too)
 FOLLOWUP_SECONDS = 12                    # conversation: after each reply, keep listening without the wake word
                                          # until he's quiet this long or says "thanks"/"that's all" (0 = off)
@@ -244,8 +245,19 @@ DUCK_APPS = ["AppleMusic.exe", "iTunes.exe", "Spotify.exe"]   # process names; [
 DUCK_VOLUME = 0.2                        # their volume while ducked (0-1 of what it was)
 
 # --- Speech-to-text ---
-# Windows: "small.en" is fine. Pi 4/5: use "tiny.en" or "base.en".
-WHISPER_MODEL = "tiny.en" if ON_PI else "base.en"
+# Bigger models hear more accurately but take longer. "small.en" (~250 MB, one-time
+# download) mishears far less than "base.en" on a PC; Pi 4/5: "tiny.en" or "base.en".
+WHISPER_MODEL = "tiny.en" if ON_PI else "small.en"
+WHISPER_FALLBACK_MODEL = "base.en"       # used if the main one can't load (e.g. no internet for the download)
+WHISPER_BEAM_SIZE = 1 if ON_PI else 3    # tries a few readings and keeps the likeliest (1 = fastest)
+# Words he uses that Whisper doesn't expect. They're given to Whisper as a hint,
+# so "breadboard" isn't heard as "bare book". Add your own here, or say
+# "Jarvis, learn the word ..." (saved in memory/vocab.json). Canvas class names are added too.
+STT_WORDS = [
+    "Jarvis", "breadboard", "Arduino", "resistor", "capacitor", "multimeter", "oscilloscope", "soldering",
+    "thermodynamics", "photosynthesis", "mitochondria", "calculus", "derivative", "integral", "vector",
+    "Canvas", "whiteboard", "Courtice", "Apple Music", "Python", "VS Code", "GitHub",
+]
 WHISPER_DEVICE = "cpu"                   # "cuda" if you have an NVIDIA GPU
 WHISPER_COMPUTE = "int8"
 

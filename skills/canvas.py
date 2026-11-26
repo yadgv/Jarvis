@@ -204,7 +204,11 @@ def _need_sign_in():
 
 def _courses():
     courses = _get("/api/v1/courses", {"enrollment_state": "active"})
-    return [c for c in courses if isinstance(c, dict) and c.get("name") and not c.get("access_restricted_by_date")]
+    courses = [c for c in courses if isinstance(c, dict) and c.get("name") and not c.get("access_restricted_by_date")]
+    names = [c["name"] for c in courses][:12]
+    if names and names != _saved().get("course_names"):
+        memory._write(SETTINGS, dict(_saved(), course_names=names))   # speech recognition hints
+    return courses
 
 
 def _match(courses, name):

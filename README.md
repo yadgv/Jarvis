@@ -168,6 +168,8 @@ or switch off "Jarvis" in Task Manager > Startup apps.
 - **Music turns down** while he listens and talks (Windows, apps in `DUCK_APPS`, needs `pip install pycaw`).
 - To test without the wake word, set `MODE = "enter"`.
 - Conversations: after "Hey Jarvis" he keeps listening, no wake word needed, until you're quiet for `FOLLOWUP_SECONDS` (12, or Settings > Keep listening) or you say you're done ("thanks", "that's all", "never mind", "bye"), and he signs off. "Okay" or "cool" just keep him listening, a mumble gets "Sorry, sir, I didn't catch that.", and chatter that clearly isn't for him (you talking to someone else) is ignored without ending the conversation; he can't be shut down by it. Requests can run up to 30 seconds. Set `FOLLOWUP_SECONDS = 0` to always need the wake word.
+- Saying his name mid-conversation ("Jarvis, and Friday?", "what do you think, Jarvis?") carries on the same conversation, the way you'd use anyone's name; it's never treated as chatter. "Jarvis" on its own, or a pause right after it, just keeps him listening for the rest. While he's talking, "Jarvis" on its own cuts him off (`BARGE_IN_ON_NAME`).
+- **Mishearing:** speech recognition guesses words from sound, so unusual words come out as sound-alikes ("bare book" for breadboard). It now uses the `small.en` Whisper model (a one-time ~250 MB download; falls back to `base.en`), tries a few readings (`WHISPER_BEAM_SIZE`), and gets your words as a hint: `STT_WORDS` in config.py, your Canvas class names, and any word you teach it ("Jarvis, learn the word Kirchhoff"). If replies feel slow, set `WHISPER_MODEL = "base.en"` or `WHISPER_BEAM_SIZE = 1`.
 
 ## Memory
 - **Third person in the room** (off by default; idea from isair/jarvis): set `ROOM_CONTEXT = True` and Jarvis

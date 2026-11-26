@@ -47,10 +47,12 @@ from skills import sticky  # noqa: E402
 from skills import calculator  # noqa: E402
 from skills import canvas  # noqa: E402
 from skills import recap  # noqa: E402
+from skills import vocab  # noqa: E402
 
 MODULES = [
     briefing,
     memory_tools,
+    vocab,
     timers,
     reminders,
     jobs,

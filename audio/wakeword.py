@@ -148,7 +148,7 @@ class NameSpotter:
 
 def _heard_name(audio) -> bool:
     from audio.stt import transcribe
-    text = transcribe(audio.astype(np.float32) / 32768.0)
+    text = transcribe(audio.astype(np.float32) / 32768.0, hints=False)
     if config.WAKE_DEBUG or text:
         print(f"[wake] short word heard: {text!r}")
     return is_name(text)
@@ -194,8 +194,17 @@ def watch_for_interrupt(stream, stop_event, on_wake):
     Jarvis's own voice from the speaker. Returns when stop_event is set."""
     _model.reset()
     hits = 0
+    # Just "Jarvis" (said on its own) cuts in too, the way you'd say someone's name.
+    spotter = NameSpotter() if config.WAKE_ON_NAME and getattr(config, "BARGE_IN_ON_NAME", True) else None
     while not stop_event.is_set():
         data, _ = stream.read(CHUNK)
+        if spotter is not None:
+            word = spotter.feed(data[:, 0].copy(), is_speech(data[:, 0]))
+            if word is not None and not stop_event.is_set() and _heard_name(word):
+                print("[wake] heard his name while talking: stopping")
+                _model.reset()
+                on_wake()
+                return
         score = max(_model.predict(data[:, 0]).values())
         if score > config.BARGE_IN_THRESHOLD:
             hits += 1
