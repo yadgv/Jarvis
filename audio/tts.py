@@ -29,7 +29,7 @@ _http = requests.Session()  # reuses the connection: saves a TLS handshake per s
 _fish_ok = bool(config.FISH_API_KEY and config.FISH_VOICE_ID)
 
 
-def _fish_request(text: str, stream: bool):
+def _fish_request(text: str, stream: bool, voice: str = None):
     return _http.post(
             FISH_URL,
             headers={
@@ -39,7 +39,7 @@ def _fish_request(text: str, stream: bool):
             },
             json={
                 "text": text,
-                "reference_id": settings.voice_id(),
+                "reference_id": voice or settings.voice_id(),
                 "format": "pcm",
                 "sample_rate": FISH_RATE,
                 "latency": "balanced",
@@ -281,6 +281,23 @@ def preview(name: str, text: str = SAMPLE) -> str:
     if clip is None:
         return f"Couldn't make the voice {name}."
     play(clip)
+    return f"Played a sample of the {name} voice."
+
+
+def preview_online(name: str, text: str = SAMPLE) -> str:
+    """Say a sample in one Fish Audio voice from config.VOICES (for the Settings window)."""
+    voice = (getattr(config, "VOICES", {}) or {}).get(name.lower().strip())
+    if not voice:
+        return f"There's no online voice called {name}."
+    try:
+        r = _fish_request(text, stream=False, voice=voice)
+        r.raise_for_status()
+        audio = np.frombuffer(r.content, dtype=np.int16)
+    except Exception as e:
+        return f"Couldn't reach Fish Audio for the {name} voice ({e})."
+    if audio.size == 0:
+        return f"Fish Audio sent no sound for the {name} voice."
+    play((audio, FISH_RATE))
     return f"Played a sample of the {name} voice."
 
 

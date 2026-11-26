@@ -110,7 +110,16 @@ start Jarvis when you log in. It opens with no console window; everything goes t
 `jarvis.log`. Opening it again while it's running does nothing, so two Jarvises
 never fight over the mic. `python install_app.py remove` takes the shortcuts away.
 - **Click** the orb to talk (no wake word needed). Click again while he's speaking to stop him.
-- **Drag** it to move it. **Right-click** it to type a message, move it back to the corner, or quit.
+- **Drag** it to move it (he stays where you put it next time). **Right-click** it to type a message,
+  open **Settings...**, move it back to the corner, or quit.
+- **Settings...** has his online and offline voice (with a Play button to hear each), speaking speed,
+  personality, whether to show the text panel and the "Click here to type" box, the orb's colours,
+  size and corner, the wake-word sensitivity, the chime, how long he keeps listening after a reply,
+  the microphone, room mode, offline mode, the local model, turning music down while he talks, the
+  Telegram phone bot, the morning briefing, Celsius or Fahrenheit, keeping the whiteboard on top, and
+  starting with Windows. Save applies it straight away (the microphone from the next start) and it's
+  kept in `memory/settings.json`.
+- The **whiteboard** opens in front of everything (and keeps on top until you close it; untick that in Settings).
 - While you talk to him a panel slides out with what you said and his reply, then tucks away
   after a few seconds. Click the panel (or right-click > Type a message) to open the text box; Esc closes it.
 - The orb is silver when standing by, green while listening, amber while thinking, blue while speaking.

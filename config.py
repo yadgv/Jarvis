@@ -149,6 +149,7 @@ ICLOUD_CALENDAR = os.getenv("ICLOUD_CALENDAR", "")   # calendar name to add to; 
 # TELEGRAM_BOT_TOKEN from @BotFather; TELEGRAM_ALLOWED_IDS = your Telegram user ID(s).
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_ALLOWED_IDS = os.getenv("TELEGRAM_ALLOWED_IDS", "")
+TELEGRAM_ON = True                       # the phone bot (also in the orb's right-click Settings)
 GMAIL_ADDRESS = os.getenv("GMAIL_ADDRESS")
 GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
 # Playing songs by name: Jarvis opens this app and uses screen control to search and press play.

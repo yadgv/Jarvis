@@ -410,11 +410,108 @@ def window_open() -> bool:
     return now - _launched < 10              # still starting up
 
 
+TITLE = "Jarvis whiteboard"
+
+
+def _user32():
+    """Our own handle on user32 with the argument types set, so 64-bit window
+    handles go through whole (shared ctypes.windll would affect other code)."""
+    import ctypes
+    from ctypes import wintypes as w
+    u = ctypes.WinDLL("user32", use_last_error=True)
+    H = w.HWND
+    for name, args, res in (
+            ("IsWindowVisible", [H], w.BOOL), ("GetWindowTextLengthW", [H], ctypes.c_int),
+            ("GetWindowTextW", [H, w.LPWSTR, ctypes.c_int], ctypes.c_int),
+            ("IsIconic", [H], w.BOOL), ("ShowWindow", [H, ctypes.c_int], w.BOOL),
+            ("SetWindowPos", [H, H, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, w.UINT], w.BOOL),
+            ("GetForegroundWindow", [], H), ("GetWindowThreadProcessId", [H, ctypes.c_void_p], w.DWORD),
+            ("AttachThreadInput", [w.DWORD, w.DWORD, w.BOOL], w.BOOL),
+            ("SetForegroundWindow", [H], w.BOOL), ("BringWindowToTop", [H], w.BOOL)):
+        f = getattr(u, name)
+        f.argtypes, f.restype = args, res
+    return u
+
+
+def _find_window(user32, title=TITLE):
+    """The handle of the visible window whose title has `title` in it (Windows)."""
+    import ctypes
+    from ctypes import wintypes
+    found = []
+
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def each(hwnd, _):
+        if user32.IsWindowVisible(hwnd):
+            n = user32.GetWindowTextLengthW(hwnd)
+            if n:
+                buf = ctypes.create_unicode_buffer(n + 1)
+                user32.GetWindowTextW(hwnd, buf, n + 1)
+                if title in buf.value:
+                    found.append(hwnd)
+                    return False
+        return True
+
+    user32.EnumWindows(each, 0)
+    return found[0] if found else None
+
+
+def _raise(user32, hwnd, pin: bool):
+    """Bring a window in front of everything and give it the keyboard. With
+    pin it stays above other windows (like the orb) until it's closed."""
+    import ctypes
+    HWND_TOPMOST, HWND_NOTOPMOST = -1, -2
+    flags = 0x0001 | 0x0002 | 0x0040   # keep size, keep place, show
+    if user32.IsIconic(hwnd):
+        user32.ShowWindow(hwnd, 9)      # restore if minimised
+    user32.SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, flags)
+    if not pin:                         # in front now, but other windows may cover it later
+        user32.SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, flags)
+    # Windows only lets the app you used last take the focus; joining its
+    # input queue for a moment lets this one hand the focus to the board.
+    fg = user32.GetForegroundWindow()
+    theirs = user32.GetWindowThreadProcessId(fg, None) if fg else 0
+    ours = ctypes.windll.kernel32.GetCurrentThreadId()
+    joined = bool(theirs and theirs != ours and user32.AttachThreadInput(ours, theirs, True))
+    try:
+        user32.SetForegroundWindow(hwnd)
+    finally:
+        if joined:
+            user32.AttachThreadInput(ours, theirs, False)
+    user32.BringWindowToTop(hwnd)
+
+
+def _to_front(wait: float = 15.0):
+    """Windows: once the board's window has opened, put it on top of
+    everything (Settings > "Keep the whiteboard on top") and focus it."""
+    if sys.platform != "win32":
+        return False
+
+    def run():
+        try:
+            from brain import settings
+            user32 = _user32()
+            pin = bool(settings.app().get("whiteboard_on_top", True))
+            end = time.monotonic() + wait
+            while time.monotonic() < end:
+                hwnd = _find_window(user32)
+                if hwnd:
+                    _raise(user32, hwnd, pin)
+                    return
+                time.sleep(0.25)
+            print("[whiteboard] couldn't find the window to bring it to the front")
+        except Exception as e:
+            print(f"[whiteboard] couldn't bring the window to the front: {e}")
+
+    threading.Thread(target=run, daemon=True, name="whiteboard-front").start()
+    return True
+
+
 def open_window():
     global _opened, _launched
     with _lock:
         _board["closed"] = False
     if window_open():
+        _to_front(wait=3)   # already open, maybe behind other windows: show it
         return
     _opened, _launched = True, time.monotonic()
     link = url()
@@ -422,10 +519,12 @@ def open_window():
     try:
         if exe:
             subprocess.Popen([exe, f"--app={link}", "--start-maximized"])  # big = readable
+            _to_front()
             return
     except Exception as e:
         print(f"[whiteboard] couldn't open an app window ({e}); using the browser")
     webbrowser.open(link)
+    _to_front()
 
 
 # ---------- tools ----------
