@@ -84,6 +84,12 @@ def is_acknowledgement(said: str) -> bool:
 RESET_PHRASES = {"new conversation", "start over", "start a new conversation"}
 
 
+def is_just_name(said: str) -> bool:
+    """ "Jarvis" or "hey Jarvis" on its own: he's calling for attention."""
+    words = said.split()
+    return "jarvis" in words and set(words) <= {"hey", "jarvis", "sir", "yo", "ok", "okay"}
+
+
 def normalize(text: str) -> str:
     text = re.sub(r"[^a-z' ]", " ", text.lower())
     return re.sub(r"\s+", " ", text).strip()
@@ -305,6 +311,13 @@ def main():
             said = normalize(text)
             followup = not need_wake and typed is None
             answering = followup and asked_question and said in ANSWERS
+            if followup and is_just_name(said):
+                # Just his name: he wants to say something, so chime and listen.
+                print("[follow-up: just my name, listening]")
+                already_woken = True
+                need_wake = True
+                stream.start()
+                continue
             if followup and not answering and (is_acknowledgement(said) or (is_exit(said) and "jarvis" not in said)):
                 # "I understand", "bye" etc. without his name: end the chat quietly.
                 print("[follow-up ignored: sounded like the end of the conversation]")

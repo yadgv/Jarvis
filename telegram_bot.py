@@ -73,13 +73,33 @@ def _voice_to_text(file_id):
     try:
         with os.fdopen(fd, "wb") as f:
             f.write(r.content)
-        from audio.stt import transcribe  # faster-whisper reads .ogg/.oga directly
-        return transcribe(tmp)
+        from audio.stt import transcribe
+        return transcribe(_decode(tmp))
     finally:
         try:
             os.remove(tmp)
         except OSError:
             pass
+
+
+def _decode(path):
+    """Read a voice note into 16 kHz mono float32 samples for Whisper.
+    We decode it ourselves because faster-whisper's own file reader passes
+    a 'metadata_errors' option that newer PyAV versions no longer accept."""
+    import av
+    import numpy as np
+    resampler = av.AudioResampler(format="s16", layout="mono", rate=16000)
+    chunks = []
+    with av.open(path) as container:
+        for frame in container.decode(audio=0):
+            frame.pts = None
+            for out in resampler.resample(frame):
+                chunks.append(out.to_ndarray().reshape(-1))
+        for out in resampler.resample(None):  # flush what's left
+            chunks.append(out.to_ndarray().reshape(-1))
+    if not chunks:
+        return np.zeros(0, dtype=np.float32)
+    return np.concatenate(chunks).astype(np.float32) / 32768.0
 
 
 def _think(text):

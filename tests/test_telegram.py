@@ -121,3 +121,24 @@ def test_poll_timeout_while_offline_is_not_logged(monkeypatch):
     monkeypatch.setattr(network, "_check", lambda: True)
     assert not telegram_bot._offline_error(requests.ReadTimeout("Read timed out."))
     assert not telegram_bot._offline_error(RuntimeError("Telegram error 409"))
+
+
+def test_voice_note_decodes_without_faster_whisper_reader(tmp_path):
+    """Decode .ogg ourselves: faster-whisper's reader breaks on newer PyAV."""
+    av = pytest.importorskip("av")
+    import numpy as np
+    path = str(tmp_path / "note.ogg")
+    with av.open(path, "w") as out:
+        stream = out.add_stream("libopus", rate=48000, layout="mono")
+        t = np.arange(48000) / 48000
+        samples = (np.sin(2 * np.pi * 440 * t) * 8000).astype(np.int16).reshape(1, -1)
+        frame = av.AudioFrame.from_ndarray(samples, format="s16", layout="mono")
+        frame.sample_rate = 48000
+        for packet in stream.encode(frame):
+            out.mux(packet)
+        for packet in stream.encode(None):
+            out.mux(packet)
+    audio = telegram_bot._decode(path)
+    assert audio.dtype == np.float32
+    assert 14000 < len(audio) < 18000  # about one second at 16 kHz
+    assert 0.1 < np.abs(audio).max() <= 1.0
