@@ -143,3 +143,50 @@ def test_page_draws_smoothly():
     assert "strokeDashoffset" in js and "sweepIn" in js and "drawStep" in js
     assert "prefers-reduced-motion" in js
     assert "window.close()" in js and "The whiteboard is clear" in wb.PAGE
+
+
+@pytest.mark.parametrize("args", [
+    {"change": "clear", "topic": "clear"}, {"change": "clear all", "topic": "Arduino Servo and LED Wiring"},
+    {"action": "clear"}, {"topic": "clear the whiteboard"}, {"change": "erase the board"},
+])
+def test_clear_asked_through_show_diagram(board, args):
+    # What the model actually sent (from his log).
+    asked, _ = board
+    wb.show_diagram({"topic": "servo"})
+    n = len(asked)
+    assert "Cleared" in wb.show_diagram(args)
+    assert wb._board["svg"] == "" and len(asked) == n
+
+
+def test_redraw_that_mentions_clearing_still_draws(board):
+    asked, _ = board
+    wb.show_diagram({"change": "Clear and redraw full wiring: red lead to 5V", "topic": "servo"})
+    assert wb._board["svg"] and asked
+
+
+def test_reopens_after_he_closes_the_window(monkeypatch):
+    launched = []
+    monkeypatch.setattr(wb, "_app_browser", lambda: "edge")
+    monkeypatch.setattr(wb.subprocess, "Popen", lambda cmd: launched.append(cmd))
+    monkeypatch.setattr(wb, "url", lambda: "http://127.0.0.1:1/")
+    monkeypatch.setattr(wb, "_opened", False)
+    clock = [1000.0]
+    monkeypatch.setattr(wb.time, "monotonic", lambda: clock[0])
+    wb.open_window()
+    assert len(launched) == 1
+    clock[0] += 1; wb._last_seen = clock[0]     # the page is polling
+    wb.open_window()
+    assert len(launched) == 1                   # still open: no second window
+    clock[0] += 30                              # he closed it with the X: polling stopped
+    assert not wb.window_open()
+    wb.open_window()
+    assert len(launched) == 2                   # so it opens again
+
+
+def test_open_the_whiteboard(monkeypatch):
+    opened = []
+    monkeypatch.setattr(wb, "open_window", lambda: opened.append(1))
+    from skills import pc_control
+    assert "whiteboard is open" in pc_control.open_app({"name": "whiteboard"})
+    assert "whiteboard is open" in wb.whiteboard_step({"action": "open"})
+    assert len(opened) == 2

@@ -17,7 +17,7 @@ import requests
 import sounddevice as sd
 
 import config
-from brain import network, settings
+from brain import network, settings, textfix
 
 # Only one thing talks at a time (e.g. a timer going off while Jarvis is mid-sentence).
 _speaking = threading.RLock()
@@ -312,6 +312,7 @@ _fallback = None
 
 def speak_system(text: str):
     global _fallback
+    text = textfix.for_speech(text)
     if _fallback is None:
         import pyttsx3
         _fallback = pyttsx3.init()
@@ -395,6 +396,7 @@ def synthesize(text: str):
     """Start turning text into audio without playing it. Returns something
     play() understands, or None if only the system voice is left (it can't
     render to audio)."""
+    text = textfix.for_speech(text)
     if _fish_ok and network.online():
         return StreamClip(text)
     return _synth_local(text)

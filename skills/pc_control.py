@@ -57,6 +57,9 @@ def open_app(a):
     name = _norm(a.get("name", ""))
     if not name:
         return "No app name given."
+    if re.fullmatch(r"(?:the )?(?:jarvis )?(?:white ?board|drawing board)", name):
+        from skills import whiteboard
+        return whiteboard.whiteboard_step({"action": "open"})
     apps = {_norm(k): v for k, v in config.APPS.items()}
     target = apps.get(name)
     if target is None and IS_WINDOWS:

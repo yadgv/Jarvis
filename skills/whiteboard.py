@@ -21,6 +21,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 import webbrowser
 
 import config
@@ -60,6 +61,9 @@ _board = {"version": 0, "title": "", "svg": "", "steps": [], "step": 0, "topic":
 _lock = threading.Lock()
 _server = None
 _opened = False
+_last_seen = 0.0     # when the page last asked for the board (it asks every 0.4 s)
+_launched = 0.0      # when we last opened a window
+GONE_AFTER = 3.0     # no ask for this long = the window was closed
 
 
 # ---------- making the drawing ----------
@@ -77,10 +81,11 @@ def parse(text: str) -> dict:
     if not isinstance(spec, dict) or not (spec.get("wires") or spec.get("nodes")):
         raise ValueError("the description had nothing to draw")
     svg, skipped = diagram.render(spec)
-    steps = [str(s).strip() for s in spec.get("steps") or [] if str(s).strip()][:12]
+    from brain import textfix
+    steps = [textfix.fix(s).strip() for s in spec.get("steps") or [] if str(s).strip()][:12]
     if skipped:
         print(f"[whiteboard] couldn't draw: {', '.join(skipped)}")
-    return {"title": str(spec.get("title") or "Whiteboard")[:80], "spec": spec, "svg": svg,
+    return {"title": textfix.fix(spec.get("title") or "Whiteboard")[:80], "spec": spec, "svg": svg,
             "steps": steps, "skipped": skipped}
 
 
@@ -273,6 +278,8 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         elif path == "/app.js":
             self._send(APP_JS, "application/javascript")
         elif path == "/board.json":
+            global _last_seen
+            _last_seen = time.monotonic()
             with _lock:
                 self._send(json.dumps({k: _board.get(k) for k in ("version", "title", "svg", "steps", "step", "closed")}),
                            "application/json")
@@ -306,13 +313,24 @@ def _app_browser():
     return shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
 
 
+def window_open() -> bool:
+    """Is the whiteboard window showing? Judged by the page still polling,
+    so it's right even after he closes the window with the X."""
+    now = time.monotonic()
+    if not _opened:
+        return False
+    if _last_seen >= _launched:              # the page has loaded since we opened it
+        return now - _last_seen < GONE_AFTER
+    return now - _launched < 10              # still starting up
+
+
 def open_window():
-    global _opened
+    global _opened, _launched
     with _lock:
         _board["closed"] = False
-    if _opened:
+    if window_open():
         return
-    _opened = True
+    _opened, _launched = True, time.monotonic()
     link = url()
     exe = _app_browser()
     try:
@@ -333,9 +351,34 @@ def _summary(intro: str) -> str:
             "He moves on with 'next step' (whiteboard_step).")
 
 
+_WIPE = re.compile(r"(?:please )?(?:clear|erase|wipe|reset|empty|clean)(?: (?:it|all|everything|that|"
+                   r"(?:the |my )?(?:white ?board|board|drawing|diagram|screen)))?(?: (?:off|out|clean|please))*")
+_CLOSE = re.compile(r"(?:please )?(?:close|hide|exit|dismiss)(?: (?:it|that|(?:the |my )?(?:white ?board|board|"
+                    r"drawing|diagram|window)))?(?: (?:please|now))*")
+
+
+def _wants(text: str):
+    """'clear' or 'close' when a request passed as a drawing is really that."""
+    t = re.sub(r"[^a-z ]+", " ", (text or "").lower())
+    t = re.sub(r"\s+", " ", t).strip()
+    if _WIPE.fullmatch(t):
+        return "clear"
+    if _CLOSE.fullmatch(t):
+        return "close"
+    return None
+
+
 def show_diagram(a):
     topic = (a.get("topic") or "").strip()
     change = (a.get("change") or "").strip()
+    action = (a.get("action") or "").strip().lower()
+    # Models sometimes ask this tool to clear or close the board.
+    wants = action if action in ("clear", "close", "open") else (_wants(change) or (not change and _wants(topic)))
+    if wants in ("clear", "close"):
+        return clear(close=wants == "close")
+    if wants == "open" or (not topic and not change and _board["svg"]):
+        open_window()
+        return "The whiteboard is open." if _board["svg"] else "The whiteboard is open and empty."
     if not topic and not change:
         return "Say what to draw."
     try:
@@ -365,6 +408,9 @@ def whiteboard_step(a):
     action = (a.get("action") or "next").lower()
     if action in ("clear", "close"):
         return clear(close=action == "close")
+    if action == "open":
+        open_window()
+        return "The whiteboard is open." if _board["svg"] else "The whiteboard is open and empty."
     if not _board["svg"]:
         return "The whiteboard is empty. Use show_diagram first."
     if action == "goto":
@@ -390,13 +436,16 @@ SKILLS = [
             "Draw a diagram on the whiteboard window and walk him through it step by step: how to wire "
             "something to his Arduino or breadboard, a circuit, a flowchart, how parts connect. Use when he "
             "says 'show me', 'draw', 'visualize' or 'how do I wire/connect'. To change the current drawing "
-            "('use pin 6 instead', 'add an LED'), pass change."
+            "('use pin 6 instead', 'add an LED'), pass change. To clear, close or reopen the board use whiteboard_step "
+            "(or action here)."
         ),
         "parameters": {
             "type": "object",
             "properties": {
                 "topic": {"type": "string", "description": "what to draw, with any parts and pins he mentioned"},
                 "change": {"type": "string", "description": "a change to the drawing already on the whiteboard"},
+                "action": {"type": "string", "enum": ["draw", "clear", "close", "open"],
+                           "description": "clear/close/open the whiteboard instead of drawing"},
             },
         },
         "run": show_diagram,
@@ -405,11 +454,11 @@ SKILLS = [
         "name": "whiteboard_step",
         "description": ("Control the whiteboard: move through its steps ('next step', 'go back', 'step 3', "
                         "'show it all'), clear or erase it ('clear the whiteboard', 'wipe the board'), "
-                        "or close its window ('close the whiteboard')."),
+                        "close its window ('close the whiteboard'), or open it again ('open the whiteboard')."),
         "parameters": {
             "type": "object",
             "properties": {
-                "action": {"type": "string", "enum": ["next", "back", "goto", "all", "clear", "close"]},
+                "action": {"type": "string", "enum": ["next", "back", "goto", "all", "clear", "close", "open"]},
                 "step": {"type": "integer", "description": "for goto"},
             },
             "required": ["action"],
