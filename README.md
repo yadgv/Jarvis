@@ -527,6 +527,13 @@ questions for the free rate limits (`--delay 8` to slow it down).
 - The report goes to `testbench/reports/` (Markdown to read, JSON to compare runs). Send me the .md file.
 - Add your own questions to `testbench/cases.py`.
 
+### Jarvis talks to Jarvis
+
+`python3.13 talk_tests.py` has a second AI play you, with a goal ("brief this article, make slides on it,
+then make them corporate"), and talk to Jarvis turn by turn until it's done or says goodbye. A third call
+grades each conversation (goal done? 1-5) and the whole transcripts go to `testbench/reports/..._talk.md`.
+Free models only, tools are dry runs. Scenarios are in `testbench/scenarios.py`; `--only arduino` runs one.
+
 ## Logs and tests
 - Everything Jarvis prints also goes to `jarvis.log`, with times, including how long each reply took.
 - `pip install pytest` then `pytest` runs the tests (no mic or API key needed). GitHub runs them on every PR.
