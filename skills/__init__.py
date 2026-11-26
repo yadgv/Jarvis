@@ -252,6 +252,30 @@ def restyle_intent(text: str) -> bool:
     return documents.last() is not None
 
 
+def route(text: str) -> dict:
+    """What's decided before the model sees a request (the model can't get these wrong):
+    direct: [(tool, args)] to run straight away; exclude: tools the model mustn't use this turn;
+    screen: read his screen first because he said "this article" / "on my screen"."""
+    plan = {"direct": [], "exclude": set(), "screen": False, "followup": False}
+    if phone_test_intent(text):
+        plan["direct"].append(("test_phone_alerts", {}))
+        plan["exclude"].add("test_phone_alerts")
+    if restyle_intent(text):
+        plan["exclude"].add("make_document")      # a new look, never a new deck
+    searching = re.search(r"\b(?:search|look (?:\w+ )?up|google|online|on the web|internet)\b", text or "", re.I)
+    if brief_intent(text):
+        plan["direct"].append(("brief_document", {"source": ""}))
+        plan["exclude"] |= {"brief_document", "web_search", "look_at_screen"}   # it's already being read
+    elif screen_intent(text):
+        plan["screen"] = True
+        if not searching:
+            plan["exclude"].add("web_search")     # "this" is on his screen, not on the web
+    elif sight.recent() and mentions_screen_followup(text) and not searching:
+        plan["followup"] = True                   # "now make slides on it": the page he just had read
+        plan["exclude"].add("web_search")
+    return plan
+
+
 def phone_test_intent(text: str) -> bool:
     """ "Test my phone notifications", "send a test alert to my phone"."""
     return bool(re.search(r"\btest\w*\b.{0,25}\b(?:phone|notifications?|alerts?|telegram|call)\b", text or "", re.I))
