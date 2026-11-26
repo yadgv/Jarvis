@@ -41,6 +41,7 @@ from skills import documents  # noqa: E402
 from skills import cad  # noqa: E402
 from skills import web_search  # noqa: E402
 from skills import background  # noqa: E402
+from skills import study  # noqa: E402
 
 MODULES = [
     briefing,
@@ -73,6 +74,7 @@ MODULES = [
     cad,
     personality,
     background,
+    study,
 ]
 # Counts conversation turns, so a tool can tell "he said yes" (a later turn)
 # from the model confirming its own draft in the same turn.
@@ -165,6 +167,7 @@ def mentions_board(text) -> bool:
     return bool(_BOARD.search(text or ""))
 
 
+_STUDY = re.compile(r"\b(quiz|flash ?cards?|pomodoro|study|studying|revise|revision|focus (?:session|time|mode))\b", re.I)
 # "what are you working on", "is it done", "cancel that", "stop the task"
 _TASKS = re.compile(r"\b(working on|doing|busy|done yet|finished|progress|status|cancel|stop|abort|tasks?|jobs?)\b", re.I)
 
@@ -194,6 +197,8 @@ def pick_tools(text, limit=12, exclude=()):
         keep |= set(CAD_TOOLS)
     if _DOCS.search(text or ""):
         keep |= set(DOC_TOOLS) | {"find_files", "read_file"}
+    if _STUDY.search(text or ""):
+        keep |= {"quiz_me", "quiz_next", "pomodoro", "find_files"}
     if _TASKS.search(text or "") and background.active():
         keep |= {"list_tasks", "cancel_task"}
     keep -= set(exclude)
