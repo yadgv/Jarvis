@@ -18,14 +18,25 @@ _lock = threading.Lock()
 _state = {"online": None, "until": 0.0}
 
 
+def _try(host, result: threading.Event):
+    try:
+        socket.create_connection(host, timeout=TIMEOUT).close()
+        result.set()
+    except OSError:
+        pass
+
+
 def _check() -> bool:
+    return _reach_any()
+
+
+def _reach_any() -> bool:
+    """All hosts at once, so the answer takes at most TIMEOUT seconds, and
+    returns as soon as any one answers."""
+    up = threading.Event()
     for host in HOSTS:
-        try:
-            socket.create_connection(host, timeout=TIMEOUT).close()
-            return True
-        except OSError:
-            continue
-    return False
+        threading.Thread(target=_try, args=(host, up), daemon=True).start()
+    return up.wait(TIMEOUT + 0.1)
 
 
 def _set(up: bool):
