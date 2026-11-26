@@ -210,3 +210,8 @@ FISH_MODEL = "s2.1-pro-free"             # free tier
 
 # Fallback voice: Piper voice files (.onnx + .onnx.json) go in ./voices
 PIPER_VOICE = os.path.join(os.path.dirname(__file__), "voices", "en_GB-alan-medium.onnx")
+# Backup voice when Fish Audio is down: "kokoro" (sounds more natural; needs
+# pip install kokoro-onnx, and downloads ~120 MB into ./voices once) or "piper".
+# Kokoro falls back to Piper by itself if it isn't ready.
+LOCAL_VOICE = "kokoro"
+KOKORO_VOICE = "bm_george"               # British: bm_george, bm_lewis, bm_daniel, bm_fable, bf_emma, bf_alice

@@ -107,6 +107,87 @@ def _synth_piper(text: str):
         return None
 
 
+# ---------- Kokoro (local, better-sounding backup) ----------
+# Idea from OpenJarvis (github.com/open-jarvis/OpenJarvis, Apache-2.0), which
+# offers Kokoro as its local voice. Uses kokoro-onnx (github.com/thewh1teagle/kokoro-onnx, MIT).
+# The two model files (about 120 MB) download into voices/ in the background the
+# first time; until then Piper is used.
+KOKORO_DIR = os.path.dirname(config.PIPER_VOICE)
+KOKORO_FILES = {
+    "kokoro-v1.0.int8.onnx": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.int8.onnx",
+    "voices-v1.0.bin": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin",
+}
+_kokoro = None
+_kokoro_lock = threading.Lock()
+
+
+def _kokoro_wanted() -> bool:
+    return getattr(config, "LOCAL_VOICE", "piper") == "kokoro"
+
+
+def _download_kokoro():
+    try:
+        os.makedirs(KOKORO_DIR, exist_ok=True)
+        for name, url in KOKORO_FILES.items():
+            path = os.path.join(KOKORO_DIR, name)
+            if os.path.exists(path):
+                continue
+            print(f"[tts] downloading {name} for the Kokoro voice...")
+            with requests.get(url, stream=True, timeout=60) as r:
+                r.raise_for_status()
+                with open(path + ".part", "wb") as f:
+                    for block in r.iter_content(1 << 20):
+                        f.write(block)
+            os.replace(path + ".part", path)
+        print("[tts] Kokoro voice ready.")
+    except Exception as e:
+        print(f"[tts] couldn't download the Kokoro voice ({e}); using Piper.")
+
+
+def _load_kokoro():
+    global _kokoro
+    if _kokoro is not None:
+        return _kokoro
+    paths = [os.path.join(KOKORO_DIR, n) for n in KOKORO_FILES]
+    if not all(os.path.exists(p) for p in paths):
+        return None
+    with _kokoro_lock:
+        if _kokoro is None:
+            from kokoro_onnx import Kokoro
+            _kokoro = Kokoro(*paths)
+    return _kokoro
+
+
+def _synth_kokoro(text: str):
+    if not _kokoro_wanted():
+        return None
+    try:
+        model = _load_kokoro()
+        if model is None:
+            return None
+        samples, rate = model.create(text, voice=getattr(config, "KOKORO_VOICE", "bm_george"),
+                                     speed=settings.speed(), lang="en-gb")
+        audio = (np.clip(np.asarray(samples, dtype=np.float32), -1, 1) * 32767).astype(np.int16)
+        return audio, rate
+    except Exception as e:
+        print(f"[tts] Kokoro failed ({e}); using Piper.")
+        return None
+
+
+def _synth_local(text: str):
+    """Best voice that runs on this PC: Kokoro if set up, else Piper."""
+    return _synth_kokoro(text) or _synth_piper(text)
+
+
+if _kokoro_wanted():
+    try:
+        import kokoro_onnx  # noqa: F401
+        if not all(os.path.exists(os.path.join(KOKORO_DIR, n)) for n in KOKORO_FILES):
+            threading.Thread(target=_download_kokoro, daemon=True, name="kokoro-download").start()
+    except ImportError:
+        print("[tts] LOCAL_VOICE is kokoro but kokoro-onnx isn't installed: pip install kokoro-onnx")
+
+
 # ---------- pyttsx3 (last resort) ----------
 _fallback = None
 
@@ -164,7 +245,7 @@ class StreamClip:
             if not got_audio:
                 if str(e) != "no Fish Audio":
                     print(f"[tts] Fish Audio failed ({e}) -> using fallback.")
-                clip = _synth_piper(self.text)
+                clip = _synth_local(self.text)
                 if clip is None:
                     self.failed = True
                 else:
@@ -198,7 +279,7 @@ def synthesize(text: str):
     render to audio)."""
     if _fish_ok:
         return StreamClip(text)
-    return _synth_piper(text)
+    return _synth_local(text)
 
 
 _stop = threading.Event()

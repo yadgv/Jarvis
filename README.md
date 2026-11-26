@@ -29,7 +29,9 @@ Wake word → Whisper → Claude → Piper voice. Runs on Windows now and on a R
    ```
    Close and reopen the terminal afterwards.
    If Fish Audio fails (no key, no internet, no credits), Jarvis falls back to the
-   local Piper "Alan" voice, then to the Windows system voice.
+   local Kokoro voice (British "George", downloads ~120 MB into `voices/` the first
+   time), then the Piper "Alan" voice, then the Windows system voice. Set
+   `LOCAL_VOICE = "piper"` in config.py to skip Kokoro.
    Optional backup brain for when Claude credits run out: make a free account at
    openrouter.ai, create a key at openrouter.ai/keys, and add it to the same `.env`:
    ```

@@ -2,6 +2,7 @@ anthropic
 faster-whisper
 openwakeword
 piper-tts
+kokoro-onnx
 pyttsx3
 sounddevice
 numpy
