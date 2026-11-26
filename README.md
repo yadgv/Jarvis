@@ -379,6 +379,18 @@ functions ("graph y = x^2 - 4 and y = 2x + 1", with roots and crossings marked),
 **circuit schematics** with proper symbols ("a 9 V battery, a switch and two
 lamps in parallel"). The side panel lists the working, one line per step.
 
+## Brief an article (split screen)
+
+Say "brief this article" (or "summarise this PDF") while it's on screen. Jarvis
+reads the page in your browser (Edge, Chrome, Firefox...) or the PDF / Word file
+you have open, snaps that window to the left half of the screen and puts his
+brief on the right half, in the same holographic look as the whiteboard. Click
+the brief to type in it; or ask "make section 2 shorter", "add a point about
+the costs" and it changes in front of you. It autosaves in
+**Documents/Jarvis Docs** (Markdown); "save it as a Word doc" makes a .docx.
+A file or link that isn't on screen ("brief my lab manual") opens in Jarvis's
+own reader on the left. Free models write it first.
+
 ## 3D printable parts
 
 Say "make me a phone stand", "a 40 mm box with a snap-on lid" or "a bracket for
@@ -388,7 +400,7 @@ size as a named variable at the top, saved in **Documents/Jarvis 3D**. If
 for your slicer and shows it in **Jarvis's own 3D viewer**: a holographic window
 (pinned on top) with a grid floor, glowing edges, the part's size in mm, volume
 and rough PLA weight. Drag to turn it, right-drag to pan, scroll to zoom,
-double-click to reset. OpenSCAD builds the part in the background without opening
+double-click to reset. It's see-through like the whiteboard (Settings > See-through). OpenSCAD builds the part in the background without opening
 its own window; press "Open in OpenSCAD" (or say "open it in OpenSCAD") to edit the
 code by hand, and "show me the part" brings the viewer back. "Make it 10 mm taller" changes the last part; "undo that" bins it.
 

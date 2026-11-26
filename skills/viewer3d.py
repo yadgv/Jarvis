@@ -133,32 +133,16 @@ def window_open() -> bool:
     return time.monotonic() - _launched < 10
 
 
-def _to_front(wait: float = 15.0):
-    """Windows: pin the viewer on top (like the whiteboard) once it has opened."""
-    if sys.platform != "win32":
-        return
-
-    def run():
-        from skills import whiteboard
-        try:
-            user32 = whiteboard._user32()
-            end = time.monotonic() + wait
-            while time.monotonic() < end:
-                hwnd = whiteboard._find_window(user32, TITLE)
-                if hwnd:
-                    whiteboard._raise(user32, hwnd, pin=True)
-                    return
-                time.sleep(0.25)
-        except Exception as e:
-            print(f"[3d viewer] couldn't bring the window to the front: {e}")
-
-    threading.Thread(target=run, daemon=True, name="viewer3d-front").start()
+def _arrange(rect=None, wait: float = 15.0):
+    """Windows: pinned on top and see-through, like the whiteboard."""
+    from skills import hudwin, whiteboard
+    hudwin.arrange(TITLE, rect, pin=True, opacity=whiteboard.opacity(), wait=wait, label="3d viewer")
 
 
 def open_window():
     global _opened, _launched
     if window_open():
-        _to_front(wait=3)   # the page picks up the new part by itself
+        _arrange(wait=3)   # the page picks up the new part by itself
         return
     from skills import whiteboard
     _opened, _launched = True, time.monotonic()
@@ -166,8 +150,10 @@ def open_window():
     exe = whiteboard._app_browser()
     try:
         if exe:
-            subprocess.Popen([exe, f"--app={link}", "--window-size=1180,820"])
-            _to_front()
+            from skills import hudwin
+            rect = hudwin.wide_rect(share=0.72)
+            subprocess.Popen([exe] + hudwin.browser_args(link, rect))
+            _arrange(rect)
             return
     except Exception as e:
         print(f"[3d viewer] couldn't open an app window ({e}); using the browser")

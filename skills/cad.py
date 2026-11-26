@@ -234,7 +234,7 @@ SKILLS = [
             "change": {"type": "string", "description": "a change to the last part"},
             "name": {"type": "string", "description": "file name without extension"},
             "stl": {"type": "boolean", "description": "also export an STL (default true)"},
-            "open": {"type": "boolean", "description": "also open the code in OpenSCAD itself (default false)"}}},
+            "open": {"type": "boolean", "description": "also open OpenSCAD's own window: ONLY if he explicitly asked for OpenSCAD (default false)"}}},
         "run": make_3d_model,
     },
 ]

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Jarvis brief</title>
+<style>
+  :root { --c: #3fe6ff; --c2: #9ff4ff; --amber: #ffb547; --ink: #dff9ff; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; color: var(--c2); overflow: hidden;
+    font: 15px "Bahnschrift", "Segoe UI", sans-serif;
+    background: radial-gradient(ellipse at 50% 30%, #0a2a38 0%, #05151e 60%, #020a0f 100%); }
+  body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 5;
+    background: repeating-linear-gradient(0deg, rgba(63,230,255,.03) 0 1px, transparent 1px 3px); }
+  body::after { content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .35;
+    background-image: linear-gradient(rgba(63,230,255,.07) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(63,230,255,.07) 1px, transparent 1px);
+    background-size: 48px 48px; }
+  .corner { position: fixed; width: 24px; height: 24px; border: 2px solid var(--c); opacity: .7; pointer-events: none; z-index: 6; }
+  .tl { top: 10px; left: 10px; border-right: 0; border-bottom: 0; } .tr { top: 10px; right: 10px; border-left: 0; border-bottom: 0; }
+  .bl { bottom: 10px; left: 10px; border-right: 0; border-top: 0; } .br { bottom: 10px; right: 10px; border-left: 0; border-top: 0; }
+  #app { position: relative; z-index: 2; height: 100%; display: flex; flex-direction: column; padding: 22px 28px 20px; }
+  header { display: flex; align-items: flex-end; gap: 16px; padding-bottom: 12px;
+    border-bottom: 1px solid rgba(63,230,255,.35); text-shadow: 0 0 8px rgba(63,230,255,.5); }
+  .tag { font: 11px Consolas, monospace; letter-spacing: .25em; color: var(--c); opacity: .85; }
+  .name { font-size: 21px; letter-spacing: .04em; color: #e8fdff; margin-top: 3px; text-transform: uppercase;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .grow { flex: 1; min-width: 0; }
+  #status { font: 12px Consolas, monospace; letter-spacing: .08em; color: var(--c); text-align: right; white-space: nowrap; }
+  #status.busy { color: var(--amber); }
+  #status.busy::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%;
+    background: var(--amber); box-shadow: 0 0 8px var(--amber); animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .2; } }
+  main { flex: 1; min-height: 0; position: relative; margin-top: 14px; }
+  .scroll { position: absolute; inset: 0; overflow: auto; padding: 6px 18px 30px 4px; }
+  .scroll::-webkit-scrollbar { width: 6px; } .scroll::-webkit-scrollbar-thumb { background: rgba(63,230,255,.35); }
+  #doc { color: var(--ink); line-height: 1.6; max-width: 900px; cursor: text; }
+  #doc h1 { font-size: 26px; font-weight: normal; letter-spacing: .03em; color: #fff; margin: 4px 0 12px;
+    text-shadow: 0 0 12px rgba(63,230,255,.6); }
+  #doc h2 { font-size: 15px; font-weight: normal; letter-spacing: .2em; text-transform: uppercase; color: var(--c);
+    margin: 22px 0 8px; padding-left: 10px; border-left: 3px solid var(--c); }
+  #doc h2 .num { font-family: Consolas, monospace; opacity: .6; margin-right: 8px; }
+  #doc h3 { font-size: 15px; color: var(--c2); margin: 14px 0 6px; font-weight: normal; letter-spacing: .06em; }
+  #doc p { margin: 8px 0; }
+  #doc ul, #doc ol { margin: 6px 0; padding-left: 22px; }
+  #doc li { margin: 4px 0; }
+  #doc li::marker { color: var(--c); }
+  #doc strong { color: #fff; font-weight: 600; }
+  #doc code { font-family: Consolas, monospace; color: var(--amber); }
+  #doc blockquote { margin: 10px 0; padding: 6px 12px; border-left: 2px solid var(--amber); color: #ffe2b0; }
+  #doc table { border-collapse: collapse; margin: 10px 0; } #doc td, #doc th { border: 1px solid rgba(63,230,255,.35); padding: 4px 10px; }
+  #doc.flash { animation: flash 1.2s ease-out; }
+  @keyframes flash { from { text-shadow: 0 0 14px rgba(63,230,255,.9); } }
+  textarea { position: absolute; inset: 0; width: 100%; height: 100%; resize: none; border: 1px solid rgba(63,230,255,.45);
+    background: rgba(3,16,23,.75); color: var(--ink); font: 15px/1.6 Consolas, monospace; padding: 14px 18px;
+    outline: none; box-shadow: inset 0 0 30px rgba(63,230,255,.08); }
+  .hidden { display: none !important; }
+  footer { display: flex; gap: 8px; align-items: center; padding-top: 12px; border-top: 1px solid rgba(63,230,255,.25); }
+  .hint { font: 11px Consolas, monospace; opacity: .6; letter-spacing: .06em; }
+  button { background: rgba(63,230,255,.08); color: var(--c2); border: 1px solid rgba(63,230,255,.55);
+    font: 12px "Bahnschrift", sans-serif; letter-spacing: .08em; padding: 7px 12px; cursor: pointer; text-transform: uppercase;
+    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px); }
+  button:hover { background: rgba(63,230,255,.22); color: #fff; }
+  button.on { background: rgba(63,230,255,.3); color: #fff; }
+  #msg { font: 12px Consolas, monospace; color: var(--amber); }
+  /* reader */
+  #reader { color: var(--ink); line-height: 1.65; max-width: 860px; }
+  #reader h1, #reader h2, #reader h3, #reader h4 { color: #fff; font-weight: normal; letter-spacing: .03em; margin: 18px 0 8px; }
+  #reader h1 { font-size: 24px; } #reader h2 { font-size: 19px; color: var(--c); } #reader h3 { font-size: 16px; color: var(--c2); }
+  #reader p.li { padding-left: 18px; position: relative; } #reader p.li::before { content: "▸"; position: absolute; left: 0; color: var(--c); }
+  #reader blockquote { border-left: 2px solid var(--amber); margin: 10px 0; padding: 4px 12px; color: #ffe2b0; }
+  iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 1px solid rgba(63,230,255,.45); background: #0b1a22; }
+  #empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column;
+    font: 13px Consolas, monospace; letter-spacing: .3em; color: var(--c); opacity: .75; }
+  #empty .ring { width: 80px; height: 80px; border: 1px dashed var(--c); border-radius: 50%; margin-bottom: 18px;
+    animation: spin 8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+<div id="app">
+  <header>
+    <div class="grow"><div class="tag" id="tag">JARVIS // BRIEF</div><div class="name" id="name">Nothing open</div></div>
+    <div id="status"></div>
+  </header>
+  <main>
+    <div id="empty"><div class="ring"></div><span id="emptyText">STANDING BY</span></div>
+    <div class="scroll hidden" id="docWrap"><div id="doc" title="Click to edit"></div></div>
+    <textarea id="editor" class="hidden" spellcheck="true"></textarea>
+    <div class="scroll hidden" id="readerWrap"><div id="reader"></div></div>
+    <iframe id="pdf" class="hidden" title="PDF"></iframe>
+  </main>
+  <footer id="briefBar">
+    <button id="bEdit">Edit</button>
+    <button id="bWord">Save as Word</button>
+    <button id="bFolder">Show file</button>
+    <span class="grow"></span>
+    <span id="msg"></span>
+    <span class="hint">TYPE TO EDIT · OR ASK JARVIS: "MAKE SECTION 2 SHORTER"</span>
+  </footer>
+</div>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const pane = new URLSearchParams(location.search).get("pane") === "source" ? "source" : "brief";
+const editor = $("editor"), docEl = $("doc");
+let docVersion = -1, sourceVersion = -1, editing = false, dirty = false, saveTimer = null, lastBy = "";
+
+// ---------- a small Markdown renderer (headings, lists, bold, italics, code, quotes, tables) ----------
+function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+function inline(s) {
+  return esc(s).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>");
+}
+function md(text) {
+  const out = [], lines = text.split(/\r?\n/);
+  let list = null, para = [], section = 0;
+  const flush = () => { if (para.length) { out.push(`<p>${inline(para.join(" "))}</p>`); para = []; } };
+  const close = () => { if (list) { out.push(`</${list}>`); list = null; } };
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    let m;
+    if (!line.trim()) { flush(); close(); continue; }
+    if ((m = line.match(/^(#{1,4})\s+(.*)/))) {
+      flush(); close();
+      const level = m[1].length;
+      if (level === 2) { section++; out.push(`<h2><span class="num">${String(section).padStart(2, "0")}</span>${inline(m[2])}</h2>`); }
+      else out.push(`<h${level}>${inline(m[2])}</h${level}>`);
+    } else if ((m = line.match(/^\s*[-*+]\s+(.*)/)) || (m = line.match(/^\s*\d+[.)]\s+(.*)/))) {
+      flush();
+      const kind = /^\s*\d/.test(line) ? "ol" : "ul";
+      if (list !== kind) { close(); out.push(`<${kind}>`); list = kind; }
+      out.push(`<li>${inline(m[1])}</li>`);
+    } else if (/^\s*\|.*\|\s*$/.test(line)) {
+      flush(); close();
+      const rows = [];
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) { rows.push(lines[i]); i++; }
+      i--;
+      out.push("<table>" + rows.filter(r => !/^\s*\|[\s:|-]+\|\s*$/.test(r)).map((r, n) =>
+        "<tr>" + r.trim().slice(1, -1).split("|").map(c => n ? `<td>${inline(c.trim())}</td>` : `<th>${inline(c.trim())}</th>`).join("") + "</tr>").join("") + "</table>");
+    } else if ((m = line.match(/^>\s?(.*)/))) {
+      flush(); close(); out.push(`<blockquote>${inline(m[1])}</blockquote>`);
+    } else { close(); para.push(line.trim()); }
+  }
+  flush(); close();
+  return out.join("\n");
+}
+
+// ---------- brief: read view, click to edit, autosave ----------
+function show(id) {
+  for (const el of ["empty", "docWrap", "editor", "readerWrap", "pdf"]) $(el).classList.toggle("hidden", el !== id);
+}
+function renderDoc(text) { docEl.innerHTML = md(text || ""); }
+function startEdit() {
+  if (editing || docVersion < 1) return;
+  editing = true; editor.value = currentText; show("editor"); editor.focus();
+  $("bEdit").textContent = "Done"; $("bEdit").classList.add("on");
+}
+function stopEdit() {
+  if (!editing) return;
+  editing = false; saveNow(); renderDoc(currentText); show("docWrap");
+  $("bEdit").textContent = "Edit"; $("bEdit").classList.remove("on");
+}
+let currentText = "";
+editor.addEventListener("input", () => {
+  currentText = editor.value; dirty = true;
+  clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 600);
+  status("Typing…");
+});
+editor.addEventListener("keydown", e => { if (e.key === "Escape") stopEdit(); });
+docEl.addEventListener("click", startEdit);
+$("bEdit").onclick = () => editing ? stopEdit() : startEdit();
+
+async function saveNow() {
+  clearTimeout(saveTimer);
+  if (!dirty) return;
+  dirty = false;
+  try {
+    const r = await fetch("/doc", {method: "POST", body: JSON.stringify({text: currentText, base: docVersion})});
+    const j = await r.json();
+    if (j.ok) { docVersion = j.doc_version; lastBy = "you"; }
+    else { docVersion = -2; $("msg").textContent = "JARVIS JUST CHANGED IT: SHOWING HIS VERSION"; }
+  } catch (e) { dirty = true; saveTimer = setTimeout(saveNow, 1500); }
+}
+
+function status(text, busy) { const s = $("status"); s.textContent = text; s.classList.toggle("busy", !!busy); }
+
+async function pollBrief() {
+  try {
+    const st = await (await fetch("/state.json?pane=brief", {cache: "no-store"})).json();
+    $("name").textContent = st.name || "Nothing open";
+    document.title = `${st.name ? st.name + " · " : ""}Jarvis brief`;
+    if (st.doc_version !== docVersion && !dirty) {
+      const fromJarvis = st.by === "jarvis" && docVersion >= 0;
+      docVersion = st.doc_version; currentText = st.doc || ""; lastBy = st.by;
+      if (editing) {
+        const pos = editor.selectionStart; editor.value = currentText;
+        editor.selectionStart = editor.selectionEnd = Math.min(pos, currentText.length);
+      } else { renderDoc(currentText); }
+      if (currentText) { if (!editing) show("docWrap"); }
+      if (fromJarvis && currentText) { docEl.classList.remove("flash"); void docEl.offsetWidth; docEl.classList.add("flash"); }
+    }
+    if (!currentText && !editing) { show("empty"); $("emptyText").textContent = st.busy ? "COMPOSING BRIEF" : "STANDING BY"; }
+    if (st.busy) status(st.busy.toUpperCase() + "…", true);
+    else if (!dirty) status(st.saved_at ? `SAVED ${st.saved_at}${lastBy === "jarvis" ? " · BY JARVIS" : ""}` : "");
+  } catch (e) { status("RECONNECTING…", true); }
+  setTimeout(pollBrief, 800);
+}
+
+// ---------- source: Jarvis's reader for files and links that aren't on screen ----------
+async function pollSource() {
+  try {
+    const st = await (await fetch("/state.json?pane=source", {cache: "no-store"})).json();
+    if (st.version !== sourceVersion) {
+      sourceVersion = st.version;
+      $("name").textContent = st.name || "Nothing open";
+      document.title = `${st.name ? st.name + " · " : ""}Jarvis reader`;
+      status(st.kind === "pdf" ? "PDF" : st.kind === "web" ? (st.url ? new URL(st.url).hostname.toUpperCase() : "WEB") : "DOCUMENT");
+      if (st.kind === "pdf") { $("pdf").src = `/source.pdf?v=${st.version}#view=FitH`; show("pdf"); }
+      else if (st.kind) { $("reader").innerHTML = await (await fetch("/source.html", {cache: "no-store"})).text(); show("readerWrap"); }
+      else show("empty");
+    }
+  } catch (e) { status("RECONNECTING…", true); }
+  setTimeout(pollSource, 1000);
+}
+
+async function post(path) {
+  try {
+    const j = await (await fetch(path, {method: "POST"})).json();
+    $("msg").textContent = j.message || ""; setTimeout(() => { $("msg").textContent = ""; }, 5000);
+  } catch (e) { $("msg").textContent = "JARVIS ISN'T ANSWERING"; }
+}
+$("bWord").onclick = async () => { await saveNow(); post("/word"); };
+$("bFolder").onclick = () => post("/folder");
+addEventListener("beforeunload", () => { if (dirty) saveNow(); navigator.sendBeacon(`/bye?pane=${pane}`); });
+
+if (pane === "source") {
+  $("tag").textContent = "JARVIS // READER"; $("briefBar").classList.add("hidden"); pollSource();
+} else { pollBrief(); }
+</script>
+</body>
+</html>
