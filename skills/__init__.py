@@ -45,6 +45,7 @@ from skills import study  # noqa: E402
 from skills import clipboard_tools  # noqa: E402
 from skills import sticky  # noqa: E402
 from skills import calculator  # noqa: E402
+from skills import canvas  # noqa: E402
 
 MODULES = [
     briefing,
@@ -81,6 +82,7 @@ MODULES = [
     clipboard_tools,
     sticky,
     calculator,
+    canvas,
 ]
 # Counts conversation turns, so a tool can tell "he said yes" (a later turn)
 # from the model confirming its own draft in the same turn.
@@ -179,6 +181,9 @@ _MATHS = re.compile(r"\d\s*[-+*/x^]\s*\d|\b(times|divided|plus|minus|squared|sqr
 _CLIP = re.compile(r"\b(copied|clipboard|what i (?:just )?copied|translate|paste)\b", re.I)
 _STUDY = re.compile(r"\b(quiz|flash ?cards?|pomodoro|study|studying|revise|revision|focus (?:session|time|mode))\b", re.I)
 # "what are you working on", "is it done", "cancel that", "stop the task"
+_CANVAS = re.compile(r"\b(canvas|class files|course files|lecture (?:notes|slides|files)|my (?:classes|courses)|"
+                     r"due|assignments?|homework|deadlines?)\b", re.I)
+CANVAS_TOOLS = ("canvas_setup", "canvas_sign_in", "canvas_courses", "canvas_download", "canvas_due")
 _TASKS = re.compile(r"\b(working on|doing|busy|done yet|finished|progress|status|cancel|stop|abort|tasks?|jobs?)\b", re.I)
 
 
@@ -213,6 +218,8 @@ def pick_tools(text, limit=12, exclude=()):
         keep |= {"read_clipboard", "copy_to_clipboard"}
     if _STUDY.search(text or ""):
         keep |= {"quiz_me", "quiz_next", "pomodoro", "find_files"}
+    if _CANVAS.search(text or ""):
+        keep |= set(CANVAS_TOOLS)
     if _TASKS.search(text or "") and background.active():
         keep |= {"list_tasks", "cancel_task"}
     keep -= set(exclude)
@@ -237,6 +244,7 @@ FILLERS = {
     "check_email": "Checking your email, sir.",
     "daily_briefing": "Pulling that together, sir.",
     "show_diagram": "Drawing that up for you, sir.",
+    "canvas_download": "Fetching your class files from Canvas, sir.",
 }
 _local = threading.local()
 

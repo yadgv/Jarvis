@@ -145,6 +145,12 @@ CALENDAR_ICS_URLS = os.getenv(
 ICLOUD_USERNAME = os.getenv("ICLOUD_USERNAME")
 ICLOUD_APP_PASSWORD = os.getenv("ICLOUD_APP_PASSWORD")
 ICLOUD_CALENDAR = os.getenv("ICLOUD_CALENDAR", "")   # calendar name to add to; empty = the first one
+# Canvas (school courses): the school's Canvas address, e.g. learn.school.ca (or tell Jarvis
+# "my Canvas is ..."). Sign-in happens once in a browser window: "sign in to Canvas". The
+# calendar feed link (Canvas > Calendar > Calendar Feed) lets "what's due" work with no sign-in.
+CANVAS_URL = os.getenv("CANVAS_URL", "")
+CANVAS_CALENDAR_FEED = os.getenv("CANVAS_CALENDAR_FEED", "")
+SCHOOL_FOLDER = os.getenv("SCHOOL_FOLDER", "")   # empty = Documents\School
 # Reading Gmail (read-only): app password from myaccount.google.com/apppasswords. Put in .env:
 # GMAIL_ADDRESS=you@gmail.com and GMAIL_APP_PASSWORD=abcd efgh ijkl mnop
 # Talk to Jarvis from your phone with a private Telegram bot (see telegram_bot.py):
