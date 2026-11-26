@@ -27,3 +27,14 @@ def test_facts(tmp_path, monkeypatch):
     assert memory.load_facts() == ["Ziad's sister is called Mona"]
     assert memory.remove_facts("mona").startswith("Removed 1")
     assert memory.load_facts() == []
+
+
+def test_junk_facts_are_refused_and_dropped(tmp_path, monkeypatch):
+    import config
+    from brain import memory
+    monkeypatch.setattr(config, "MEMORY_DIR", str(tmp_path))
+    assert memory.add_fact("Tuesday").startswith("Not saved")
+    assert memory.add_fact("He wants the assistant to remember Tuesday.").startswith("Not saved")
+    assert memory.add_fact("His thermo exam is on Tuesday") == "Saved."
+    memory._write("facts.json", ["Tuesday", "He wants the assistant to remember Tuesday.", "He lives in Courtice"])
+    assert memory.load_facts() == ["He lives in Courtice"]     # old junk from before is left out

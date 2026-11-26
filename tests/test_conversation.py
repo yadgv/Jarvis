@@ -107,3 +107,16 @@ def test_old_saved_window_moves_to_new_default(monkeypatch, tmp_path):
     memory._write(settings.FILE, dict(memory._read(settings.FILE, {}), followup_seconds=5))
     settings.apply()                     # he chose 5 himself after that: kept
     assert config.FOLLOWUP_SECONDS == 5
+
+
+def test_finished_job_reported_inside_the_conversation():
+    ui_events.inbox.put(("text", "hello"))
+    ui_events.inbox.put(("task_result", "[A background job finished: x]"))
+    assert main.pending_task_result() == "[A background job finished: x]"
+    assert ui_events.inbox.get_nowait() == ("text", "hello")      # everything else stays queued
+    assert main.pending_task_result() is None
+
+
+def test_drawing_is_not_a_background_job():
+    from skills import background
+    assert "show_diagram" not in background.LONG

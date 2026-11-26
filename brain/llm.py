@@ -160,8 +160,10 @@ def _speakable(sentence: str) -> bool:
     return True
 
 
-def _sentences(pieces, said):
-    """Turns streamed text pieces into whole sentences as soon as each ends."""
+def _sentences(pieces, said, tail=None):
+    """Turns streamed text pieces into whole sentences as soon as each ends.
+    With a tail list, the unfinished bit left at the end goes there instead of
+    being said (the caller decides once it knows if a tool call followed)."""
     buf, muted = "", False
     pieces = _no_code(pieces)
     for delta in pieces:
@@ -184,8 +186,17 @@ def _sentences(pieces, said):
                 said.append(sentence)
                 yield sentence
     if buf.strip() and not muted and _speakable(buf.strip()):
+        if tail is not None:
+            tail.append(buf.strip())
+            return
         said.append(buf.strip())
         yield buf.strip()
+
+
+def fragment(text: str) -> bool:
+    """A scrap like "You" left before a tool call: not something to say."""
+    t = (text or "").strip()
+    return bool(t) and len(t.split()) < 4 and t[-1] not in ".!?"
 
 
 def _claude_turn(user_text, system, said, tools_used, exclude=(), history=None):
@@ -252,14 +263,23 @@ def _openai_turn(user_text, system, said, tools_used, exclude=(), history=None, 
                     yield value
                 else:
                     result["done"] = value
-        held = []
-        for sentence in _sentences(pieces(), said):
+        held, tail = [], []
+        for sentence in _sentences(pieces(), said, tail):
             if not tools_used and _CLAIM.search(sentence):
                 said.pop()          # "Saved and opened, sir" with no tool run yet: hold it
                 held.append(sentence)
                 continue
             yield sentence
         text, tool_calls, model = result["done"]
+        for bit in tail:
+            if tool_calls and fragment(bit):
+                print(f"[brain] not spoken (a scrap before a tool call): {bit}")
+                continue
+            if not tools_used and _CLAIM.search(bit):
+                held.append(bit)   # same rule as whole sentences above
+                continue
+            said.append(bit)
+            yield bit
         if held and not tool_calls:
             if not nudged:
                 # It said it did something without doing it: make it do it (or own up).
@@ -279,6 +299,12 @@ def _openai_turn(user_text, system, said, tools_used, exclude=(), history=None, 
             out = skills.run(name, backup.parse_args(call))
             tools_used.append(f"{name} -> {str(out)[:80]}")
             messages.append({"role": "tool", "tool_call_id": call["id"], "content": out})
+    if not said and tools_used:
+        # The tools ran but it said nothing after them: say what they reported.
+        out = tools_used[-1].split(" -> ", 1)[-1].strip()
+        line = out if out and len(out) < 90 and not out.startswith("[") else "Done, sir."
+        said.append(line)
+        yield line
     who = (target or {}).get("who") or "backup model"
     print(f"[brain] {who} ({model or '?'}) answered in {time.perf_counter() - t0:.1f}s")
 

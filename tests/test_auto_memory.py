@@ -47,3 +47,13 @@ def test_saves_in_background(monkeypatch):
                         lambda target, daemon, name: types.SimpleNamespace(start=target))
     auto_memory.run_in_background("I work every Saturday at the store", "Noted.", [])
     assert saved == ["He works Saturdays"]
+
+
+def test_only_personal_grounded_facts(monkeypatch):
+    monkeypatch.setattr(config, "AUTO_MEMORY", True)
+    assert not auto_memory.worth_checking("Can you show me how to wire a servo to a breadboard", [])
+    assert not auto_memory.worth_checking("[A background job you started earlier has finished: x]", [])
+    assert auto_memory.worth_checking("my sister Mona is visiting this weekend", [])
+    said = "I work every Saturday at the store"
+    assert auto_memory.grounded("He works Saturdays", said)
+    assert not auto_memory.grounded("He is located in Toronto", said)     # from the known facts, not this turn
