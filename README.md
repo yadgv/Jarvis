@@ -287,6 +287,14 @@ Jarvis can use tools (all free, no extra API keys):
 Skills live in `skills/`, one file each, written in a provider-neutral way so another LLM
 provider can use them too (`skills.openai_tools()` gives the OpenAI/Groq format).
 
+## Study mode
+
+"Quiz me on my thermo notes" makes questions from that file (free models) and asks them one at a time, then
+gives your score; the ones you missed are saved for "quiz me on the ones I got wrong". "Start a Pomodoro" or
+"study for two hours" runs 25-minute focus blocks with 5-minute breaks, announced aloud, and if YouTube,
+Instagram, TikTok, Reddit, Netflix or Twitch comes up during focus time he nudges you back to work.
+"How long left?" and "stop the Pomodoro" work too.
+
 ## Several things at once
 
 Long jobs (using the screen, carrying out a file sort, 3D parts, documents, whiteboard drawings, "what's the
