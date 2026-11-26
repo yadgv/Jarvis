@@ -25,12 +25,26 @@ LIST = b"""<?xml version="1.0"?><multistatus xmlns="DAV:" xmlns:C="urn:ietf:para
 </multistatus>"""
 
 
+EMPTY = b'<?xml version="1.0"?><multistatus xmlns="DAV:"></multistatus>'
+REPORTS = {}
+
+
+def _report(summary, day):
+    ics = ("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//t//EN\r\nBEGIN:VEVENT\r\nUID:" + summary
+           + f"\r\nDTSTART:{day:%Y%m%d}T100000\r\nDTEND:{day:%Y%m%d}T110000\r\nSUMMARY:" + summary
+           + "\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n")
+    return ('<?xml version="1.0"?><multistatus xmlns="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">'
+            '<response><href>/x.ics</href><propstat><prop><C:calendar-data>' + ics
+            + '</C:calendar-data></prop></propstat></response></multistatus>').encode()
+
+
 @pytest.fixture
 def icloud(monkeypatch):
     monkeypatch.setattr(config, "ICLOUD_USERNAME", "z@icloud.com")
     monkeypatch.setattr(config, "ICLOUD_APP_PASSWORD", "abcd-efgh-ijkl-mnop")
     monkeypatch.setattr(config, "ICLOUD_CALENDAR", "work")
     monkeypatch.setattr(ic, "_calendar_url", None)
+    monkeypatch.setattr(ic, "_calendars", None)
     calls = []
     answers = {"https://caldav.icloud.com/": PRINCIPAL,
                "https://caldav.icloud.com/123/principal/": HOME,
@@ -39,6 +53,9 @@ def icloud(monkeypatch):
     def request(method, url, **kw):
         calls.append((method, url, kw))
         assert kw["auth"] == ("z@icloud.com", "abcd-efgh-ijkl-mnop")
+        if method == "REPORT":
+            return NS(status_code=207, content=REPORTS.get(url.rstrip("/").rsplit("/", 1)[-1], EMPTY),
+                      raise_for_status=lambda: None)
         return NS(status_code=207, content=answers[url], raise_for_status=lambda: None)
 
     def put(url, **kw):
@@ -86,3 +103,23 @@ def test_bad_password(icloud, monkeypatch):
 
 def test_bad_time(icloud):
     assert "YYYY-MM-DD" in ic.add_event({"title": "x", "start": "next tuesday"})
+
+
+def test_add_to_a_named_calendar(icloud):
+    out = ic.add_event({"title": "Lab", "start": "2026-12-03T10:00", "calendar": "home"})
+    assert "'Home' calendar" in out and "/calendars/home/" in icloud[-1][1]
+    assert "No calendar called 'Chemistry'" in ic.add_event(
+        {"title": "x", "start": "2026-12-03", "calendar": "Chemistry"})
+
+
+def test_reading_sees_every_calendar(icloud, monkeypatch):
+    from datetime import date
+    import skills
+    from skills import calendar_events
+    today = date.today()
+    REPORTS.update(home=_report("Gym", today), work=_report("Shift", today))
+    monkeypatch.setattr(config, "CALENDAR_ICS_URLS", [])
+    calendar_events._cache.clear()
+    out = skills.run("get_calendar_events", {"day": "today"})
+    assert "Gym (Home)" in out and "Shift (Work)" in out
+    REPORTS.clear()
