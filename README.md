@@ -62,6 +62,25 @@ Wake word → Whisper → Claude → Piper voice. Runs on Windows now and on a R
    ```
    Say **"Hey Jarvis"** (or just **"Jarvis"**, then a short pause), then talk. Say **"Goodbye Jarvis"** to quit.
 
+## Without internet
+
+If the wifi is down, Jarvis notices within a second and keeps doing the basics.
+The wake word, speech-to-text and the backup voice (Kokoro or Piper) already run
+on the PC, so the whole loop works offline:
+
+- **No model needed:** the time and date, timers ("set a 10 minute timer for
+  pasta"), alarms ("wake me up at 7"), reminders ("remind me to call Mona in 20
+  minutes"), volume ("turn it up", "volume to 30", "mute"), play/pause/next,
+  opening apps ("open Spotify") and locking the PC.
+- **With Ollama installed** (`ollama pull llama3.2:3b`): anything else that works
+  offline, like cancelling a timer, opening a settings page, dark mode, or
+  chatting, goes to that local model (`OFFLINE_MODEL` in config.py).
+- Anything that needs the internet (weather, news, search, email, calendar,
+  looking at the screen) gets a short "that needs the internet" instead of a long wait.
+
+Set `OFFLINE_MODE = True` in config.py to try it without unplugging anything.
+Start Jarvis online once first so the speech and wake word models are downloaded.
+
 ## Desktop widget
 ```
 python gui.py          (or: python main.py --gui)

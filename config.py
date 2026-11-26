@@ -60,6 +60,12 @@ OPENROUTER_MODELS = [
 # (ollama.com/download), run `ollama pull llama3.2:3b`, then set it here.
 # Anything harder, or anything it isn't sure of, still goes to Claude.
 LOCAL_MODEL = ""                         # e.g. "llama3.2:3b" (or "qwen2.5:3b")
+# With no internet, simple commands (time, timers, alarms, reminders, volume,
+# media keys, opening apps) work with no model at all; anything else goes to
+# this Ollama model with only the offline tools. Uses LOCAL_MODEL if that's set.
+# Setup: install Ollama (ollama.com/download), then `ollama pull llama3.2:3b`.
+OFFLINE_MODEL = "llama3.2:3b"
+OFFLINE_MODE = False                     # True = act as if the internet is down (for testing)
 BACKUP_MINUTES = 15                      # after Claude fails, use the backup this long before retrying Claude
 MAX_HISTORY_TURNS = 10                   # conversation memory (pairs)
 MEMORY_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "memory")

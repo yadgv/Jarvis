@@ -7,7 +7,7 @@ from datetime import datetime
 import anthropic
 
 import config
-from brain import auto_memory, backup, local_llm, memory, providers, settings
+from brain import auto_memory, backup, local_llm, memory, network, offline, providers, settings
 import skills
 
 # The SDK's defaults (10 minute timeout, 2 retries) let one stuck request
@@ -201,7 +201,7 @@ def _chain(asked, system, said, tools_used, exclude=(), history=None):
                                             exclude, history, target)
                     return
                 except Exception as e:
-                    if said:
+                    if said or network.is_network_error(e):
                         raise
                     providers.rest(target["model"], e)
                     errors.append(e)
@@ -211,7 +211,7 @@ def _chain(asked, system, said, tools_used, exclude=(), history=None):
                                         exclude, history)
                 return
             except Exception as e:
-                if said:
+                if said or network.is_network_error(e):
                     raise
                 providers.rest("openrouter", e)
                 errors.append(e)
@@ -239,6 +239,8 @@ def _chain(asked, system, said, tools_used, exclude=(), history=None):
 def complete(system: str, user: str, max_tokens: int = 400, small: bool = True) -> str:
     """A one-off text answer with no tools (fact extraction, rewriting text),
     from the cheapest brain that works. Raises if none does."""
+    if not network.online():
+        raise RuntimeError("offline: no internet for the cloud models")
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     errors = []
     for name in providers.order():
@@ -262,6 +264,33 @@ def complete(system: str, user: str, max_tokens: int = 400, small: bool = True) 
     if errors:
         raise errors[-1]
     raise RuntimeError("No brain available")
+
+
+def _offline_turn(user_text, asked, said, tools_used, exclude=(), followup=False):
+    """No internet: simple commands are done right here (brain/offline.py),
+    the rest goes to the local Ollama model with only the offline tools."""
+    if not followup:
+        found = offline.quick(user_text)
+        if found:
+            reply, tool = found
+            if tool:
+                tools_used.append(f"{tool} -> {reply[:80]}")
+            print(f"[offline] handled without a model: {user_text}")
+            said.append(reply)
+            yield reply
+            return
+    if offline.model_ready():
+        try:
+            yield from _openai_turn(asked, offline.system_prompt(), said, tools_used,
+                                    offline.exclude(exclude), target=offline.target())
+            return
+        except Exception as e:
+            if said:
+                raise
+            offline.model_failed(e)
+    reply = IGNORE if followup else offline.BASICS
+    said.append(reply)
+    yield reply
 
 
 class _HandOff(Exception):
@@ -367,6 +396,9 @@ def _think_stream(user_text: str, followup: bool = False, note: str = "", exclud
 
     def turn():
         global _claude_off_until
+        if not network.online():
+            yield from _offline_turn(user_text, asked, said, tools_used, exclude, followup)
+            return
         if local_llm.should_use(user_text, followup, note):
             try:
                 yield from _local_turn(user_text, said)
@@ -377,7 +409,14 @@ def _think_stream(user_text: str, followup: bool = False, note: str = "", exclud
                 if said:
                     raise
                 local_llm.failed(e)
-        yield from _chain(asked, system, said, tools_used, exclude)
+        try:
+            yield from _chain(asked, system, said, tools_used, exclude)
+        except Exception as e:
+            # The wifi dropped mid-way: do what can be done offline instead.
+            if said or not network.is_network_error(e):
+                raise
+            network.mark_offline()
+            yield from _offline_turn(user_text, asked, said, tools_used, exclude, followup)
 
     gen = turn()
     try:

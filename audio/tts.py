@@ -17,7 +17,7 @@ import requests
 import sounddevice as sd
 
 import config
-from brain import settings
+from brain import network, settings
 
 # Only one thing talks at a time (e.g. a timer going off while Jarvis is mid-sentence).
 _speaking = threading.RLock()
@@ -277,7 +277,7 @@ def synthesize(text: str):
     """Start turning text into audio without playing it. Returns something
     play() understands, or None if only the system voice is left (it can't
     render to audio)."""
-    if _fish_ok:
+    if _fish_ok and network.online():
         return StreamClip(text)
     return _synth_local(text)
 

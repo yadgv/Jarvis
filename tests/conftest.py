@@ -51,3 +51,7 @@ def no_network(monkeypatch):
     monkeypatch.setattr(requests, "get", blocked)
     monkeypatch.setattr(requests, "post", blocked)
     monkeypatch.setattr(requests.Session, "request", blocked)
+    # The internet counts as up unless a test says otherwise (brain/network.py).
+    from brain import network
+    monkeypatch.setattr(network, "_check", lambda: True)
+    monkeypatch.setattr(network, "_state", {"online": None, "until": 0.0})

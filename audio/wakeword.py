@@ -13,7 +13,10 @@ from openwakeword.model import Model
 import config
 from audio.recorder import CHUNK, is_speech
 
-openwakeword.utils.download_models()  # one-time download (also the voice detector), cached after
+try:
+    openwakeword.utils.download_models()  # one-time download (also the voice detector), cached after
+except Exception as e:  # no internet: the copies already downloaded are used
+    print(f"[wake] couldn't check for wake word models ({type(e).__name__}); using the ones on disk")
 
 
 def _options():
