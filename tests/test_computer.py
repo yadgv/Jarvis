@@ -74,6 +74,7 @@ def env(monkeypatch):
         def create(**kw):
             sent.append([dict(m) if isinstance(m, dict) else m for m in kw["messages"]])
             assert kw["tools"] == [{"type": "computer_toolset_20260801"}]
+            assert kw["thinking"]["block_binding"]["prefix_mismatch_behavior"] == "drop_block"
             return next(it)
         monkeypatch.setattr(computer.screen, "create", create)
     return gui, sent, script

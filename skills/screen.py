@@ -59,14 +59,15 @@ def _ask(image_b64: str, question: str):
     return create(**request)
 
 
-def create(**request):
+def create(extra_betas=(), **request):
     """messages.create with the server-side refusal fallback turned on."""
     client = _get_client()
     try:
         # If the model declines, the API retries on a fallback model in the same call.
-        return client.beta.messages.create(betas=["server-side-fallback-2026-07-01"], fallbacks="default",
-                                           **request)
+        return client.beta.messages.create(betas=["server-side-fallback-2026-07-01", *extra_betas],
+                                           fallbacks="default", **request)
     except TypeError:  # older anthropic package without these options
+        request.pop("thinking", None)
         return client.messages.create(**request)
 
 
