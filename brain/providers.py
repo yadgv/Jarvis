@@ -52,9 +52,10 @@ def groq_available() -> bool:
     return bool(getattr(config, "GROQ_API_KEY", None))
 
 
-def groq_targets(small=False):
-    """Groq models to try in order, skipping rested ones."""
-    models = list(getattr(config, "GROQ_SMALL_MODELS", []) if small else []) + list(config.GROQ_MODELS)
+def groq_targets(small=False, models=None):
+    """Groq models to try in order, skipping rested ones. models: try these first."""
+    models = (list(models or []) + list(getattr(config, "GROQ_SMALL_MODELS", []) if small else [])
+              + list(config.GROQ_MODELS))
     seen, out = set(), []
     for m in models:
         if m in seen or resting(m):

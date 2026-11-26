@@ -44,6 +44,9 @@ GROQ_MODELS = [
     "openai/gpt-oss-20b",
 ]
 GROQ_SMALL_MODELS = ["openai/gpt-oss-20b"]  # tried first for small background jobs (saving facts)
+# Drawing diagrams on the whiteboard ("show me how to wire a servo"): a big
+# model writes the picture, so these are tried first (then the usual order).
+WHITEBOARD_MODELS = ["llama-3.3-70b-versatile", "openai/gpt-oss-120b"]
 GROQ_HISTORY_TURNS = 4                   # free models have small token limits: send the last few turns only
 LLM_MODEL = "claude-haiku-5-5"          # Claude, when it's needed (fast + cheap for voice)
 # Backup brain for when Claude credits run out: free models on OpenRouter

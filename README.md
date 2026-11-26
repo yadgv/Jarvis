@@ -267,6 +267,17 @@ Jarvis can use tools (all free, no extra API keys):
 Skills live in `skills/`, one file each, written in a provider-neutral way so another LLM
 provider can use them too (`skills.openai_tools()` gives the OpenAI/Groq format).
 
+## Whiteboard (diagrams he explains step by step)
+
+Ask "show me how to wire a servo to my Arduino", "draw a circuit for an LED with
+a button" or "draw a flowchart of my morning routine". A whiteboard window opens
+(an Edge/Chrome app window, or your browser) with a labelled drawing, and each
+step lights up its wires while he explains it. Say "next step", "go back",
+"step 3" or "show it all" (or click / use the arrow keys), and ask for changes
+like "use pin 6 instead" to redraw it. The drawing is made by a big free model
+on Groq (`WHITEBOARD_MODELS` in config.py), so it costs nothing; Claude only if
+those fail. It needs the internet. The page only runs on your PC (127.0.0.1).
+
 ## Plug in MCP servers (more tools without new code)
 Any [MCP server](https://modelcontextprotocol.io/examples) can give Jarvis new tools: files, a browser,
 Home Assistant, Spotify, GitHub and many more.
