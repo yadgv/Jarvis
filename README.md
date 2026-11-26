@@ -470,6 +470,9 @@ for your voice. `PHONE_ALERTS = False` in config.py turns this off.
 message **@CallMeBot_txtbot** in Telegram once to authorize it, then add your Telegram username to `.env`:
 `CALLMEBOT_USER=@yourname`. Jarvis then calls you (a spoken message) before an Approve/Deny question.
 
+**Test it:** say "test my phone alerts". You get an Approve/Deny message (and a call, if set up), and the
+startup log shows a `[phone]` line saying whether the bot and calls are set up.
+
 ## Raspberry Pi
 Use a Pi 4 (4 GB) or Pi 5 with Raspberry Pi OS 64-bit, a USB mic and a speaker.
 ```
