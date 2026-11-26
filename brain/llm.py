@@ -341,8 +341,8 @@ def _chain(asked, system, said, tools_used, exclude=(), history=None, can_ask=Tr
     if paid.straight_to_claude() and "claude" in order and _use_claude():
         order = ["claude"]   # he just said yes to Claude: the free ones already failed at this
     for name in order:
-        if name == "groq":
-            for target in providers.groq_targets():
+        if name in providers.FREE:
+            for target in providers.free_targets(name):
                 try:
                     yield from _openai_turn(_already_done(asked, tools_used), system, said, tools_used,
                                             exclude, history, target)
@@ -350,7 +350,7 @@ def _chain(asked, system, said, tools_used, exclude=(), history=None, can_ask=Tr
                 except Exception as e:
                     if said or network.is_network_error(e):
                         raise
-                    providers.rest(target["model"], e)
+                    providers.rest(target.get("rest_key") or target["model"], e)
                     errors.append(e)
         elif name == "openrouter":
             try:
@@ -423,8 +423,9 @@ def complete(system: str, user: str, max_tokens: int = 400, small: bool = True, 
 
     for name in providers.order():
         targets = []
-        if name == "groq":
-            targets = [dict(t, tools=False, max_tokens=max_tokens) for t in providers.groq_targets(small=small, models=models)]
+        if name in providers.FREE:
+            targets = [dict(t, tools=False, max_tokens=max_tokens)
+                       for t in providers.free_targets(name, small=small, models=models if name == "groq" else None)]
         elif name == "openrouter":
             targets = [dict(backup.openrouter_target(), tools=False, max_tokens=max_tokens)]
         for target in targets:
@@ -434,7 +435,7 @@ def complete(system: str, user: str, max_tokens: int = 400, small: bool = True, 
                 if out is not None:
                     return out
             except Exception as e:
-                providers.rest(target["model"] if name == "groq" else "openrouter", e)
+                providers.rest(target.get("rest_key") or (target["model"] if name == "groq" else "openrouter"), e)
                 errors.append(e)
         if name == "claude" and _use_claude():
             if not paid.allowed():

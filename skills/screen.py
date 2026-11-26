@@ -85,6 +85,15 @@ def look_at_screen(a):
     except Exception as e:
         return f"Couldn't take a screenshot: {e}"
     try:
+        from brain import vision
+        free = vision.look(image, question, SYSTEM)
+    except Exception as e:
+        print(f"[screen] free vision failed: {e}")
+        free = None
+    if free:
+        print(f"[screen] answered for free in {time.perf_counter() - t0:.1f}s")
+        return free
+    try:
         response = _ask(image, question)
     except Exception as e:
         from brain import backup
@@ -103,7 +112,7 @@ SKILLS = [
     {
         "name": "look_at_screen",
         "description": (
-            "Take a screenshot and ask Claude (paid) about it: for pictures, videos, diagrams, layout or "
+            "Take a screenshot and ask a vision model about it (free Gemini if set up, else Claude, paid): for pictures, videos, diagrams, layout or "
             "anything visual that read_screen (free, text only) can't answer. Try read_screen first for text, "
             "pages, errors and documents. Read-only."
         ),

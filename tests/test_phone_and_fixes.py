@@ -317,3 +317,67 @@ def test_named_browser(monkeypatch):
     assert "Opened Brave" in q.open_website({"site": "brave browser"})
     out = q.open_website({"site": "brave", "search": "data breaches"})
     assert "in Brave" in out and "google" in opened[-1][1]
+
+
+def test_free_providers_only_with_keys(monkeypatch):
+    from brain import providers
+    for k in ("CEREBRAS_API_KEY", "GEMINI_API_KEY", "MISTRAL_API_KEY", "GITHUB_MODELS_TOKEN"):
+        monkeypatch.setattr(config, k, None, raising=False)
+    monkeypatch.setattr(config, "GROQ_API_KEY", "g")
+    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", None)
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", None)
+    assert providers.order() == ["groq"]
+    monkeypatch.setattr(config, "GEMINI_API_KEY", "gem")
+    monkeypatch.setattr(config, "CEREBRAS_API_KEY", "cer")
+    assert providers.order() == ["groq", "cerebras", "gemini"]
+    t = providers.free_targets("gemini")
+    assert t[0]["url"].startswith("https://generativelanguage.googleapis.com") and t[0]["drop_empty_params"]
+    assert t[0]["headers"]["Authorization"] == "Bearer gem" and t[0]["rest_key"] == "gemini:" + t[0]["model"]
+    providers._resting[t[0]["rest_key"]] = time.monotonic() + 60
+    assert providers.free_targets("gemini")[0]["model"] != t[0]["model"]
+    providers._resting.clear()
+
+
+def test_chain_falls_through_to_next_free_provider(monkeypatch):
+    from brain import backup, llm, providers
+    monkeypatch.setattr(config, "GROQ_API_KEY", "g")
+    monkeypatch.setattr(config, "CEREBRAS_API_KEY", "c")
+    for k in ("GEMINI_API_KEY", "MISTRAL_API_KEY", "GITHUB_MODELS_TOKEN", "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY"):
+        monkeypatch.setattr(config, k, None, raising=False)
+    providers._resting.clear()
+    tried = []
+
+    def fake_round(messages, exclude, target):
+        tried.append(target["who"])
+        if "Groq" in target["who"]:
+            raise backup.ProviderError("Rate limit reached: tokens per day", 429)
+        yield "text", "Hello, sir."
+        yield "done", ("Hello, sir.", [], target["model"])
+    monkeypatch.setattr(backup, "stream_round", fake_round)
+    said = []
+    out = list(llm._chain("hi", "sys", said, []))
+    assert out == ["Hello, sir."] and tried[-1].startswith("Cerebras")
+    providers._resting.clear()
+
+
+def test_gemini_drops_empty_parameters(monkeypatch):
+    from brain import backup
+    sent = {}
+
+    class R:
+        status_code = 200
+    monkeypatch.setattr(backup.requests, "post", lambda url, headers, json, stream, timeout: sent.update(json) or R())
+    backup._post([{"role": "user", "content": "hi"}], (), {"url": "u", "model": "m", "tools": True,
+                                                            "short_tools": True, "drop_empty_params": True})
+    empty = [t for t in sent["tools"] if "parameters" in t["function"] and not t["function"]["parameters"].get("properties")]
+    assert sent["tools"] and not empty
+
+
+def test_free_vision_before_claude(monkeypatch):
+    from brain import vision
+    from skills import screen
+    monkeypatch.setattr(screen, "ImageGrab", object())
+    monkeypatch.setattr(screen, "capture", lambda: "abc")
+    monkeypatch.setattr(vision, "look", lambda img, q, s: "A cat on a sofa.")
+    monkeypatch.setattr(screen, "_ask", lambda *a: (_ for _ in ()).throw(AssertionError("Claude was called")))
+    assert screen.look_at_screen({"question": "what's in this picture"}) == "A cat on a sofa."
