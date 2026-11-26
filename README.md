@@ -159,7 +159,7 @@ or switch off "Jarvis" in Task Manager > Startup apps.
   `memory/my_voice_verifier.pkl` to go back to anyone.
 - **Music turns down** while he listens and talks (Windows, apps in `DUCK_APPS`, needs `pip install pycaw`).
 - To test without the wake word, set `MODE = "enter"`.
-- After a reply he keeps listening for `FOLLOWUP_SECONDS` (5) so you can carry on without "Hey Jarvis". In that window he only answers things meant for him: "okay", "I understand", "bye" (without his name) or chatter to someone else end the conversation quietly, and he can't be shut down by it. Set `FOLLOWUP_SECONDS = 0` to always need the wake word.
+- Conversations: after "Hey Jarvis" he keeps listening, no wake word needed, until you're quiet for `FOLLOWUP_SECONDS` (12, or Settings > Keep listening) or you say you're done ("thanks", "that's all", "never mind", "bye"), and he signs off. "Okay" or "cool" just keep him listening, a mumble gets "Sorry, sir, I didn't catch that.", and chatter that clearly isn't for him (you talking to someone else) is ignored without ending the conversation; he can't be shut down by it. Requests can run up to 30 seconds. Set `FOLLOWUP_SECONDS = 0` to always need the wake word.
 
 ## Memory
 - **Third person in the room** (off by default; idea from isair/jarvis): set `ROOM_CONTEXT = True` and Jarvis

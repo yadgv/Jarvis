@@ -205,7 +205,8 @@ WAKE_CHIME = True                        # beep when Jarvis starts listening
 WAKE_DEBUG = False                       # print wake-word scores to help tuning
 BARGE_IN = True                          # say "Hey Jarvis" while he's talking to cut him off
 BARGE_IN_THRESHOLD = 0.6                 # stricter than WAKE_THRESHOLD (the mic hears his voice too)
-FOLLOWUP_SECONDS = 5                     # after a reply, listen this long without the wake word (0 = off)
+FOLLOWUP_SECONDS = 12                    # conversation: after each reply, keep listening without the wake word
+                                         # until he's quiet this long or says "thanks"/"that's all" (0 = off)
 WAKE_VAD_THRESHOLD = 0.5                 # wake only if a voice detector also hears speech (0 = off; cuts TV/music wakes)
 WAKE_NOISE_SUPPRESSION = ON_PI           # Speex noise suppression for the wake word (Linux only: pip install speexdsp-ns)
 # Your-voice check for "Hey Jarvis", made by running: python train_my_voice.py
@@ -233,8 +234,8 @@ SMART_TURN_MAX_SILENCE = 2.0
 SMART_TURN_MIN_SPEECH = 0.5                # seconds of speech before Smart Turn may end the turn
 SMART_TURN_MODEL_URL = "https://huggingface.co/pipecat-ai/smart-turn-v3/resolve/main/smart-turn-v3.2-cpu.onnx"
 SPEAKER_DROP = 0.35                      # sound quieter than this share of your voice is background (raise if chatter keeps him listening)
-MAX_RECORD_SECONDS = 10
-LISTEN_TIMEOUT = 4                       # give up if you don't start talking within this many seconds
+MAX_RECORD_SECONDS = 30
+LISTEN_TIMEOUT = 6                       # give up if you don't start talking within this many seconds
 AUTO_CALIBRATE = True                    # measure room noise at startup
 NOISE_MULTIPLIER = 3.0                   # speech must be this many times louder than room noise
 
