@@ -277,6 +277,8 @@ def _start_extras():
 
 def main():
     startup.mark("modules loaded")
+    from brain import settings as saved_settings
+    saved_settings.apply()  # choices from the orb's Settings window (mic, wake sensitivity, ...)
     timers.announce = say
     reminders.start()  # also reads out any that came due while he was off
     jobs.start()  # standing jobs and watches from memory/jobs.json

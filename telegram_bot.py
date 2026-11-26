@@ -181,6 +181,9 @@ def _loop():
     offset = None
     failures = 0
     while True:
+        if not getattr(config, "TELEGRAM_ON", True):  # turned off in Settings
+            time.sleep(5)
+            continue
         if _wait_for_internet():
             failures = 0
         try:
@@ -204,12 +207,19 @@ def _loop():
             time.sleep(min(60, 2 * failures))
 
 
+_thread = None
+
+
 def start():
-    """Run the bot in the background if a token is set."""
-    if not _token():
+    """Run the bot in the background if a token is set (and it's on in Settings)."""
+    global _thread
+    if not _token() or not getattr(config, "TELEGRAM_ON", True):
         return False
+    if _thread and _thread.is_alive():
+        return True
     if not _allowed():
         print("[telegram] bot on, but TELEGRAM_ALLOWED_IDS is empty: message the bot to get your ID")
-    threading.Thread(target=_loop, daemon=True, name="telegram").start()
+    _thread = threading.Thread(target=_loop, daemon=True, name="telegram")
+    _thread.start()
     print("[telegram] phone bot running")
     return True
