@@ -35,6 +35,8 @@ config.MODE = "enter"  # main.py then skips loading the wake-word model
 config.SMART_TURN = False  # tests that want it patch audio.smart_turn
 config.DUCK_APPS = []
 config.AUTO_MEMORY = False  # tests that want it turn it on
+config.ASK_BEFORE_PAID = False  # tests that want the "use Claude?" question turn it on
+config.BACKGROUND_TASKS = False  # tests that want background jobs turn them on
 config.OFFLINE_VOICE = "alan"  # Piper: no Kokoro during tests
 config.VOICE_DOWNLOADS = False  # and no voice downloads
 

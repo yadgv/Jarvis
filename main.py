@@ -303,6 +303,15 @@ def main():
                     kind = "talk"
                 else:
                     kind, typed = wait_for_trigger(stream)
+                if kind == "task_result":
+                    # A background job finished: tell him now, while it's quiet.
+                    stream.stop()
+                    ducking.duck()
+                    was_interrupted = respond(typed, None, stream)
+                    stream.start()
+                    need_wake = was_interrupted or config.FOLLOWUP_SECONDS <= 0
+                    already_woken = was_interrupted
+                    continue
                 room = room_context.start() if kind == "wake" else None
                 if kind != "text":
                     ducking.duck()  # music down while he listens and talks

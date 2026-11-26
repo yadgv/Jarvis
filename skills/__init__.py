@@ -40,6 +40,7 @@ from skills import files  # noqa: E402
 from skills import documents  # noqa: E402
 from skills import cad  # noqa: E402
 from skills import web_search  # noqa: E402
+from skills import background  # noqa: E402
 
 MODULES = [
     briefing,
@@ -71,6 +72,7 @@ MODULES = [
     documents,
     cad,
     personality,
+    background,
 ]
 # Counts conversation turns, so a tool can tell "he said yes" (a later turn)
 # from the model confirming its own draft in the same turn.
@@ -163,6 +165,10 @@ def mentions_board(text) -> bool:
     return bool(_BOARD.search(text or ""))
 
 
+# "what are you working on", "is it done", "cancel that", "stop the task"
+_TASKS = re.compile(r"\b(working on|doing|busy|done yet|finished|progress|status|cancel|stop|abort|tasks?|jobs?)\b", re.I)
+
+
 def pick_tools(text, limit=12, exclude=()):
     """Names of the tools that look relevant to what he said (plus CORE_TOOLS),
     so a model with a small token budget isn't sent all of them. Scores each
@@ -188,6 +194,8 @@ def pick_tools(text, limit=12, exclude=()):
         keep |= set(CAD_TOOLS)
     if _DOCS.search(text or ""):
         keep |= set(DOC_TOOLS) | {"find_files", "read_file"}
+    if _TASKS.search(text or "") and background.active():
+        keep |= {"list_tasks", "cancel_task"}
     keep -= set(exclude)
     return keep | {n for n in CORE_TOOLS if n in _BY_NAME and n not in exclude}
 
@@ -294,25 +302,23 @@ def run(name: str, args: dict) -> str:
         from brain import network
         if not network.online():
             return f"The internet is down, so {name} can't work right now. Tell him briefly."
-    from brain import safety
     verdict, note = _guard().check(name, args)
     if verdict == "block":
         return note
-    done = threading.Event()
+    label = task_label(name, args)
     handler = getattr(_local, "handler", None)
+    if background.wants(name, args or {}, live=handler is not None):
+        # A long job: it runs on its own thread and he can talk to Jarvis meanwhile.
+        return background.start(name, args or {}, lambda a: _call(skill, name, a), label) + note
+    done = threading.Event()
     if handler:
         threading.Thread(target=_watch_progress, args=(name, done, handler), daemon=True).start()
-    label = task_label(name, args)
     ok = False
     if label:
         ui_events.task(label)
     try:
-        print(f"[tool] {name} {args}")
-        result = str(skill["run"](args or {}))
+        result = _call(skill, name, args)
         ok = True
-        print(f"[tool] -> {result[:150].replace(chr(10), ' | ')}")
-        if name not in TRUSTED_RESULTS:
-            result = safety.guard_content(result, name)
         return result + note
     except Exception as e:
         print(f"[tool] {name} failed: {e}")
@@ -321,3 +327,13 @@ def run(name: str, args: dict) -> str:
         done.set()
         if label:
             ui_events.task_done(ok)
+
+
+def _call(skill, name, args):
+    from brain import safety
+    print(f"[tool] {name} {args}")
+    result = str(skill["run"](args or {}))
+    print(f"[tool] -> {result[:150].replace(chr(10), ' | ')}")
+    if name not in TRUSTED_RESULTS:
+        result = safety.guard_content(result, name)
+    return result

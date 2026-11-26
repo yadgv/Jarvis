@@ -181,6 +181,7 @@ class SettingsWindow:
         self._row(card, "Room mode", self._check("room_mode", "Hears the room before \"Hey Jarvis\""))
 
     def _brain(self, card):
+        self._row(card, "Paid AI", self._check("ask_paid", "Ask before using Claude (costs money)"))
         self._row(card, "Offline mode", self._check("offline_mode", "Act as if the internet is down"))
         self._row(card, "Local model", self._check("local_model", "Easy questions on this PC (Ollama)"))
         self._row(card, "Music", self._check("ducking", "Turn music down while he talks"))

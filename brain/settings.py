@@ -43,7 +43,7 @@ def load() -> dict:
 
 # ---------- the Settings window (right-click the orb) ----------
 # Config values as config.py set them, so "on" can be put back after "off".
-_ATTRS = ("WAKE_THRESHOLD", "WAKE_CHIME", "FOLLOWUP_SECONDS", "OFFLINE_MODE", "LOCAL_MODEL", "DUCK_APPS",
+_ATTRS = ("ASK_BEFORE_PAID", "WAKE_THRESHOLD", "WAKE_CHIME", "FOLLOWUP_SECONDS", "OFFLINE_MODE", "LOCAL_MODEL", "DUCK_APPS",
           "ROOM_CONTEXT", "TELEGRAM_ON", "MORNING_BRIEFING", "TEMPERATURE_UNIT", "MIC_DEVICE")
 _ORIGINAL = {a: getattr(config, a, None) for a in _ATTRS}
 _ORIGINAL["DUCK_APPS"] = list(_ORIGINAL["DUCK_APPS"] or [])
@@ -82,7 +82,8 @@ def app_defaults() -> dict:
         "position": None,              # [right edge, top] after dragging; None = the corner
         "panel_seconds": 7,            # how long the text stays after he's done
         "whiteboard_on_top": True,
-        "reduce_motion": False,        # fewer animations (slower PCs, or if they're distracting)
+        "reduce_motion": False,
+        "ask_paid": bool(_orig("ASK_BEFORE_PAID", True)),   # ask before using Claude (it costs money)        # fewer animations (slower PCs, or if they're distracting)
         "wake_sensitivity": _sensitivity(_orig("WAKE_THRESHOLD", 0.5)),
         "wake_chime": bool(_orig("WAKE_CHIME", True)),
         "followup_seconds": int(_orig("FOLLOWUP_SECONDS", 5)),
@@ -184,7 +185,7 @@ def apply():
     if not isinstance(saved, dict):
         return
     s = app()
-    plain = {"wake_chime": "WAKE_CHIME", "followup_seconds": "FOLLOWUP_SECONDS", "offline_mode": "OFFLINE_MODE",
+    plain = {"ask_paid": "ASK_BEFORE_PAID", "wake_chime": "WAKE_CHIME", "followup_seconds": "FOLLOWUP_SECONDS", "offline_mode": "OFFLINE_MODE",
              "room_mode": "ROOM_CONTEXT", "telegram": "TELEGRAM_ON", "morning_briefing": "MORNING_BRIEFING",
              "temperature_unit": "TEMPERATURE_UNIT"}
     for key, attr in plain.items():

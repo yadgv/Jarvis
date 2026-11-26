@@ -7,7 +7,7 @@ from datetime import datetime
 import anthropic
 
 import config
-from brain import auto_memory, backup, local_llm, memory, network, offline, providers, settings
+from brain import auto_memory, backup, local_llm, memory, network, offline, paid, providers, settings
 import skills
 
 # The SDK's defaults (10 minute timeout, 2 retries) let one stuck request
@@ -296,13 +296,16 @@ def _already_done(asked, tools_used):
             f"{'; '.join(tools_used)}]\n" + asked)
 
 
-def _chain(asked, system, said, tools_used, exclude=(), history=None):
+def _chain(asked, system, said, tools_used, exclude=(), history=None, can_ask=True):
     """Answer with the cheapest brain that works (providers.order()): Groq's
     free models, then OpenRouter's, then Claude. One that fails before saying
     anything is rested and the next takes over."""
     global _claude_off_until
     errors = []
-    for name in providers.order():
+    order = providers.order()
+    if paid.straight_to_claude() and "claude" in order and _use_claude():
+        order = ["claude"]   # he just said yes to Claude: the free ones already failed at this
+    for name in order:
         if name == "groq":
             for target in providers.groq_targets():
                 try:
@@ -326,6 +329,16 @@ def _chain(asked, system, said, tools_used, exclude=(), history=None):
                 errors.append(e)
         elif name == "claude":
             if not _use_claude():
+                continue
+            if not paid.allowed():
+                # Claude costs money: ask him first (or, with nobody to ask, go without).
+                if can_ask and not said:
+                    print(f"[paid] free models failed ({errors[-1] if errors else 'no answer'}); asking before Claude")
+                    paid.asked(asked)
+                    said.append(paid.QUESTION)
+                    yield paid.QUESTION
+                    return
+                print("[paid] skipped Claude: he hasn't said yes to it")
                 continue
             try:
                 yield from _claude_turn(_already_done(asked, tools_used), system, said, tools_used,
@@ -389,6 +402,10 @@ def complete(system: str, user: str, max_tokens: int = 400, small: bool = True, 
                 providers.rest(target["model"] if name == "groq" else "openrouter", e)
                 errors.append(e)
         if name == "claude" and _use_claude():
+            if not paid.allowed():
+                paid.asked(None)
+                errors.append(paid.PaidNeeded("That job"))
+                continue
             try:
                 msg = _client.messages.create(model=config.LLM_MODEL, max_tokens=max(max_tokens, 1024),
                                               system=system, messages=[{"role": "user", "content": user}])
@@ -528,7 +545,8 @@ def _think_stream(user_text: str, followup: bool = False, note: str = "", exclud
         _turn_running, _pending_clip = True, None
     skills.new_turn()
     _trim()
-    asked = (FOLLOWUP_NOTE if followup else "") + note + user_text
+    request = paid.answer(user_text)   # a yes to "Shall I use Claude?" brings back what he asked
+    asked = (FOLLOWUP_NOTE if followup else "") + note + request
     # Overheard chatter must never be able to switch him off.
     exclude = tuple(exclude_tools) + (("shut_down",) if followup else ())
     # Build the system prompt once per turn: Claude's thinking blocks are tied
@@ -542,9 +560,9 @@ def _think_stream(user_text: str, followup: bool = False, note: str = "", exclud
         if not network.online():
             yield from _offline_turn(user_text, asked, said, tools_used, exclude, followup)
             return
-        if local_llm.should_use(user_text, followup, note):
+        if not paid.straight_to_claude() and local_llm.should_use(request, followup, note):
             try:
-                yield from _local_turn(user_text, said)
+                yield from _local_turn(request, said)
                 return
             except _HandOff:
                 print("[brain] local model passed it on")
@@ -593,7 +611,7 @@ def run_job(prompt: str, exclude_tools=()) -> str:
     said, used = [], []
     exclude = tuple(exclude_tools) + ("shut_down",)
     try:
-        for _ in _chain(prompt, system, said, used, exclude, history=[]):
+        for _ in _chain(prompt, system, said, used, exclude, history=[], can_ask=False):
             pass
     except Exception as e:
         if not said:
