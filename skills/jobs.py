@@ -25,6 +25,7 @@ SAFE_TOOLS = {
     "daily_briefing", "get_weather", "get_news", "web_search", "whats_the_buzz",
     "get_calendar_events", "check_email", "stock_price", "list_reminders", "list_timers",
     "claude_code_status",
+    "suggest_action",  # queues an action for his yes (skills/suggestions.py); does nothing itself
 }
 _lock = threading.Lock()
 _started = False
@@ -113,12 +114,16 @@ def cancel_job(a):
     return f"Cancelled {gone} job(s)." if gone else "No job matched."
 
 
+SUGGEST_NOTE = ("\nYou can't act yourself. If an action would clearly help (e.g. replying to an "
+                "email you found), call suggest_action and mention it; he'll approve it later.")
+
+
 def _prompt(job):
     if job.get("watch"):
         return (f"{job['task']}\nThis is a watch that runs repeatedly. If there is nothing new or the "
                 f"condition isn't met, reply with exactly {NOTHING} and nothing else. Otherwise report "
-                f"what's new in one or two sentences.")
-    return job["task"]
+                f"what's new in one or two sentences." + SUGGEST_NOTE)
+    return job["task"] + SUGGEST_NOTE
 
 
 def _deliver(job, text):

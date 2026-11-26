@@ -147,6 +147,10 @@ Jarvis can use tools (all free, no extra API keys):
   my unread email", "check every 15 minutes and tell me when Mom emails" (a watch only speaks up when something
   is new). "What jobs do I have?", "cancel the email job". Jobs can only look things up, never send or click.
   Saved in `memory/jobs.json`.
+- **Approve-later suggestions** (idea from [OpenJarvis](https://github.com/open-jarvis/OpenJarvis)):
+  a job can suggest an action ("reply to Mom that Sunday works") instead of doing it. Jarvis mentions it,
+  and it waits until you say "yes, do it" (or "no", or "what are you suggesting?"). Approved actions still
+  go through their usual read-back. Suggestions expire after a day.
 - **Dictation**: hold **F9** (`DICTATION_KEY`), talk, let go, and your words are typed into whatever app you're in.
   Speech is turned into text on your PC; nothing is sent anywhere.
 - **Edit by voice**: highlight text in any app and say "Jarvis, make this more formal" / "fix the grammar" /

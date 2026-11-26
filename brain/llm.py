@@ -57,7 +57,7 @@ def _system_prompt(about: str = "") -> str:
     facts = memory.relevant_facts(facts, f"{about} {recent}", config.FACTS_IN_PROMPT)
     if facts:
         prompt += "\nThings you know about the user:\n" + "\n".join(f"- {f}" for f in facts)
-    return prompt
+    return prompt + skills.suggestions.prompt_lines()
 
 
 def _trim():
