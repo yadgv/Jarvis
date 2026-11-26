@@ -52,6 +52,7 @@ from skills import viewer3d  # noqa: E402
 from skills import workspace  # noqa: E402
 from skills import sight  # noqa: E402
 from skills import browser_bridge  # noqa: E402,F401
+from skills import phone  # noqa: E402
 
 MODULES = [
     briefing,
@@ -94,6 +95,7 @@ MODULES = [
     calculator,
     canvas,
     recap,
+    phone,
 ]
 # Counts conversation turns, so a tool can tell "he said yes" (a later turn)
 # from the model confirming its own draft in the same turn.
@@ -239,6 +241,8 @@ def pick_tools(text, limit=12, exclude=()):
         keep |= {"quiz_me", "quiz_next", "pomodoro", "find_files"}
     if _CANVAS.search(text or ""):
         keep |= set(CANVAS_TOOLS)
+    if re.search(r"\b(?:test|try)\b.*\b(?:phone|call|telegram|alerts?)\b", text or "", re.I):
+        keep.add("test_phone_alerts")
     if _SCREEN.search(text or "") or _BRIEF.search(text or ""):
         keep.add("read_screen")
     if _VISUAL.search(text or ""):

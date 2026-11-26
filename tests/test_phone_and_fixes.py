@@ -142,3 +142,29 @@ def test_his_own_voice_isnt_logged_as_a_wake_word(monkeypatch, capsys):
     assert ww._heard_name(np.zeros(100, np.int16), quiet=True) is False
     assert "short word heard" not in capsys.readouterr().out
     sys.modules.pop("audio.wakeword", None)
+
+
+def test_phone_test_command_routes_and_runs(monkeypatch):
+    import skills
+    from skills import phone
+    import telegram_bot
+    assert "test_phone_alerts" in skills.pick_tools("test my phone alerts")
+    assert "test_phone_alerts" in skills.pick_tools("can you test the call feature")
+    monkeypatch.setattr(telegram_bot, "_token", lambda: "x")
+    monkeypatch.setattr(telegram_bot, "_allowed", lambda: {1})
+    monkeypatch.setattr(phone.config, "CALLMEBOT_USER", "", raising=False)
+    sent, asked = [], []
+    monkeypatch.setattr(telegram_bot, "ask", lambda q, wait=0: asked.append(q) or True)
+    monkeypatch.setattr(telegram_bot, "notify", lambda t: sent.append(t) or True)
+    phone._test_run(1)
+    assert asked and "Approve" in sent[0]
+    out = phone.test_phone()
+    assert "CALLMEBOT_USER isn't set" in out
+    assert "calls off" in phone.status()
+
+
+def test_phone_test_without_bot(monkeypatch):
+    from skills import phone
+    import telegram_bot
+    monkeypatch.setattr(telegram_bot, "_token", lambda: "")
+    assert "isn't set up" in phone.test_phone()
