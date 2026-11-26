@@ -55,7 +55,8 @@ SYSTEM = (
 _JSON = re.compile(r"\{.*\}", re.DOTALL)
 
 # What's on the board now (also what the page polls).
-_board = {"version": 0, "title": "", "svg": "", "steps": [], "step": 0, "topic": "", "spec": None}
+_board = {"version": 0, "title": "", "svg": "", "steps": [], "step": 0, "topic": "", "spec": None,
+          "closed": False}
 _lock = threading.Lock()
 _server = None
 _opened = False
@@ -114,23 +115,26 @@ li.on{color:#1d2433;font-weight:700;background:#fff3bf;border-radius:8px;padding
 border-radius:10px;padding:10px;font-size:16px;cursor:pointer}button:hover{background:#1971c2}
 button.alt{background:#e9ecef;color:#1d2433}button.alt:hover{background:#dee2e6}
 g[id^="step-"]{transition:opacity .35s}
+#empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:22px;color:#adb5bd;pointer-events:none}
 g[id^="step-"].later{opacity:.08}g[id^="step-"].past{opacity:.45}
 g[id^="step-"].now .wire{stroke-width:9}
 g[id^="step-"].now{filter:drop-shadow(0 0 5px #ffd43b) drop-shadow(0 0 10px #fab005)}
 .hint{margin-top:16px;font-size:14px;color:#7b8494;line-height:1.4}
 </style></head>
 <body><div id="board"><div id="zoom"><button class="alt" id="zin">+</button><button class="alt" id="zout">&minus;</button>
-<button class="alt" id="fit" style="width:60px;font-size:15px">Fit</button></div></div>
+<button class="alt" id="fit" style="width:60px;font-size:15px">Fit</button></div><div id="empty">The whiteboard is clear.</div></div>
 <div id="side"><h1 id="title">Whiteboard</h1><ol id="steps"></ol>
 <div id="nav"><button class="alt" id="back">&#8592; Back</button><button class="alt" id="all">All</button><button id="next">Next &#8594;</button></div>
-<div class="hint">Say "next step", "go back" or "step 3".<br>Scroll to zoom, drag to move, Fit to see it all.</div></div>
+<div class="hint">Say "next step", "go back", "step 3" or "clear the whiteboard".<br>Scroll to zoom, drag to move, Fit to see it all.</div></div>
 <script src="/app.js"></script></body></html>"""
 
 APP_JS = """
-let version = -1, step = -1, svg = null, home = null, view = null;
+let version = -1, step = -1, svg = null, home = null, view = null, drawn = new Set(), queue = 0;
+const calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 async function poll() {
   try {
     const b = await (await fetch('/board.json', {cache: 'no-store'})).json();
+    if (b.closed) { window.close(); }
     if (b.version !== version) {
       version = b.version;
       document.title = b.title || 'Jarvis whiteboard';
@@ -142,6 +146,8 @@ async function poll() {
       board.insertBefore(svg, board.firstChild);
       home = (svg.getAttribute('viewBox') || '0 0 1000 700').split(/\\s+/).map(Number);
       view = home.slice(); setView();
+      document.getElementById('empty').style.display = b.svg ? 'none' : 'flex';
+      drawn = new Set(); queue = 0; sweepIn();
       const ol = document.getElementById('steps');
       ol.replaceChildren(...(b.steps || []).map((s, i) => {
         const li = document.createElement('li'); li.textContent = s;
@@ -151,6 +157,43 @@ async function poll() {
     if (b.step !== step) { step = b.step; show(step); }
   } catch (e) {}
   setTimeout(poll, 400);
+}
+// ---- drawing it smoothly: the parts sweep in from the top, then each
+// step's wires are drawn along their paths, one after another.
+function later(ms, fn) { if (calm) fn(); else setTimeout(fn, ms); }
+function sweepIn() {
+  const base = svg && svg.querySelector('#base');
+  svg && svg.querySelectorAll('g[id^="step-"]').forEach(g => { g.style.visibility = 'hidden'; });
+  if (!base || calm) return;
+  const items = Array.from(base.children), boxes = items.map(el => { try { return el.getBBox(); } catch (e) { return null; } });
+  const ys = boxes.filter(Boolean).map(b => b.y), top = Math.min(...ys), span = Math.max(1, Math.max(...ys) - top);
+  items.forEach((el, i) => {
+    el.style.opacity = 0; el.style.transition = 'opacity .45s ease';
+    const at = boxes[i] ? (boxes[i].y - top) / span * 900 : 0;
+    later(30 + at, () => { el.style.opacity = 1; });
+  });
+  queue = Date.now() + 1100;  // wires wait for the parts
+}
+function drawStep(g) {
+  if (!g || drawn.has(g.id)) return;
+  drawn.add(g.id);
+  const start = Math.max(0, queue - Date.now()), wires = g.querySelectorAll('path, polyline, line');
+  const rest = Array.from(g.children).filter(el => !el.matches('path, polyline, line'));
+  const dur = 750;
+  wires.forEach(p => {
+    let len = 0; try { len = p.getTotalLength(); } catch (e) {}
+    if (!len || calm) return;
+    p.style.transition = 'none'; p.style.strokeDasharray = len; p.style.strokeDashoffset = len;
+    later(start, () => {
+      p.getBoundingClientRect();
+      p.style.transition = 'stroke-dashoffset ' + dur + 'ms ease-in-out'; p.style.strokeDashoffset = 0;
+      later(dur + 50, () => { p.style.strokeDasharray = ''; p.style.strokeDashoffset = ''; });
+    });
+  });
+  rest.forEach(el => { el.style.opacity = calm ? 1 : 0; el.style.transition = 'opacity .35s'; });
+  g.style.visibility = 'visible';
+  later(start + dur * 0.8, () => rest.forEach(el => { el.style.opacity = 1; }));
+  queue = Date.now() + start + dur + 150;  // the next step's wires start after this one
 }
 function setView() { if (svg) svg.setAttribute('viewBox', view.join(' ')); }
 function zoom(f, cx, cy) {
@@ -175,7 +218,10 @@ document.getElementById('zin').onclick = () => zoom(1 / 1.25);
 document.getElementById('zout').onclick = () => zoom(1.25);
 document.getElementById('fit').onclick = () => { if (home) { view = home.slice(); setView(); } };
 function show(n) {
-  document.querySelectorAll('g[id^="step-"]').forEach(g => {
+  const groups = Array.from(document.querySelectorAll('g[id^="step-"]'));
+  groups.sort((a, b) => parseInt(a.id.slice(5)) - parseInt(b.id.slice(5)));
+  groups.forEach(g => { const k = parseInt(g.id.slice(5)); if (n === 0 || k <= n) drawStep(g); });
+  groups.forEach(g => {
     const k = parseInt(g.id.slice(5));
     g.classList.remove('now', 'past', 'later');
     if (n > 0) g.classList.add(k === n ? 'now' : (k < n ? 'past' : 'later'));
@@ -228,7 +274,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             self._send(APP_JS, "application/javascript")
         elif path == "/board.json":
             with _lock:
-                self._send(json.dumps({k: _board[k] for k in ("version", "title", "svg", "steps", "step")}),
+                self._send(json.dumps({k: _board.get(k) for k in ("version", "title", "svg", "steps", "step", "closed")}),
                            "application/json")
         elif path == "/step":
             m = re.search(r"(?:^|&)n=(-?\d+)", query)
@@ -262,6 +308,8 @@ def _app_browser():
 
 def open_window():
     global _opened
+    with _lock:
+        _board["closed"] = False
     if _opened:
         return
     _opened = True
@@ -301,10 +349,24 @@ def show_diagram(a):
     return _summary("Redrawn:" if change else "On the whiteboard:")
 
 
+def clear(close=False) -> str:
+    """Wipe the board; close=True also shuts its window."""
+    global _opened
+    with _lock:
+        _board.update(title="", svg="", steps=[], step=0, topic="", spec=None,
+                      version=_board["version"] + 1, closed=close)
+    if close:
+        _opened = False  # the next drawing opens a fresh window
+        return "Closed the whiteboard."
+    return "Cleared the whiteboard."
+
+
 def whiteboard_step(a):
+    action = (a.get("action") or "next").lower()
+    if action in ("clear", "close"):
+        return clear(close=action == "close")
     if not _board["svg"]:
         return "The whiteboard is empty. Use show_diagram first."
-    action = (a.get("action") or "next").lower()
     if action == "goto":
         n = set_step(a.get("step") or 1)
     elif action == "back":
@@ -341,11 +403,13 @@ SKILLS = [
     },
     {
         "name": "whiteboard_step",
-        "description": "Move through the whiteboard's steps: 'next step', 'go back', 'step 3', 'show it all'.",
+        "description": ("Control the whiteboard: move through its steps ('next step', 'go back', 'step 3', "
+                        "'show it all'), clear or erase it ('clear the whiteboard', 'wipe the board'), "
+                        "or close its window ('close the whiteboard')."),
         "parameters": {
             "type": "object",
             "properties": {
-                "action": {"type": "string", "enum": ["next", "back", "goto", "all"]},
+                "action": {"type": "string", "enum": ["next", "back", "goto", "all", "clear", "close"]},
                 "step": {"type": "integer", "description": "for goto"},
             },
             "required": ["action"],

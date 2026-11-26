@@ -194,6 +194,12 @@ def _command(t: str):
     if re.fullmatch(r"(?:previous|last|go back)(?: (?:a |the )?(?:song|track|one))?|play the (?:previous|last) (?:song|track)", t):
         return "media", {"action": "previous"}
 
+    board = r"(?:the |my |your )?(?:white ?board|board|drawing|diagram)"
+    if re.fullmatch(rf"(?:close|hide|get rid of|exit)(?: out of)? {board}", t):
+        return "whiteboard_step", {"action": "close"}
+    if re.fullmatch(rf"(?:clear|erase|wipe|clean|reset|empty)(?: off| out)? {board}(?: off| clean)?|"
+                    rf"(?:clear|erase|wipe) (?:it|that|everything)(?: off)?(?: (?:on|from) {board})?", t):
+        return "whiteboard_step", {"action": "clear"}
     if re.fullmatch(r"lock (?:the |my )?(?:screen|computer|pc|laptop)", t):
         return "lock_screen", {}
     m = re.fullmatch(r"(?:open|launch|start|run)(?: up)? (?:the |my )?([a-z0-9][a-z0-9 .+'-]{0,40}?)(?: app| application| program)?"
@@ -227,9 +233,9 @@ _ONLINE_ONLY = re.compile(
     r"buzz|trending|briefing|latest|"
     r"my screen|on (the|my) screen|look at (the|my|this)|claude code|"
     r"traffic|flights?|deliver(y|ies)|tracking|"
-    r"draw|diagram|whiteboard|wiring|wire up)\b")
+    r"draw|diagram|wiring|wire up)\b")
 _OFFLINE_ASKS = re.compile(r"^(remind|set|start|cancel|stop|remember|forget|open|launch|"
-                           r"turn|volume|play|pause|skip|lock|mute)\b")
+                           r"turn|volume|play|pause|skip|lock|mute|clear|close|erase|wipe|hide|next|go back)\b")
 
 
 def needs_internet(text: str) -> bool:
