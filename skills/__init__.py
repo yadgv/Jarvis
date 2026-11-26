@@ -44,6 +44,7 @@ from skills import background  # noqa: E402
 from skills import study  # noqa: E402
 from skills import clipboard_tools  # noqa: E402
 from skills import sticky  # noqa: E402
+from skills import calculator  # noqa: E402
 
 MODULES = [
     briefing,
@@ -79,6 +80,7 @@ MODULES = [
     study,
     clipboard_tools,
     sticky,
+    calculator,
 ]
 # Counts conversation turns, so a tool can tell "he said yes" (a later turn)
 # from the model confirming its own draft in the same turn.
@@ -171,6 +173,9 @@ def mentions_board(text) -> bool:
     return bool(_BOARD.search(text or ""))
 
 
+_MATHS = re.compile(r"\d\s*[-+*/x^]\s*\d|\b(times|divided|plus|minus|squared|sqrt|square root|percent|"
+                    r"convert|how many|calculate|work out|what'?s \d)\b|\d\s*(?:k?N|[kMG]?Pa|kWh?|psi|mm|cm|km|kg|"
+                    r"lbs?|ft|°|deg|kelvin|celsius|fahrenheit)\b", re.I)
 _CLIP = re.compile(r"\b(copied|clipboard|what i (?:just )?copied|translate|paste)\b", re.I)
 _STUDY = re.compile(r"\b(quiz|flash ?cards?|pomodoro|study|studying|revise|revision|focus (?:session|time|mode))\b", re.I)
 # "what are you working on", "is it done", "cancel that", "stop the task"
@@ -202,6 +207,8 @@ def pick_tools(text, limit=12, exclude=()):
         keep |= set(CAD_TOOLS)
     if _DOCS.search(text or ""):
         keep |= set(DOC_TOOLS) | {"find_files", "read_file"}
+    if _MATHS.search(text or ""):
+        keep.add("calculate")
     if _CLIP.search(text or ""):
         keep |= {"read_clipboard", "copy_to_clipboard"}
     if _STUDY.search(text or ""):

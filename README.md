@@ -308,6 +308,13 @@ instructions. Needs `pip install pyperclip` (already used by dictation).
 keyboard or mouse again after 5 minutes away (`AWAY_MINUTES`), or the next time he starts. "What notes do
 I have for later?" lists them.
 
+## Calculator with units
+
+Sums are worked out exactly, never guessed by the language model: "what's 3.2 kN times 45 mm in newton
+metres", "2.5 kW for 3 hours in kWh", "convert 350 kelvin to Fahrenheit", "1 atm in psi", "5 ft 3 in in cm",
+"1 over 2 pi times 10 kHz times 100 nF". Knows SI units with prefixes, imperial units, pi, g0, R, k_B and
+the usual functions.
+
 ## Several things at once
 
 Long jobs (using the screen, carrying out a file sort, 3D parts, documents, whiteboard drawings, "what's the
