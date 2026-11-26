@@ -22,3 +22,7 @@ pyperclip
 pynput
 send2trash  # file deletes go to the Recycle Bin (skills/files.py)
 pypdf  # reading PDFs (skills/files.py)
+python-docx  # Word, PowerPoint, Excel and PDF files (skills/documents.py)
+python-pptx
+openpyxl
+fpdf2

@@ -25,7 +25,7 @@ OFFLINE_TOOLS = (
     "open_app", "set_volume", "media", "lock_screen", "open_settings", "dark_mode",
     "open_folder", "set_brightness", "app_controls", "start_with_windows",
     "change_setting", "get_settings", "try_offline_voice", "whiteboard_step", "arduino", "shut_down",
-    "make_file", "find_files", "read_file", "open_file", "organize_folder", "file_action", "undo_files",
+    "make_file", "find_files", "read_file", "show_chart", "open_file", "organize_folder", "file_action", "undo_files",
 )
 
 NEEDS_INTERNET = "I'm offline at the moment, sir, so that one will have to wait for the internet."
