@@ -96,3 +96,28 @@ def test_long_poll_timeout_does_not_clash(monkeypatch):
     monkeypatch.setattr(telegram_bot._session, "post", post)
     assert telegram_bot._call("getUpdates", http_timeout=40, timeout=30) == []
     assert seen == {"json": {"timeout": 30}, "timeout": 40}
+
+
+def test_offline_pauses_quietly_and_resumes(monkeypatch, capsys):
+    from brain import network
+    checks = iter([False, False, False, True])
+    monkeypatch.setattr(network, "online", lambda: next(checks))
+    naps = []
+    assert telegram_bot._wait_for_internet(sleep=naps.append)
+    out = capsys.readouterr().out
+    assert out.count("[telegram]") == 2 and "back online" in out
+    assert naps == [telegram_bot.OFFLINE_CHECK_SECONDS] * 2
+
+
+def test_online_does_not_wait(monkeypatch):
+    assert not telegram_bot._wait_for_internet(sleep=lambda s: pytest.fail("waited"))
+
+
+def test_poll_timeout_while_offline_is_not_logged(monkeypatch):
+    import requests
+    from brain import network
+    monkeypatch.setattr(network, "_check", lambda: False)
+    assert telegram_bot._offline_error(requests.ReadTimeout("Read timed out. (read timeout=40)"))
+    monkeypatch.setattr(network, "_check", lambda: True)
+    assert not telegram_bot._offline_error(requests.ReadTimeout("Read timed out."))
+    assert not telegram_bot._offline_error(RuntimeError("Telegram error 409"))

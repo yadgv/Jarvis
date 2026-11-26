@@ -45,6 +45,15 @@ def online() -> bool:
         return _state["online"]
 
 
+def recheck() -> bool:
+    """Check right now, ignoring the remembered answer."""
+    if getattr(config, "OFFLINE_MODE", False):
+        return False
+    with _lock:
+        _set(_check())
+        return _state["online"]
+
+
 def mark_offline():
     """A request just failed to connect: treat the internet as down for a bit."""
     with _lock:

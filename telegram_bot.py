@@ -17,6 +17,9 @@ import time
 import requests
 
 import config
+from brain import network
+
+OFFLINE_CHECK_SECONDS = 15  # while the internet is down, how often to look again
 
 API = "https://api.telegram.org"
 PHONE_NOTE = ("[Sent from his phone by Telegram: he may not be at the PC. Your reply is shown as text, "
@@ -135,10 +138,31 @@ def handle(update):
     return reply
 
 
+def _wait_for_internet(sleep=time.sleep) -> bool:
+    """While the internet is down, wait quietly (one line in the log when it
+    goes and one when it's back). True if it had to wait."""
+    if network.online():
+        return False
+    print("[telegram] offline: pausing the phone bot until the internet is back")
+    while not network.online():
+        sleep(OFFLINE_CHECK_SECONDS)
+    print("[telegram] back online: phone bot running again")
+    return True
+
+
+def _offline_error(e: Exception) -> bool:
+    """A failed poll that was really the internet going down."""
+    if not (network.is_network_error(e) or isinstance(e, requests.Timeout)):
+        return False
+    return not network.recheck()
+
+
 def _loop():
     offset = None
     failures = 0
     while True:
+        if _wait_for_internet():
+            failures = 0
         try:
             params = {"timeout": 30, "allowed_updates": ["message"]}
             if offset is not None:
@@ -152,6 +176,8 @@ def _loop():
                 except Exception as e:
                     print(f"[telegram] couldn't answer a message: {e}")
         except Exception as e:
+            if _offline_error(e):
+                continue  # _wait_for_internet() takes it from here, quietly
             failures += 1
             if failures in (1, 10) or failures % 100 == 0:
                 print(f"[telegram] connection problem ({e}); retrying")
