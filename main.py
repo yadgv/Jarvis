@@ -69,10 +69,19 @@ ACKNOWLEDGEMENTS = {
 # Short replies that answer his question rather than end the conversation.
 ANSWERS = {"yes", "no", "yeah", "yep", "nope", "sure", "ok", "okay", "do it", "go ahead", "send it",
            "yes please", "no thanks", "yes send it", "please do", "alright", "fine", "right"}
+ANSWER_NOTE = "[He's answering the question you just asked him.]\n"
 last_ignored = False  # the last follow-up wasn't meant for Jarvis
 # His last spoken sentence was a question ("Shall I send it?"), so a bare
 # "yes" or "no" straight after is an answer, not the end of the chat.
 asked_question = False
+
+
+def followup_options(followup: bool) -> dict:
+    """How to think about something heard without the wake word. Straight
+    after he asked a question it's the answer, so it's never ignored."""
+    if followup and asked_question:
+        return {"note": ANSWER_NOTE}
+    return {"followup": True} if followup else {}
 
 
 def is_acknowledgement(said: str) -> bool:
@@ -310,7 +319,9 @@ def main():
 
             said = normalize(text)
             followup = not need_wake and typed is None
-            answering = followup and asked_question and said in ANSWERS
+            # Right after he asked a question, whatever is said next is the answer:
+            # never dropped as chatter or as the end of the conversation.
+            answering = followup and asked_question
             if followup and is_just_name(said):
                 # Just his name: he wants to say something, so chime and listen.
                 print("[follow-up: just my name, listening]")
@@ -334,7 +345,7 @@ def main():
                 stream.start()
                 continue
 
-            extra = {"followup": True} if followup else {}
+            extra = followup_options(followup)
             if not followup and briefing.is_first_hello(said):
                 extra["note"] = briefing.NOTE  # first hello of the day: give the morning briefing
                 briefing.mark_briefed()

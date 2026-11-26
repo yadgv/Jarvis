@@ -66,3 +66,13 @@ def test_question_marks_answer_window(monkeypatch):
 def test_just_his_name_means_listen(text, expected):
     """A bare "Jarvis" in the follow-up window starts listening, not ends the chat."""
     assert main.is_just_name(main.normalize(text)) is expected
+
+
+def test_answer_to_his_question_is_never_ignored(monkeypatch):
+    """"May I troubleshoot it?" -> "Just put the error in the logs" must get a reply."""
+    monkeypatch.setattr(main, "asked_question", True)
+    opts = main.followup_options(True)
+    assert "followup" not in opts and "answering the question" in opts["note"]
+    monkeypatch.setattr(main, "asked_question", False)
+    assert main.followup_options(True) == {"followup": True}
+    assert main.followup_options(False) == {}

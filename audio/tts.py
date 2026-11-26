@@ -335,10 +335,13 @@ class StreamClip:
         self.arrived = threading.Condition()
         self.failed = False           # nothing playable at all (use the system voice)
         self.created = time.perf_counter()
+        self.first_audio = None       # when the first sound arrived
         threading.Thread(target=self._fetch, daemon=True).start()
 
     def _add(self, samples):
         with self.arrived:
+            if self.first_audio is None:
+                self.first_audio = time.perf_counter()
             self.chunks.append(samples)
             self.arrived.notify_all()
 
@@ -439,13 +442,18 @@ def level() -> float:
 def _play_stream(clip: StreamClip) -> bool:
     """Play audio while it's still downloading. False if there was none."""
     global _stream_level
+    asked = time.perf_counter()
     if not clip.wait_start():
         return False
-    waited = time.perf_counter() - clip.created
+    now = time.perf_counter()
+    # The real pause he hears is from when this sentence's turn came (the last
+    # one finished) to its first sound. Time since the text was written also
+    # counts the earlier sentences playing, so it isn't a delay by itself.
+    pause, fetched = now - asked, (clip.first_audio or now) - clip.created
     block = clip.rate // 40   # 25 ms pieces, so the orb follows the voice
     with _speaking:
         _stop.clear()
-        print(f"[time] voice started {waited:.2f}s after the text was ready")
+        print(f"[time] voice started after a {pause:.2f}s pause (audio was ready {fetched:.2f}s after the text)")
         try:
             with sd.OutputStream(samplerate=clip.rate, channels=1, dtype="int16") as out:
                 i = 0
