@@ -157,6 +157,8 @@ when I log in", or run `python autostart.py on`. The widget then starts at every
 console window (its output goes to `jarvis.log`). To stop: untick it, run `python autostart.py off`,
 or switch off "Jarvis" in Task Manager > Startup apps.
 
+
+**Shortcuts (from any app):** `Ctrl+Alt+J` opens the text box so you can type to him straight away (press it again to put it away), and `Ctrl+Alt+H` shows or hides the whole text panel. Change them in Settings > Look (e.g. `ctrl+shift+k`, `f8`).
 ## Tuning
 - Jarvis tells speech from noise with a voice detector (webrtcvad), so quiet talking counts.
 - It says "no speech detected" when you did talk → lower `MIN_SPEECH_LEVEL` (the log shows how loud you were).

@@ -105,6 +105,12 @@ class SettingsWindow:
         return lambda parent: ttk.Combobox(parent, textvariable=var, values=list(options), state="readonly",
                                            width=width, style="J.TCombobox")
 
+    def _text_entry(self, key, width=18):
+        var = tk.StringVar(value=str(self.values.get(key, "")))
+        self.vars[key] = var
+        return lambda parent: tk.Entry(parent, textvariable=var, bg=BG, fg=FG, insertbackground=FG,
+                                       relief="flat", font=(SANS, 10), width=width)
+
     def _check(self, key, text):
         var = tk.BooleanVar(value=bool(self.values.get(key)))
         self.vars[key] = var
@@ -148,6 +154,8 @@ class SettingsWindow:
         self._row(card, "Text panel", self._check("show_panel", "Show what you said and his reply"))
         self._row(card, "Text box", self._check("show_text_box", "Show \"Click here to type\""))
         self._row(card, "Hide text after", self._slider("panel_seconds", 2, 30), note="seconds of quiet")
+        self._row(card, "Type shortcut", self._text_entry("type_key"), note="e.g. ctrl+alt+j: type to him from any app")
+        self._row(card, "Text shortcut", self._text_entry("panel_key"), note="e.g. ctrl+alt+h: show or hide the text")
         self._row(card, "Orb size", self._combo("orb_size", settings.ORB_SIZES))
         corners = ("keep where I put it",) + settings.CORNERS
         self.values["corner_choice"] = "keep where I put it" if self.values.get("position") else self.values["corner"]

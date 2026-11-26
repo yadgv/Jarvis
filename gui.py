@@ -11,6 +11,8 @@ other windows in the top-right corner of the screen.
 - Right-click the orb for: type a message, Settings (voice, colours, size,
   text box, wake word, microphone and more; saved for next time), move back
   to the corner, quit. Click the panel to open the text box; Esc closes it.
+- From any app: Ctrl+Alt+J types to him (again puts the box away), Ctrl+Alt+H
+  shows or hides the whole text panel. Change them in Settings > Look.
 
 The orb is silver while standing by, green while listening, amber while
 thinking and blue while speaking, and it moves with the voice.
@@ -230,6 +232,7 @@ class JarvisWidget:
         self.set_status("starting")
         self.set_expanded(False, force=True)
         ui_events.on(lambda kind, text: self.events.put((kind, text)))
+        self._start_hotkeys()
         root.after(self._frame_ms(), self.tick)
 
     # ----- settings -----
@@ -272,8 +275,17 @@ class JarvisWidget:
             self.orb_xy = (self.right - self.size, self.top)
             self.roamer.place(*self.orb_xy)
         self._rebuild()
+        self._start_hotkeys()
         if self.status in STATES:
             self.set_status(self.status)
+
+    def _start_hotkeys(self):
+        """Ctrl+Alt+J: type to him; Ctrl+Alt+H: show/hide the text (Settings > Look)."""
+        import config
+        import hotkeys
+        # pynput calls back on its own thread: hand the action to tick(), which runs on Tk's.
+        hotkeys.start(self.prefs, lambda action: self.events.put(("hotkey", action)),
+                      getattr(config, "DICTATION_KEY", ""))
 
     def open_settings(self):
         if self.settings_window and self.settings_window.alive():
@@ -643,6 +655,50 @@ class JarvisWidget:
         self.root.focus_force()
         self.entry.focus_set()
 
+    def on_hotkey(self, action):
+        if action == "type_key":
+            if self.typing and self.root.focus_get() == self.entry:
+                self.close_typing()          # pressed again: put it away
+            else:
+                self.open_typing()
+                self._take_keyboard()
+        elif action == "panel_key":
+            self.toggle_panel()
+
+    def toggle_panel(self):
+        """Show or hide the whole text panel (the Settings "Text panel" box, saved)."""
+        on = not self.prefs["show_panel"]
+        self._hide_panel_after_typing = False
+        if not on:
+            self.typing = False
+            self.root.focus_set()
+        self.prefs = {**self.prefs, "show_panel": on}
+        try:
+            from brain import settings
+            settings.save({"show_panel": on})
+        except Exception as e:
+            print(f"[gui] couldn't save the text panel setting: {e}")
+        self.last_activity = time.time() if on else 0
+        self.set_expanded(on, force=True)
+        if on:
+            self._show_text(quiet=True)
+        print(f"[gui] text panel {'shown' if on else 'hidden'}")
+
+    def _take_keyboard(self):
+        """A shortcut pressed in another app: Windows only gives the focus to the app in
+        front, so bring the orb's window forward properly before typing."""
+        if not IS_WINDOWS:
+            return
+        try:
+            import ctypes
+            from skills import whiteboard
+            user32 = ctypes.windll.user32
+            hwnd = user32.GetAncestor(self.root.winfo_id(), 2) or self.root.winfo_id()
+            whiteboard._raise(user32, hwnd, pin=True)
+            self.root.after(30, self.entry.focus_force)
+        except Exception as e:
+            print(f"[gui] couldn't take the keyboard: {e}")
+
     def close_typing(self):
         self.entry.delete(0, "end")
         self.typing = False
@@ -693,6 +749,8 @@ class JarvisWidget:
                     self.finish_task((text or {}).get("ok", True))
                 elif kind == "click":
                     self.ripple(*text)
+                elif kind == "hotkey":
+                    self.on_hotkey(text)
         except queue.Empty:
             pass
 
