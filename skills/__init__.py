@@ -35,6 +35,7 @@ from skills import weather  # noqa: E402
 from skills import whiteboard  # noqa: E402
 from skills import files  # noqa: E402
 from skills import documents  # noqa: E402
+from skills import cad  # noqa: E402
 from skills import web_search  # noqa: E402
 
 MODULES = [
@@ -65,6 +66,7 @@ MODULES = [
     whiteboard,
     files,
     documents,
+    cad,
     personality,
 ]
 # Counts conversation turns, so a tool can tell "he said yes" (a later turn)
@@ -138,6 +140,9 @@ _FILES = _re.compile(r"\b(files?|folders?|downloads|desktop|documents|pictures|o
 _DOCS = _re.compile(r"\b(word doc(?:ument)?|docx|power ?point|slides?|slide deck|presentation|excel|spreadsheet|"
                     r"pdf|graph|chart|plot)\b", _re.I)
 DOC_TOOLS = ("make_document", "show_chart")
+_CAD = _re.compile(r"\b(3d|three d|print(?:able)?|printer|openscad|scad|stl|cad|bracket|enclosure|phone stand|"
+                   r"mount|model (?:of|for)|taller|shorter|wider|thicker|thinner)\b", _re.I)
+CAD_TOOLS = ("make_3d_model",)
 FILE_TOOLS = ("make_file", "find_files", "read_file", "open_file", "organize_folder", "file_action", "undo_files")
 
 
@@ -168,6 +173,8 @@ def pick_tools(text, limit=12, exclude=()):
         keep |= set(BOARD_TOOLS)
     if mentions_files(text):
         keep |= set(FILE_TOOLS)
+    if _CAD.search(text or ""):
+        keep |= set(CAD_TOOLS)
     if _DOCS.search(text or ""):
         keep |= set(DOC_TOOLS) | {"find_files", "read_file"}
     keep -= set(exclude)
@@ -240,7 +247,7 @@ def _guard():
 NEEDS_INTERNET = {"get_weather", "get_news", "web_search", "whats_the_buzz", "get_calendar_events",
                   "check_email", "reply_email", "add_calendar_event", "delete_calendar_event", "stock_price", "look_at_screen",
                   "use_computer", "plan_claude_code_task", "start_claude_code_task", "edit_selected_text",
-                  "daily_briefing", "open_website", "show_diagram", "make_document"}
+                  "daily_briefing", "open_website", "show_diagram", "make_document", "make_3d_model"}
 
 
 def run(name: str, args: dict) -> str:

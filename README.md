@@ -292,6 +292,15 @@ functions ("graph y = x^2 - 4 and y = 2x + 1", with roots and crossings marked),
 **circuit schematics** with proper symbols ("a 9 V battery, a switch and two
 lamps in parallel"). The side panel lists the working, one line per step.
 
+## 3D printable parts
+
+Say "make me a phone stand", "a 40 mm box with a snap-on lid" or "a bracket for
+my SG90 servo". A big free model writes the part as an OpenSCAD file, with every
+size as a named variable at the top, saved in **Documents/Jarvis 3D**. If
+[OpenSCAD](https://openscad.org) (free) is installed he also exports the **STL**
+for your slicer, puts a preview picture on the whiteboard, and opens the file in
+OpenSCAD. "Make it 10 mm taller" changes the last part; "undo that" bins it.
+
 ## Your files
 
 Jarvis can work with the files in your own folders (Desktop, Documents,
