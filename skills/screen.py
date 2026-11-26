@@ -61,6 +61,10 @@ def _ask(image_b64: str, question: str):
 
 def create(extra_betas=(), **request):
     """messages.create with the server-side refusal fallback turned on."""
+    from brain import paid
+    if not paid.allowed():   # seeing the screen needs Claude, which costs money: he says yes first
+        paid.asked(None)
+        raise paid.PaidNeeded("Seeing or using the screen")
     client = _get_client()
     try:
         # If the model declines, the API retries on a fallback model in the same call.

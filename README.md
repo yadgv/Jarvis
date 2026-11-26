@@ -287,6 +287,21 @@ Jarvis can use tools (all free, no extra API keys):
 Skills live in `skills/`, one file each, written in a provider-neutral way so another LLM
 provider can use them too (`skills.openai_tools()` gives the OpenAI/Groq format).
 
+## Several things at once
+
+Long jobs (using the screen, carrying out a file sort, 3D parts, documents, whiteboard drawings, "what's the
+buzz") run in the background. He says he's on it, and you can wake him and ask something else meanwhile.
+When a job finishes he tells you at the next quiet moment. Ask "what are you working on?" to hear the list,
+or "cancel that" / "cancel the screen task" / "cancel everything". Screen jobs need the mouse and keyboard,
+so they take turns; the rest run side by side. Turn it off with `BACKGROUND_TASKS = False` in config.py.
+
+## Asking before the paid AI
+
+The free models do almost everything. When only Claude can (the free ones failed, or he needs to see or use
+the screen), he asks first: "The free models couldn't manage that, sir. Shall I use Claude for it?" A yes
+covers that one request (a whole screen task counts as one); "yes, always" stops the question, and so does
+unticking **Ask before using Claude** in Settings. Scheduled jobs never use Claude while this is on.
+
 ## Whiteboard (diagrams he explains step by step)
 
 Ask "show me how to wire a servo to my Arduino", "draw a circuit for an LED with

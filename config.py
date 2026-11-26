@@ -52,6 +52,8 @@ GROQ_SMALL_MODELS = ["openai/gpt-oss-20b"]  # tried first for small background j
 WHITEBOARD_MODELS = ["openai/gpt-oss-120b", "qwen/qwen3.8-27b"]
 GROQ_HISTORY_TURNS = 4                   # free models have small token limits: send the last few turns only
 LLM_MODEL = "claude-haiku-5-5"          # Claude, when it's needed (fast + cheap for voice)
+ASK_BEFORE_PAID = True                   # ask "Shall I use Claude?" before anything that costs money (also in Settings)
+BACKGROUND_TASKS = True                  # long jobs (screen control, sorting files, 3D, documents) run while you talk to him
 # Backup brain for when Claude credits run out: free models on OpenRouter
 # (key from openrouter.ai/keys, put OPENROUTER_API_KEY=sk-or-... in .env).
 # Tried in order; "openrouter/free" picks any free model that supports tools.
