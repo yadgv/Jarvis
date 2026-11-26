@@ -477,6 +477,9 @@ def launch():
     if sys.stdout is None and config.LOG_FILE:
         # Started at login with pythonw (no console): keep everything in jarvis.log.
         sys.stdout = sys.stderr = open(config.LOG_FILE, "a", encoding="utf-8", buffering=1)
+    if ui_events.already_running():
+        print("[gui] Jarvis is already running (look for the orb in the corner).")
+        return
     print("[gui] starting the JARVIS widget...")
     try:
         start()
