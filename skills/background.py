@@ -19,7 +19,8 @@ import config
 import ui_events
 
 # Tools that run in the background when started from a live conversation.
-LONG = {"use_computer", "make_3d_model", "make_document", "whats_the_buzz", "show_diagram", "organize_folder"}
+LONG = {"use_computer", "make_3d_model", "make_document", "whats_the_buzz", "show_diagram", "organize_folder",
+        "canvas_download"}
 SCREEN = {"use_computer"}     # need the mouse and keyboard: one at a time
 KEEP_FINISHED = 300           # seconds a finished job is still listed
 

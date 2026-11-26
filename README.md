@@ -315,6 +315,16 @@ metres", "2.5 kW for 3 hours in kWh", "convert 350 kelvin to Fahrenheit", "1 atm
 "1 over 2 pi times 10 kHz times 100 nF". Knows SI units with prefixes, imperial units, pi, g0, R, k_B and
 the usual functions.
 
+## Canvas (class files, notes, what's due)
+
+No access token needed: Jarvis signs in to Canvas the way you do.
+
+1. `python3.13 -m pip install playwright` (it uses the Edge already on your PC).
+2. Say "my Canvas is learn.yourschool.ca" (or put `CANVAS_URL=` in `.env`).
+3. Say "sign in to Canvas". A Canvas window opens: log in as usual (school login and any 2-step code). Jarvis says when it's done and keeps the sign-in in `memory/canvas_profile`. When it runs out he asks you to sign in again.
+
+Then try "what classes do I have on Canvas?", "download my thermo files" (saved to `Documents\School\<class>\<module>`, skipping ones you have), "download my statics files and write notes on them" (a `- notes.md` beside each file plus a class overview, by the free models) and "what's due this week?". What's due also goes in the morning briefing. Optional: paste the link from Canvas > Calendar > Calendar Feed ("my Canvas calendar feed is ...") and "what's due" works even without signing in.
+
 ## Several things at once
 
 Long jobs (using the screen, carrying out a file sort, 3D parts, documents, whiteboard drawings, "what's the

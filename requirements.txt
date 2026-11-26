@@ -26,3 +26,4 @@ python-docx  # Word, PowerPoint, Excel and PDF files (skills/documents.py)
 python-pptx
 openpyxl
 fpdf2
+playwright  # Canvas sign-in window (skills/canvas.py); uses the Edge already on the PC
