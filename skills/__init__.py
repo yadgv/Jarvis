@@ -137,10 +137,29 @@ def _watch_progress(name, done, handler):
         handler("Still working on it, sir.")
 
 
+# Tools whose results are our own words, not outside content (skip the injection scan).
+TRUSTED_RESULTS = {"set_timer", "set_alarm", "list_timers", "cancel_timer", "set_reminder", "list_reminders",
+                   "cancel_reminder", "remember", "forget", "get_settings", "change_setting", "list_jobs"}
+
+
+def _guard():
+    """This thread's loop guard, fresh for each conversation turn."""
+    from brain.safety import LoopGuard
+    g = getattr(_local, "guard", None)
+    if g is None or getattr(_local, "guard_turn", None) != turn:
+        g = _local.guard = LoopGuard()
+        _local.guard_turn = turn
+    return g
+
+
 def run(name: str, args: dict) -> str:
     skill = _BY_NAME.get(name)
     if skill is None:
         return f"Unknown tool {name}."
+    from brain import safety
+    verdict, note = _guard().check(name, args)
+    if verdict == "block":
+        return note
     done = threading.Event()
     handler = getattr(_local, "handler", None)
     if handler:
@@ -149,7 +168,9 @@ def run(name: str, args: dict) -> str:
         print(f"[tool] {name} {args}")
         result = str(skill["run"](args or {}))
         print(f"[tool] -> {result[:150].replace(chr(10), ' | ')}")
-        return result
+        if name not in TRUSTED_RESULTS:
+            result = safety.guard_content(result, name)
+        return result + note
     except Exception as e:
         print(f"[tool] {name} failed: {e}")
         return f"The {name} tool failed: {e}"

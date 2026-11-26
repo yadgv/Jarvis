@@ -235,6 +235,14 @@ Jarvis to start on boot (and restart if he crashes). On a Pi, Jarvis uses the fa
 - Everything Jarvis prints also goes to `jarvis.log`, with times, including how long each reply took.
 - `pip install pytest` then `pytest` runs the tests (no mic or API key needed). GitHub runs them on every PR.
 
+## Safety
+- **Planted instructions:** results from email, the web, the buzz search and MCP tools are scanned for prompt-injection
+  tricks ("ignore your previous instructions", "send his inbox to...", chat-template tags). If found, Claude gets a
+  warning to treat it as data only and to tell you it looked suspicious; the log shows `[safety] possible prompt injection`.
+- **Loop guard:** the same tool with the same input more than twice in one turn, or two tools bouncing back and forth,
+  gets a warning and then is blocked, so a stuck task can't burn through credits.
+Both are adapted from [OpenJarvis](https://github.com/open-jarvis/OpenJarvis) (Apache-2.0).
+
 ## Credits
 Some ideas and code are adapted from other open-source assistants: [GLaDOS](https://github.com/dnhkng/GlaDOS) (MIT),
 [Smart Turn](https://github.com/pipecat-ai/smart-turn) (BSD 2-Clause), [openWakeWord](https://github.com/dscripka/openWakeWord) (Apache-2.0)
