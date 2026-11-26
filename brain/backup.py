@@ -70,6 +70,11 @@ def _post(messages, exclude=(), target=None):
             "max_tokens": target.get("max_tokens", 400), "stream": True}
     if target.get("tools"):
         body["tools"] = skills.openai_tools(exclude, short=target.get("short_tools", False))
+        if target.get("drop_empty_params"):
+            # Gemini refuses an object with no properties: leave such parameters out.
+            for t in body["tools"]:
+                if not (t["function"].get("parameters") or {}).get("properties"):
+                    t["function"].pop("parameters", None)
     body.update(target.get("extra") or {})
     who = target.get("who", "Local model")
     r = requests.post(target["url"], headers=target.get("headers") or {}, json=body, stream=True,

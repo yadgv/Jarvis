@@ -27,14 +27,27 @@ LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "jarvis.log"
 # --- Brain ---
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-if not (ANTHROPIC_API_KEY or GROQ_API_KEY or os.getenv("OPENROUTER_API_KEY")):
+if not (ANTHROPIC_API_KEY or GROQ_API_KEY or os.getenv("OPENROUTER_API_KEY") or os.getenv("CEREBRAS_API_KEY")
+        or os.getenv("GEMINI_API_KEY") or os.getenv("MISTRAL_API_KEY") or os.getenv("GITHUB_MODELS_TOKEN")):
     print("[setup] No brain is set up, so Jarvis can't think.\n"
           "        Put this line in a file called .env in the jarvis folder (free key from console.groq.com):\n"
           "        GROQ_API_KEY=gsk_...")
 # Which brain answers, cheapest first. A brain that fails (rate limit, no
 # credit, down) is rested and the next one answers. Claude is paid, so it's
 # last; screen control and looking at the screen always use Claude.
-BRAIN_ORDER = ["groq", "openrouter", "claude"]
+# Free brains first (each used only if its key is in .env), Claude last (it asks first).
+BRAIN_ORDER = ["groq", "cerebras", "gemini", "mistral", "github", "openrouter", "claude"]
+# More free model providers to fall back on when Groq's free limits run out. All optional:
+CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY")        # cloud.cerebras.ai: very fast, about 1M free tokens a day
+CEREBRAS_MODELS = ["gpt-oss-120b", "qwen-3-235b-a22b-instruct-2507"]
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")            # aistudio.google.com/apikey: good, and it can see pictures
+GEMINI_MODELS = ["gemini-flash-latest", "gemini-flash-lite-latest"]
+MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")          # console.mistral.ai (free "Experiment" plan)
+MISTRAL_MODELS = ["mistral-medium-latest", "mistral-small-latest"]
+GITHUB_MODELS_TOKEN = os.getenv("GITHUB_MODELS_TOKEN")  # github.com/settings/tokens: fine-grained, "Models: read"
+GITHUB_MODELS = ["openai/gpt-4.1-mini"]
+# Free picture understanding ("what's in this photo?") before Claude: tried in this order.
+FREE_VISION = ["gemini", "github"]
 # Browser for links and searches: "" = Windows' default browser; or "brave", "chrome", "edge", "firefox".
 BROWSER = os.getenv("JARVIS_BROWSER", "")
 

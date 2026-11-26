@@ -18,7 +18,8 @@ Wake word → Whisper → Claude → Piper voice. Runs on Windows now and on a R
 4. Set your API keys. Create a file named `.env` in the `jarvis` folder. Jarvis uses the
    cheapest brain that works, in the order in `BRAIN_ORDER` (config.py): Groq's free models
    first, then OpenRouter's free models, and Claude (paid) only as the last resort.
-   Screen control and looking at the screen always use Claude.
+   Screen control always uses Claude; looking at pictures on the screen uses Gemini for free if
+   `GEMINI_API_KEY` is set.
    - **Groq (free, main brain):** sign in at console.groq.com, open **API Keys**, press
      **Create API Key** and copy it (shown once).
    - **Claude (paid, last resort):** console.anthropic.com > API Keys.
@@ -44,7 +45,17 @@ Wake word → Whisper → Claude → Piper voice. Runs on Windows now and on a R
    ```
    OPENROUTER_API_KEY=sk-or-...
    ```
-   It answers when Groq is busy, before Claude. Its models are tried in the order in `OPENROUTER_MODELS` in `config.py`. Free models
+   More free brains to fall back on (all optional, each used only if its key is in `.env`; tried
+   in this order after Groq, before OpenRouter and Claude, see `BRAIN_ORDER` in config.py):
+   - **Cerebras** (very fast): cloud.cerebras.ai > API Keys. `CEREBRAS_API_KEY=csk-...`
+   - **Google Gemini** (also looks at pictures for free, before Claude): aistudio.google.com/apikey.
+     `GEMINI_API_KEY=AIza...`
+   - **Mistral**: console.mistral.ai, choose the free **Experiment** plan, then API Keys. `MISTRAL_API_KEY=...`
+   - **GitHub Models**: github.com/settings/personal-access-tokens > Generate new token
+     (fine-grained), under Permissions add **Models: Read-only**. `GITHUB_MODELS_TOKEN=github_pat_...`
+
+   A model that hits its free limit is rested and the next one answers.
+   OpenRouter answers when the others are busy, before Claude. Its models are tried in the order in `OPENROUTER_MODELS` in `config.py`. Free models
    allow 20 requests a minute and 50 a day (1000 a day once you've bought $10 of
    OpenRouter credit, ever); a reply that uses a tool costs two requests.
    Optional free local brain for easy questions ("how many ounces in a pound",

@@ -3,6 +3,9 @@
   groq        Groq's free API (console.groq.com): fast open models with tool use.
               Each model has its own free limits, so when one is rate-limited
               the next in GROQ_MODELS takes over.
+  cerebras, gemini, mistral, github
+              More free APIs with the same OpenAI-style format, each used only
+              when its key is in .env (see FREE below).
   openrouter  OpenRouter's free models (50 requests a day).
   claude      Claude, paid: the last resort. Screen control and looking at
               the screen always use Claude.
@@ -16,6 +19,15 @@ import config
 from brain import backup
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+# Free OpenAI-style providers: (url, config key name, config models list name).
+FREE = {
+    "groq": (GROQ_URL, "GROQ_API_KEY", "GROQ_MODELS"),
+    "cerebras": ("https://api.cerebras.ai/v1/chat/completions", "CEREBRAS_API_KEY", "CEREBRAS_MODELS"),
+    "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", "GEMINI_API_KEY",
+               "GEMINI_MODELS"),
+    "mistral": ("https://api.mistral.ai/v1/chat/completions", "MISTRAL_API_KEY", "MISTRAL_MODELS"),
+    "github": ("https://models.github.ai/inference/chat/completions", "GITHUB_MODELS_TOKEN", "GITHUB_MODELS"),
+}
 _resting = {}  # name or model -> time.monotonic() when it may be tried again
 
 
@@ -54,6 +66,32 @@ def groq_available() -> bool:
     return bool(getattr(config, "GROQ_API_KEY", None))
 
 
+def has_key(name) -> bool:
+    return name in FREE and bool(getattr(config, FREE[name][1], None))
+
+
+def free_targets(name, small=False, models=None):
+    """The models to try for one free provider, skipping rested ones. Rest keys are "provider:model"
+    (plain model names for Groq)."""
+    if name == "groq":
+        return groq_targets(small=small, models=models)
+    if not has_key(name):
+        return []
+    url, key_name, models_name = FREE[name]
+    out = []
+    for m in getattr(config, models_name, []):
+        key = f"{name}:{m}"
+        if resting(key):
+            continue
+        extra = {}
+        if name in ("cerebras", "gemini") and ("gpt-oss" in m or "gemini" in m):
+            extra = {"reasoning_effort": "low"}   # quick answers for voice
+        out.append({"url": url, "model": m, "who": f"{name.title()} {m}", "rest_key": key, "tools": True,
+                    "short_tools": True, "max_tokens": 1024, "extra": extra, "drop_empty_params": name == "gemini",
+                    "timeout": (4, 30), "headers": {"Authorization": f"Bearer {getattr(config, key_name)}"}})
+    return out
+
+
 def groq_targets(small=False, models=None):
     """Groq models to try in order, skipping rested ones. models: try these first."""
     models = (list(models or []) + list(getattr(config, "GROQ_SMALL_MODELS", []) if small else [])
@@ -66,7 +104,7 @@ def groq_targets(small=False, models=None):
         extra = {"reasoning_effort": "low"} if m.startswith("openai/gpt-oss") else {}
         if m.startswith("qwen/"):
             extra = {"reasoning_format": "hidden"}  # its thinking was being spoken aloud
-        out.append({"url": GROQ_URL, "model": m, "who": f"Groq {m}", "tools": True, "short_tools": True,
+        out.append({"url": GROQ_URL, "model": m, "who": f"Groq {m}", "rest_key": m, "tools": True, "short_tools": True,
                     "lean": m in getattr(config, "GROQ_LEAN_MODELS", ()),
                     "max_tokens": 1024, "extra": extra,
                     "headers": {"Authorization": f"Bearer {config.GROQ_API_KEY}"}})
@@ -79,6 +117,8 @@ def order():
     out = []
     for n in names:
         if n == "groq" and groq_available():
+            out.append(n)
+        elif n in FREE and has_key(n):
             out.append(n)
         elif n == "openrouter" and backup.available() and not resting("openrouter"):
             out.append(n)
