@@ -141,7 +141,7 @@ def test_page_draws_smoothly():
     js = wb.APP_JS
     assert "strokeDashoffset" in js and "sweepIn" in js and "drawStep" in js
     assert "prefers-reduced-motion" in js
-    assert "window.close()" in js and "The whiteboard is clear" in wb.PAGE
+    assert "window.close()" in js and "Board clear" in wb.PAGE
 
 
 @pytest.mark.parametrize("args", [

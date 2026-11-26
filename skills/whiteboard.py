@@ -171,40 +171,99 @@ def draw(topic: str, change: str = "", source_text: str = "") -> dict:
 PAGE = """<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Jarvis whiteboard</title>
 <style>
-body{margin:0;background:#eef1f6;color:#1d2433;font-family:Segoe UI,system-ui,sans-serif;display:flex;height:100vh;overflow:hidden}
-#board svg{font-variant-ligatures:none}
-#board{flex:1;position:relative;background:#ffffff;margin:12px;border-radius:14px;box-shadow:0 2px 12px #0002;overflow:hidden;cursor:grab}
-#board.drag{cursor:grabbing}#board svg{width:100%;height:100%;display:block}
-#zoom{position:absolute;right:14px;bottom:14px;display:flex;gap:6px}
-#zoom button{width:44px;font-size:20px;padding:6px 0}
-#side{width:340px;background:#ffffff;padding:22px;overflow:auto;box-shadow:-2px 0 12px #0001}
-h1{font-size:24px;margin:0 0 16px}
-ol{padding-left:24px;margin:0}li{margin:0 0 14px;line-height:1.45;font-size:18px;color:#7b8494;cursor:pointer}
-li.on{color:#1d2433;font-weight:700;background:#fff3bf;border-radius:8px;padding:6px 8px;margin-left:-8px}li.done{color:#495057}
-#nav{margin-top:18px;display:flex;gap:8px}button{flex:1;background:#1c7ed6;color:#fff;border:0;
-border-radius:10px;padding:10px;font-size:16px;cursor:pointer}button:hover{background:#1971c2}
-button.alt{background:#e9ecef;color:#1d2433}button.alt:hover{background:#dee2e6}
+:root{--c:#5fe1ff;--c2:#3fb6ff;--dim:#8db4c6;--hi:#e4f8ff;--line:rgba(95,225,255,.28);--glass:rgba(8,24,34,.62)}
+html,body{height:100%}
+body{margin:0;color:var(--hi);display:flex;height:100vh;overflow:hidden;gap:14px;padding:14px;box-sizing:border-box;
+font-family:Bahnschrift,"Segoe UI Light","Segoe UI",system-ui,sans-serif;font-weight:300;letter-spacing:.02em;
+background:radial-gradient(ellipse at 50% 40%,#0b2230 0%,#061219 55%,#03080c 100%)}
+/* fine grid and scanlines behind everything (static: no motion) */
+body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+background-image:linear-gradient(rgba(95,225,255,.055) 1px,transparent 1px),linear-gradient(90deg,rgba(95,225,255,.055) 1px,transparent 1px),
+linear-gradient(rgba(95,225,255,.09) 1px,transparent 1px),linear-gradient(90deg,rgba(95,225,255,.09) 1px,transparent 1px);
+background-size:24px 24px,24px 24px,120px 120px,120px 120px}
+body:after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;
+background:repeating-linear-gradient(0deg,rgba(0,0,0,.16) 0 1px,transparent 1px 3px);mix-blend-mode:multiply;opacity:.55}
+.panel{position:relative;z-index:1;background:var(--glass);border:1px solid var(--line);
+box-shadow:0 0 0 1px rgba(95,225,255,.05) inset,0 0 28px rgba(63,182,255,.10),inset 0 0 60px rgba(95,225,255,.05);
+backdrop-filter:blur(6px)}
+.br{position:absolute;width:18px;height:18px;border:2px solid var(--c);pointer-events:none;z-index:3;
+filter:drop-shadow(0 0 4px rgba(95,225,255,.8))}
+.br.tl{left:-1px;top:-1px;border-right:0;border-bottom:0}.br.tr{right:-1px;top:-1px;border-left:0;border-bottom:0}
+.br.bl{left:-1px;bottom:-1px;border-right:0;border-top:0}.br.brr{right:-1px;bottom:-1px;border-left:0;border-top:0}
+.tag{position:absolute;z-index:3;font:11px Consolas,"Cascadia Mono",monospace;letter-spacing:.18em;color:var(--dim);
+text-transform:uppercase;pointer-events:none}
+#board{flex:1;overflow:hidden;cursor:grab}
+#board.drag{cursor:grabbing}#board svg{width:100%;height:100%;display:block;font-variant-ligatures:none;position:relative;z-index:1}
+#board svg text{font-family:Bahnschrift,"Segoe UI",sans-serif}
+#board .tag.a{left:16px;top:12px}#board .tag.b{right:16px;top:12px;color:var(--c)}
+#board .tag.c{left:16px;bottom:12px}
+#zoom{position:absolute;right:16px;bottom:14px;display:flex;gap:6px;z-index:4}
+#zoom button{width:42px;font-size:18px;padding:6px 0}
+#side{width:330px;padding:44px 22px 20px;overflow:auto;display:flex;flex-direction:column}
+#side .tag.a{left:16px;top:12px}
+h1{font-size:22px;font-weight:300;margin:0 0 6px;text-transform:uppercase;letter-spacing:.14em;color:var(--hi);
+text-shadow:0 0 12px rgba(95,225,255,.45)}
+.rule{height:1px;margin:0 0 18px;background:linear-gradient(90deg,var(--c),rgba(95,225,255,0))}
+ol{list-style:none;padding:0;margin:0;counter-reset:s}
+li{counter-increment:s;position:relative;margin:0 0 10px;padding:8px 10px 8px 46px;line-height:1.4;font-size:16px;color:var(--dim);
+cursor:pointer;border-left:2px solid transparent}
+li:before{content:counter(s,decimal-leading-zero);position:absolute;left:10px;top:9px;font:12px Consolas,monospace;
+letter-spacing:.08em;color:rgba(141,180,198,.7)}
+li:hover{color:var(--hi);background:rgba(95,225,255,.04)}
+li.on{color:var(--hi);font-weight:400;border-left-color:var(--c);background:linear-gradient(90deg,rgba(95,225,255,.14),rgba(95,225,255,0));
+text-shadow:0 0 10px rgba(95,225,255,.35)}
+li.on:before{color:var(--c)}li.done{color:#a9c6d3}li.done:before{content:"\\2713";color:#3ee69a}
+#nav{margin-top:18px;display:flex;gap:8px}
+button{flex:1;background:rgba(95,225,255,.06);color:var(--c);border:1px solid var(--line);border-radius:2px;padding:9px 6px;
+font:12px Consolas,"Cascadia Mono",monospace;letter-spacing:.16em;text-transform:uppercase;cursor:pointer}
+button:hover{background:rgba(95,225,255,.16);border-color:var(--c);color:var(--hi);box-shadow:0 0 12px rgba(95,225,255,.25)}
+#next{background:rgba(95,225,255,.18);border-color:var(--c);color:var(--hi)}
 g[id^="step-"]{transition:opacity .35s}
-#empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:22px;color:#adb5bd;pointer-events:none}
+#empty{position:absolute;inset:0;display:flex;flex-direction:column;gap:14px;align-items:center;justify-content:center;
+font:13px Consolas,monospace;letter-spacing:.3em;color:var(--dim);pointer-events:none;z-index:2;text-transform:uppercase}
+#empty .ring{width:120px;height:120px;border-radius:50%;border:1px solid var(--line);
+box-shadow:0 0 24px rgba(95,225,255,.15),inset 0 0 24px rgba(95,225,255,.1);position:relative}
+#empty .ring:before{content:"";position:absolute;inset:18px;border-radius:50%;border:1px dashed rgba(95,225,255,.4)}
+#empty .ring:after{content:"";position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;
+background:var(--c);box-shadow:0 0 10px var(--c)}
 g[id^="step-"].later{opacity:.08}g[id^="step-"].past{opacity:.45}
 g[id^="step-"].now .wire{stroke-width:9}
-g[id^="step-"].now{filter:drop-shadow(0 0 5px #ffd43b) drop-shadow(0 0 10px #fab005)}
-.hint{margin-top:16px;font-size:14px;color:#7b8494;line-height:1.4}
+g[id^="step-"].now{filter:drop-shadow(0 0 4px rgba(95,225,255,.9)) drop-shadow(0 0 12px rgba(63,182,255,.6))}
+#base{filter:drop-shadow(0 0 2px rgba(95,225,255,.35))}
+.hint{margin-top:auto;padding-top:18px;font:11px Consolas,monospace;letter-spacing:.06em;color:rgba(141,180,198,.8);line-height:1.6}
 @keyframes enter{from{opacity:0;transform:scale(.985)}to{opacity:1;transform:none}}
 body{animation:enter .32s cubic-bezier(.2,.8,.2,1)}
 #board svg{transition:opacity .28s ease}#board svg.going{opacity:0}
 #empty{transition:opacity .3s}
-li{transition:color .3s,background-color .3s,padding .3s,margin .3s}
+li{transition:color .3s,background-color .3s}
 body.calm,body.calm *{animation:none!important;transition:none!important}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-thumb{background:rgba(95,225,255,.25)}
 </style></head>
-<body><div id="board"><div id="zoom"><button class="alt" id="zin">+</button><button class="alt" id="zout">&minus;</button>
-<button class="alt" id="fit" style="width:60px;font-size:15px">Fit</button></div><div id="empty">The whiteboard is clear.</div></div>
-<div id="side"><h1 id="title">Whiteboard</h1><ol id="steps"></ol>
-<div id="nav"><button class="alt" id="back">&#8592; Back</button><button class="alt" id="all">All</button><button id="next">Next &#8594;</button></div>
+<body><div id="board" class="panel"><i class="br tl"></i><i class="br tr"></i><i class="br bl"></i><i class="br brr"></i>
+<div class="tag a">JARVIS &middot; VISUAL LINK</div><div class="tag b" id="clock">--:--:--</div><div class="tag c" id="stepTag">STANDBY</div>
+<div id="zoom"><button id="zin">+</button><button id="zout">&minus;</button>
+<button id="fit" style="width:60px;font-size:11px">Fit</button></div>
+<div id="empty"><div class="ring"></div>Board clear</div></div>
+<div id="side" class="panel"><i class="br tl"></i><i class="br tr"></i><i class="br bl"></i><i class="br brr"></i>
+<div class="tag a">Sequence</div>
+<h1 id="title">Whiteboard</h1><div class="rule"></div><ol id="steps"></ol>
+<div id="nav"><button id="back">&#8592; Back</button><button id="all">All</button><button id="next">Next &#8594;</button></div>
 <div class="hint">Say "next step", "go back", "step 3" or "clear the whiteboard".<br>Scroll to zoom, drag to move, Fit to see it all.</div></div>
 <script src="/app.js"></script></body></html>"""
 
 APP_JS = """
+function tickClock() {
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  const el = document.getElementById('clock');
+  if (el) el.textContent = p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+}
+tickClock(); setInterval(tickClock, 1000);
+function stepTag(n) {
+  const total = document.querySelectorAll('#steps li').length, el = document.getElementById('stepTag');
+  if (!el) return;
+  el.textContent = !total ? 'STANDBY' : (n > 0 ? 'STEP ' + String(n).padStart(2, '0') + ' / ' + String(total).padStart(2, '0')
+                                                  : 'OVERVIEW \u00b7 ' + total + ' STEPS');
+}
 let version = -1, step = -1, svg = null, home = null, view = null, drawn = new Set(), queue = 0;
 let calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 let handMoved = false;   // he dragged or zoomed: don't glide away from where he looked
@@ -331,6 +390,7 @@ document.getElementById('zin').onclick = () => zoom(1 / 1.25);
 document.getElementById('zout').onclick = () => zoom(1.25);
 document.getElementById('fit').onclick = () => { if (home) { handMoved = false; glideTo(home, 450); } };
 function show(n) {
+  stepTag(n);
   const groups = Array.from(document.querySelectorAll('g[id^="step-"]'));
   groups.sort((a, b) => parseInt(a.id.slice(5)) - parseInt(b.id.slice(5)));
   groups.forEach(g => { const k = parseInt(g.id.slice(5)); if (n === 0 || k <= n) drawStep(g); });
@@ -365,6 +425,18 @@ poll();
 
 # The page may only run our own script, never anything inside the drawing.
 CSP = "default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; img-src data:"
+
+
+_theme_cache = {"version": None, "svg": ""}
+
+
+def _themed(version, svg):
+    """The drawing in the HUD colours (worked out once per drawing)."""
+    from skills import hud
+    key = (version, hash(svg or ""))
+    if _theme_cache["version"] != key:
+        _theme_cache.update(version=key, svg=hud.theme(svg or ""))
+    return _theme_cache["svg"]
 
 
 def _calm() -> bool:
@@ -405,6 +477,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             _last_seen = time.monotonic()
             with _lock:
                 data = {k: _board.get(k) for k in ("version", "title", "svg", "steps", "step", "closed")}
+            data["svg"] = _themed(data["version"], data["svg"])
             data["calm"] = _calm()
             self._send(json.dumps(data), "application/json")
         elif path == "/step":
