@@ -34,3 +34,24 @@ def poll():
         return inbox.get_nowait()
     except queue.Empty:
         return None
+
+
+# ---------- one Jarvis at a time ----------
+_INSTANCE_PORT = 47811
+_instance_lock = None
+
+
+def already_running() -> bool:
+    """True if another Jarvis is open (say, the shortcut was clicked twice):
+    two would fight over the microphone. Holds a local port while running."""
+    global _instance_lock
+    import socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.bind(("127.0.0.1", _INSTANCE_PORT))
+        sock.listen(1)
+    except OSError:
+        sock.close()
+        return True
+    _instance_lock = sock
+    return False

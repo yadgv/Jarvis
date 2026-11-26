@@ -99,6 +99,16 @@ Start Jarvis online once first so the speech and wake word models are downloaded
 python gui.py          (or: python main.py --gui)
 ```
 Jarvis appears as a small orb of particles in the top-right corner, on top of your other windows.
+
+**Open it like an app:** run this once (with the Python you use for Jarvis):
+```
+python install_app.py
+```
+It adds a **Jarvis** shortcut with the orb icon to your Desktop and Start menu
+(right-click the Start menu entry to pin it to the taskbar), and asks whether to
+start Jarvis when you log in. It opens with no console window; everything goes to
+`jarvis.log`. Opening it again while it's running does nothing, so two Jarvises
+never fight over the mic. `python install_app.py remove` takes the shortcuts away.
 - **Click** the orb to talk (no wake word needed). Click again while he's speaking to stop him.
 - **Drag** it to move it. **Right-click** it to type a message, move it back to the corner, or quit.
 - While you talk to him a panel slides out with what you said and his reply, then tucks away
