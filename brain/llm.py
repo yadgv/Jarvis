@@ -634,6 +634,8 @@ def _think_stream(user_text: str, followup: bool = False, note: str = "", exclud
         elif (prev := skills.sight.recent()) and skills.mentions_screen_followup(request):
             asked = (f"[Earlier you read his screen: \"{prev['title']}\". If he means it, pass source=\"screen\" "
                      "to the tool, or call read_screen again.]\n" + asked)
+        if skills.restyle_intent(request):
+            exclude = tuple(exclude) + ("make_document",)   # a new look, never a new deck
         brief_now = skills.brief_intent(request) and "brief_document" not in exclude
         if brief_now:
             # "Brief this article": open the split screen straight away, don't leave it to the model.

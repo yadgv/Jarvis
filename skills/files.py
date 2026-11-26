@@ -343,20 +343,50 @@ def make_file(a):
     if ext.lower() in (".xlsx", ".xls"):  # no Excel library needed: Excel opens CSV
         name, ext, note = stem + ".csv", ".csv", " (as a CSV, which Excel opens)"
     if ext.lower() == ".docx":
-        name, ext, note = stem + ".rtf", ".rtf", " (as an RTF document, which Word opens)"
-        content = _rtf(content)
+        try:
+            import docx  # noqa: F401
+        except ImportError:
+            name, ext, note = stem + ".rtf", ".rtf", " (as an RTF document, which Word opens; pip install python-docx for real .docx)"
+            content = _rtf(content)
     if ext.lower() == ".csv" and isinstance(a.get("rows"), list):
         buf = io.StringIO()
         csv.writer(buf, lineterminator="\n").writerows(a["rows"])
         content = buf.getvalue()
     os.makedirs(folder, exist_ok=True)
     path = _unique(os.path.join(folder, name))
-    with open(path, "w", encoding="utf-8-sig" if ext.lower() == ".csv" else "utf-8", newline="") as f:
-        f.write(content)
+    if ext.lower() == ".docx":
+        _write_docx(path, content)
+    else:
+        with open(path, "w", encoding="utf-8-sig" if ext.lower() == ".csv" else "utf-8", newline="") as f:
+            f.write(content)
     _log("make", [("", path)])
     if a.get("open"):
         open_file({"path": path})
     return f"Saved {_show(path)}{note}."
+
+
+def _write_docx(path, text):
+    """A real Word file from plain text: '# ' / 'Title:' lines become headings, '- ' lines bullets."""
+    import docx
+    d = docx.Document()
+    for line in (text or "").splitlines():
+        t = line.strip()
+        if not t:
+            continue
+        m = re.match(r"^(#{1,3})\s+(.*)", t)
+        if m:
+            d.add_heading(m.group(2), len(m.group(1)) - 1 if len(m.group(1)) > 1 else 0)
+        elif re.match(r"^title:\s*", t, re.I):
+            d.add_heading(re.sub(r"^title:\s*", "", t, flags=re.I), 0)
+        elif re.match(r"^(?:slide\s+\d+|section\s+\d+|part\s+\d+)\b.*:", t, re.I) or (t.endswith(":") and len(t) < 80):
+            d.add_heading(t.rstrip(":"), 1)
+        elif re.match(r"^[-*\u2022]\s+", t):
+            d.add_paragraph(re.sub(r"^[-*\u2022]\s+", "", t), style="List Bullet")
+        elif re.match(r"^\d+[.)]\s+", t):
+            d.add_paragraph(re.sub(r"^\d+[.)]\s+", "", t), style="List Number")
+        else:
+            d.add_paragraph(t)
+    d.save(path)
 
 
 def _rtf(text):
@@ -660,7 +690,7 @@ SKILLS = [
     {
         "name": "make_file",
         "description": ("Create a file in his folders: notes, lists, letters, code, a spreadsheet (.csv, or "
-                        "pass rows), a Word-style document (.docx becomes .rtf). Write the full content yourself."),
+                        "pass rows), a Word document (.docx: '# ' headings, '- ' bullets). Write the full content yourself."),
         "parameters": {"type": "object", "properties": {
             "name": {"type": "string", "description": "file name with extension, e.g. 'shopping list.txt', 'blink.ino'"},
             "content": {"type": "string"},

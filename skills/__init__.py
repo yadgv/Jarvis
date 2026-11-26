@@ -233,6 +233,25 @@ def mentions_screen_followup(text: str) -> bool:
     return bool(_SCREEN_FOLLOWUP.search(text or ""))
 
 
+_RESTYLE = re.compile(r"\b(?:pretty|prettier|nicer|better[- ]looking|look(?:s)? (?:better|nicer|good)|corporate|"
+                      r"professional|theme|style|design|colou?rs?|colou?rful|darker|lighter|sleek|modern|minimal|"
+                      r"purple|green|blue|orange)\b", re.I)
+
+
+def restyle_intent(text: str) -> bool:
+    """ "Make it prettier", "make it corporate": a new look for the deck he just made, not a new deck."""
+    from skills import documents
+    t = text or ""
+    if not _RESTYLE.search(t) or re.search(r"\b(?:new|another)\s+(?:deck|presentation|slides|document)\b", t, re.I):
+        return False
+    if re.search(r"\b(?:about|on)\s+(?!it\b|this\b|that\b|them\b|the\s+(?:deck|slides|slideshow))\w", t, re.I):
+        return False   # "a corporate deck about cyber security" is a new one
+    if not re.search(r"\b(?:it|this|that|them|the\s+(?:deck|slides?|slideshow|presentation|document|doc|powerpoint))\b",
+                     t, re.I) and len(t.split()) > 4:
+        return False
+    return documents.last() is not None
+
+
 def brief_intent(text: str) -> bool:
     """He wants what's on his screen briefed ("brief this article", "write me a brief")."""
     t = text or ""
@@ -280,6 +299,11 @@ def pick_tools(text, limit=12, exclude=()):
         keep |= set(CANVAS_TOOLS)
     if re.search(r"\b(?:test|try)\b.*\b(?:phone|call|telegram|alerts?)\b", text or "", re.I):
         keep.add("test_phone_alerts")
+    if restyle_intent(text):
+        keep.add("restyle_document")
+        keep.discard("make_document")
+    if re.search(r"\b(?:split|side by side|next to each other|half (?:the|my) screen|snap)\b", text or "", re.I):
+        keep.add("split_screen")
     if screen_intent(text):
         keep |= {"read_screen", "make_document", "quiz_me"}
     if _SCREEN.search(text or "") or _BRIEF.search(text or ""):

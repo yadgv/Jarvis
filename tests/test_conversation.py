@@ -120,3 +120,16 @@ def test_finished_job_reported_inside_the_conversation():
 def test_drawing_is_not_a_background_job():
     from skills import background
     assert "show_diagram" not in background.LONG
+
+
+@pytest.mark.parametrize("said,answering,expected", [
+    ("that's everything", True, "close"),
+    ("it's okay", True, "close"),
+    ("no jarvis it's okay that's all for now", True, "close"),
+    ("thanks", True, "answer"),
+    ("yes please", True, "answer"),
+    ("it's okay", False, "close"),
+    ("it's okay make it blue", True, "answer"),
+])
+def test_final_answers_end_the_conversation(said, answering, expected):
+    assert main.followup_action(said, answering=answering) == expected

@@ -96,7 +96,14 @@ CLOSERS = {
     "that is all", "that'll be all", "that will be all", "i'm good", "im good", "i'm done", "all good",
     "never mind", "nevermind", "nothing", "no thanks", "no thank you", "that's everything",
     "bye", "goodbye", "good bye", "see you", "see ya", "later", "talk later", "stop listening",
+    "it's okay", "it's ok", "it's fine", "that's fine", "we're good", "i'm all set", "all set", "nothing else",
+    "that's all for now", "no that's it", "that's enough",
 }
+# The answer to "anything else?" that still ends it, even right after he asked a question.
+FINAL_CLOSERS = {"that's everything", "that's all", "that's it", "that is all", "that'll be all", "nothing",
+                 "nothing else", "no thanks", "no thank you", "i'm good", "im good", "i'm done", "all good",
+                 "it's okay", "it's ok", "it's fine", "we're good", "i'm all set", "all set", "never mind",
+                 "nevermind", "bye", "goodbye", "see you", "see ya", "that's all for now", "no that's it"}
 CLOSE_WORDS = {"jarvis", "sir", "ok", "okay", "alright", "cool", "great", "perfect", "that's", "for", "now",
                "then", "so", "yeah", "no", "awesome", "nice", "good"}
 
@@ -132,7 +139,8 @@ def followup_action(said: str, answering: bool, addressed: bool = False) -> str:
     if is_just_name(said):
         return "name"
     if answering:
-        return "answer"
+        # "Anything else?" "That's everything." is still the end.
+        return "close" if is_closer(said) and any(f" {p} " in f" {said} " for p in FINAL_CLOSERS) else "answer"
     if is_closer(said) or (is_exit(said) and "jarvis" not in said and not addressed):
         return "close"
     if is_acknowledgement(said):
