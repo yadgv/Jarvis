@@ -162,7 +162,10 @@ def _openai_turn(user_text, system, said, tools_used, exclude=(), history=None, 
         keep = skills.pick_tools(user_text, exclude=exclude)
         # "Yes" to a question about a draft or a click needs the tool from the last turn.
         last = past[-1]["content"] if past and past[-1]["role"] == "assistant" else ""
-        keep |= set(re.findall(r"(?:\[tools used: |; )([a-z_]+) ->", last))
+        used = set(re.findall(r"(?:\[tools used: |; )([a-z_]+) ->", last))
+        keep |= used
+        for name in used:
+            keep |= set(skills.FOLLOW_UPS.get(name, ()))
         if skills.mentions_board(last):  # "yes, go ahead" after he offered to draw it
             keep |= set(skills.BOARD_TOOLS)
         if skills.mentions_files(last):  # "yes" to a plan to sort a folder

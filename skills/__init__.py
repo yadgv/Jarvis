@@ -143,6 +143,12 @@ DOC_TOOLS = ("make_document", "show_chart")
 _CAD = _re.compile(r"\b(3d|three d|print(?:able)?|printer|openscad|scad|stl|cad|bracket|enclosure|phone stand|"
                    r"mount|model (?:of|for)|taller|shorter|wider|thicker|thinner)\b", _re.I)
 CAD_TOOLS = ("make_3d_model",)
+_APPS = _re.compile(r"\b(claude code|(?:build|make|code|write|create) (?:me )?(?:a |an )?(?:little |small |simple |quick )?"
+                    r"[\w -]{0,25}?\b(?:app|application|website|web ?page|web ?site|game|tool|program|widget|tracker|"
+                    r"calculator|timer app)|my [\w -]{1,25} app)\b", _re.I)
+APP_TOOLS = ("plan_new_app", "plan_claude_code_task", "start_claude_code_task", "claude_code_status")
+# A tool used last turn that needs another one when he says yes.
+FOLLOW_UPS = {"plan_new_app": ("start_claude_code_task",), "plan_claude_code_task": ("start_claude_code_task",)}
 FILE_TOOLS = ("make_file", "find_files", "read_file", "open_file", "organize_folder", "file_action", "undo_files")
 
 
@@ -173,6 +179,8 @@ def pick_tools(text, limit=12, exclude=()):
         keep |= set(BOARD_TOOLS)
     if mentions_files(text):
         keep |= set(FILE_TOOLS)
+    if _APPS.search(text or ""):
+        keep |= set(APP_TOOLS)
     if _CAD.search(text or ""):
         keep |= set(CAD_TOOLS)
     if _DOCS.search(text or ""):
@@ -246,7 +254,7 @@ def _guard():
 # instead of waiting on a timeout.
 NEEDS_INTERNET = {"get_weather", "get_news", "web_search", "whats_the_buzz", "get_calendar_events",
                   "check_email", "reply_email", "add_calendar_event", "delete_calendar_event", "stock_price", "look_at_screen",
-                  "use_computer", "plan_claude_code_task", "start_claude_code_task", "edit_selected_text",
+                  "use_computer", "plan_claude_code_task", "start_claude_code_task", "plan_new_app", "edit_selected_text",
                   "daily_briefing", "open_website", "show_diagram", "make_document", "make_3d_model"}
 
 
