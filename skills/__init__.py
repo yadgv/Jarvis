@@ -177,7 +177,8 @@ def _watch_progress(name, done, handler):
 
 # Tools whose results are our own words, not outside content (skip the injection scan).
 TRUSTED_RESULTS = {"set_timer", "set_alarm", "list_timers", "cancel_timer", "set_reminder", "list_reminders",
-                   "cancel_reminder", "remember", "forget", "get_settings", "change_setting", "list_jobs"}
+                   "cancel_reminder", "remember", "forget", "get_settings", "change_setting", "list_jobs",
+                   "try_offline_voice"}
 
 
 def _guard():
