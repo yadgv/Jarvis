@@ -197,6 +197,11 @@ Jarvis can use tools (all free, no extra API keys):
   by default) and he tells you when it's done, with the full reply on Telegram. "Is Claude Code done?" checks.
   Needs [Claude Code](https://docs.claude.com/claude-code) installed and signed in. `CLAUDE_CODE_PERMISSION_MODE`
   is `acceptEdits`: it can edit files but skips anything needing more permission.
+- **Small apps and web pages**: "build me a pomodoro timer app", "make a web page for my study schedule".
+  After your yes, Claude Code builds it in a new folder in **Documents/Jarvis apps** (usually one `index.html`
+  that opens by double-clicking, no installs) and Jarvis opens it when it's done. The app then counts as a
+  project, so "add a dark mode to my pomodoro app" changes it later. To install Claude Code, run
+  `irm https://claude.ai/install.ps1 | iex` in PowerShell, then `claude` once to sign in.
 - **Standing jobs and watches** (idea from [GAIA](https://github.com/theexperiencecompany/gaia)):
   "every weekday at 8, tell me the weather and my first meeting", "every Monday at 9 send my phone a summary of
   my unread email", "check every 15 minutes and tell me when Mom emails" (a watch only speaks up when something
