@@ -102,6 +102,67 @@ def _decode(path):
     return np.concatenate(chunks).astype(np.float32) / 32768.0
 
 
+# ---------- Approve / Deny buttons (skills/phone.py) ----------
+_asks = {}            # id -> {"event", "answer", "messages": [(chat, message_id)]}
+_ask_ids = iter(range(1, 10**9))
+
+
+def ask(question: str, wait: float = 900):
+    """Send question with Approve / Deny buttons to every allowed user; wait for a tap.
+    True / False, or None if nobody answered in time (or the bot isn't set up)."""
+    import threading
+    ids = _allowed()
+    if not _token() or not ids:
+        return None
+    n = next(_ask_ids)
+    entry = _asks[n] = {"event": threading.Event(), "answer": None, "messages": []}
+    buttons = {"inline_keyboard": [[{"text": "✅ Approve", "callback_data": f"ok:{n}"},
+                                    {"text": "❌ Deny", "callback_data": f"no:{n}"}]]}
+    for chat in ids:
+        try:
+            m = _call("sendMessage", chat_id=chat, text=question, reply_markup=buttons)
+            entry["messages"].append((chat, m.get("message_id")))
+        except Exception as e:
+            print(f"[telegram] couldn't ask: {e}")
+    if not entry["messages"]:
+        _asks.pop(n, None)
+        return None
+    entry["event"].wait(wait)
+    _asks.pop(n, None)
+    if entry["answer"] is None:
+        for chat, mid in entry["messages"]:
+            try:
+                _call("editMessageText", chat_id=chat, message_id=mid, text=question + "\n\n(No answer: I didn't do it.)")
+            except Exception:
+                pass
+    return entry["answer"]
+
+
+def handle_callback(cb):
+    """A tap on Approve / Deny."""
+    sender = (cb.get("from") or {}).get("id")
+    data = str(cb.get("data") or "")
+    kind, _, num = data.partition(":")
+    entry = _asks.get(int(num)) if num.isdigit() else None
+    ok = sender in _allowed() and entry is not None and kind in ("ok", "no")
+    try:
+        _call("answerCallbackQuery", callback_query_id=cb.get("id"),
+              text=("Approved" if kind == "ok" else "Denied") if ok else "That question has expired.")
+    except Exception:
+        pass
+    if not ok:
+        return None
+    entry["answer"] = kind == "ok"
+    for chat, mid in entry["messages"]:
+        try:
+            _call("editMessageText", chat_id=chat, message_id=mid,
+                  text=(cb.get("message") or {}).get("text", "") + ("\n\n✅ Approved" if kind == "ok" else "\n\n❌ Denied"))
+        except Exception:
+            pass
+    entry["event"].set()
+    return entry["answer"]
+
+
 def _think(text):
     from brain import llm
     return " ".join(llm.think_stream(text, note=PHONE_NOTE, exclude_tools=PHONE_EXCLUDE)).strip()
@@ -187,7 +248,7 @@ def _loop():
         if _wait_for_internet():
             failures = 0
         try:
-            params = {"timeout": 30, "allowed_updates": ["message"]}
+            params = {"timeout": 30, "allowed_updates": ["message", "callback_query"]}
             if offset is not None:
                 params["offset"] = offset
             updates = _call("getUpdates", http_timeout=40, **params)
@@ -195,7 +256,10 @@ def _loop():
             for u in updates:
                 offset = u["update_id"] + 1
                 try:
-                    handle(u)
+                    if u.get("callback_query"):
+                        handle_callback(u["callback_query"])
+                    else:
+                        handle(u)
                 except Exception as e:
                     print(f"[telegram] couldn't answer a message: {e}")
         except Exception as e:

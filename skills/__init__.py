@@ -197,7 +197,9 @@ _CANVAS = re.compile(r"\b(canvas|class files|course files|lecture (?:notes|slide
 CANVAS_TOOLS = ("canvas_setup", "canvas_sign_in", "canvas_courses", "canvas_download", "canvas_due")
 _SCREEN = re.compile(r"\b(screen|looking at|this page|this site|web ?page|website|tab|selected|selection|"
                      r"read (?:me )?(?:this|that|it)|error|dialog|inspect|page code|source code|html|the code)\b", re.I)
-_BRIEF = re.compile(r"\b(brief|summari[sz]e|summary|outline|tl;?dr|this (?:article|page|pdf|paper|document|doc)|"
+_VISUAL = re.compile(r"\b(picture|photo|image|video|diagram|chart|graph|drawing|looks? like|colou?rs?|layout|design|"
+                     r"screenshot|icon|logo|meme|map)\b", re.I)
+_BRIEF = re.compile(r"\b(brief|article|what i have up|i have (?:up|open)|summari[sz]e|summary|outline|tl;?dr|this (?:article|page|pdf|paper|document|doc)|"
                     r"the brief|section \d|sections?|reader|lab manual)\b", re.I)
 BRIEF_TOOLS = ("brief_document", "edit_brief", "read_brief", "save_brief_as_word", "view_document")
 _RECAP = re.compile(r"\b(what did (?:i|we) do|recap|my day|today so far|what have i (?:done|been doing))\b", re.I)
@@ -237,8 +239,12 @@ def pick_tools(text, limit=12, exclude=()):
         keep |= {"quiz_me", "quiz_next", "pomodoro", "find_files"}
     if _CANVAS.search(text or ""):
         keep |= set(CANVAS_TOOLS)
-    if _SCREEN.search(text or ""):
-        keep |= {"read_screen", "look_at_screen"}
+    if _SCREEN.search(text or "") or _BRIEF.search(text or ""):
+        keep.add("read_screen")
+    if _VISUAL.search(text or ""):
+        keep.add("look_at_screen")    # paid: only for pictures and looks, never plain text
+    else:
+        keep.discard("look_at_screen")
     if _BRIEF.search(text or ""):
         keep |= set(BRIEF_TOOLS)
     if _RECAP.search(text or ""):

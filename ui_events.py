@@ -19,8 +19,15 @@ def on(fn):
     _listeners.append(fn)
 
 
+last_you = 0.0   # when he last said or typed something to Jarvis (time.time())
+
+
 def emit(kind, text=""):
     """kind: status (idle/listening/thinking/speaking), you, jarvis, info, task, task_done, click."""
+    global last_you
+    if kind == "you" and not str(text).startswith("(phone)"):
+        import time
+        last_you = time.time()
     for fn in list(_listeners):
         try:
             fn(kind, text)

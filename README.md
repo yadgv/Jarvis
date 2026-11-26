@@ -387,8 +387,11 @@ Ask "what's on my screen?", "read me this error", "what does this page say?" or
 - **Web pages**, through the small **Jarvis eyes** browser extension: the page's
   address, its text, what you've selected, and its HTML code when you ask (saved in
   Documents/Jarvis Docs). It also lets "brief this article" read pages you're signed in to.
-  Install once in Chrome or Edge: open `chrome://extensions` (or `edge://extensions`),
-  turn on **Developer mode**, click **Load unpacked**, pick the `browser_extension` folder.
+  Install once in Brave, Chrome or Edge: open `brave://extensions` (or `chrome://extensions`,
+  `edge://extensions`), turn on **Developer mode**, click **Load unpacked**, pick the
+  `browser_extension` folder. The log says `[browser] Jarvis eyes extension connected` once it
+  works; if it says `no word from the Jarvis eyes extension`, click the extension's reload
+  button and reload the page.
 - **Other apps** (Word, VS Code, error boxes, Settings): the text the app itself shows,
   through Windows UI Automation (`pip install uiautomation`).
 - **Pictures and video**: Windows' built-in OCR (`pip install -r requirements.txt` adds it).
@@ -457,6 +460,15 @@ Message Jarvis from anywhere, by text or voice note. The PC (or Pi) must be runn
 
 Only IDs in `TELEGRAM_ALLOWED_IDS` get answers; anyone else is ignored. Phone chats share the same
 conversation and memory as the mic. Everything works from the phone except shutting Jarvis down.
+
+**Alerts while you're away.** When a background task finishes, Jarvis sends the result to Telegram.
+When a task needs your OK for a risky step and you haven't spoken to him for 3 minutes
+(`PHONE_AWAY_SECONDS`), he sends a message with **Approve** and **Deny** buttons instead of waiting
+for your voice. `PHONE_ALERTS = False` in config.py turns this off.
+
+**Optional phone call** (free, via the third-party CallMeBot service): to have your phone ring as well,
+message **@CallMeBot_txtbot** in Telegram once to authorize it, then add your Telegram username to `.env`:
+`CALLMEBOT_USER=@yourname`. Jarvis then calls you (a spoken message) before an Approve/Deny question.
 
 ## Raspberry Pi
 Use a Pi 4 (4 GB) or Pi 5 with Raspberry Pi OS 64-bit, a USB mic and a speaker.

@@ -46,7 +46,9 @@ def test_only_the_extension_can_post(bridge):
     page = browser_bridge.current()
     assert page["url"] == PAGE["url"] and page["selection"] == "second law"
     assert browser_bridge.current("Week 3: Entropy - Course site - Google Chrome")
-    assert browser_bridge.current("Inbox - Gmail - Google Chrome") is None                # a different tab
+    assert browser_bridge.current("Inbox - Gmail - Google Chrome")                        # just reported: still it
+    browser_bridge._page["at"] -= browser_bridge.RECENT + 5
+    assert browser_bridge.current("Inbox - Gmail - Google Chrome") is None                # older: a different tab
     assert browser_bridge.connected()
 
 

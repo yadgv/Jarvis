@@ -182,8 +182,18 @@ def _windows(user32):
     from ctypes import wintypes
     found = []
 
+    me = os.getpid()
+
     @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
     def each(hwnd, _):
+        pid = wintypes.DWORD()
+        try:
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            tool = user32.GetWindowLongW(hwnd, -20) & 0x80          # WS_EX_TOOLWINDOW: not a real app window
+        except Exception:
+            tool = 0
+        if pid.value == me or tool:                                  # Jarvis's own orb, panel, menus
+            return True
         if user32.IsWindowVisible(hwnd) and not user32.IsIconic(hwnd):
             n = user32.GetWindowTextLengthW(hwnd)
             if n:
@@ -200,7 +210,8 @@ def his_window(windows):
     """The window he's looking at: the front-most one that isn't Jarvis's own."""
     for hwnd, title in windows:
         t = title.strip()
-        if not t or "jarvis" in t.lower() or t in ("Program Manager", "Windows Input Experience", "Settings"):
+        letters = re.sub(r"[^a-z]", "", t.lower())                  # "J.A.R.V.I.S." is Jarvis too
+        if not t or "jarvis" in letters or t in ("Program Manager", "Windows Input Experience", "Settings"):
             continue
         return hwnd, t
     return None, ""
@@ -637,10 +648,11 @@ def view_document(a):
 SKILLS = [
     {
         "name": "brief_document",
-        "description": ("Brief an article or document: 'brief this article', 'summarise this PDF', 'make me a doc "
-                        "outlining this page'. Reads what's on screen (his browser page or open PDF/Word file) or a "
-                        "file/link he names, splits the screen (it on the left, the brief on the right) and writes "
-                        "an editable brief."),
+        "description": ("Brief an article or document: 'brief this', 'brief this article', 'summarise this PDF', "
+                        "'make me a doc outlining this page', 'the article I have up'. With no source it reads "
+                        "what's on his screen by itself (his browser tab or open PDF/Word file): NEVER ask him for "
+                        "a link or file first. Splits the screen (it on the left, the brief on the right) and "
+                        "writes an editable brief."),
         "parameters": {"type": "object", "properties": {
             "source": {"type": "string", "description": "empty for what's on screen, else a file name or link"},
             "focus": {"type": "string", "description": "what he wants it to concentrate on, if he said"}}},

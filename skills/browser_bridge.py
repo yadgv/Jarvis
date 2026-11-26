@@ -18,6 +18,7 @@ import time
 import config
 
 FRESH = 30 * 60            # seconds a page report counts as "what he's looking at"
+RECENT = 120               # a report this new is the tab in front even if the window title differs
 MAX_BODY = 6_000_000
 _lock = threading.Lock()
 _page = {}                 # the latest report from the tab in front
@@ -47,7 +48,8 @@ def current(title_hint: str = ""):
     if title_hint:
         t = (page.get("title") or "").strip().lower()
         hint = title_hint.replace("​", "").lower()
-        if t and t[:40] not in hint:
+        # A different title is fine if the report is recent (titles change: "(3) Inbox").
+        if t and t[:40] not in hint and time.time() - page.get("at", 0) > RECENT:
             return None
     return page
 
@@ -60,6 +62,19 @@ def page_code(timeout: float = 8.0):
         return None
     with _lock:
         return dict(_html)
+
+
+def _touch(agent: str):
+    global _last_contact
+    if not _last_contact:
+        browser = "Brave/Chrome/Edge" if "Chrome" in agent else (agent.split(" ")[-1] or "browser")
+        print(f"[browser] Jarvis eyes extension connected ({browser})")
+    _last_contact = time.time()
+
+
+def not_connected_hint() -> str:
+    return (f"[browser] no word from the Jarvis eyes extension on port {port()}: load the browser_extension folder "
+            "at brave://extensions or chrome://extensions (Developer mode > Load unpacked), then reload the page")
 
 
 class _Handler(http.server.BaseHTTPRequestHandler):
@@ -84,13 +99,12 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        global _last_contact
         path = self.path.partition("?")[0]
         if path == "/hello":
             return self._send({"jarvis": True})
         if not self._allowed():
             return self.send_error(403)
-        _last_contact = time.time()
+        _touch(self.headers.get("User-Agent", ""))
         if path == "/next":   # the extension waits here for a command
             try:
                 want = _wants.get(timeout=20)
@@ -100,7 +114,6 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         self.send_error(404)
 
     def do_POST(self):
-        global _last_contact
         if not self._allowed():
             return self.send_error(403)
         n = int(self.headers.get("Content-Length") or 0)
@@ -110,7 +123,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             data = json.loads(self.rfile.read(n) or b"{}")
         except ValueError:
             return self.send_error(400)
-        _last_contact = time.time()
+        _touch(self.headers.get("User-Agent", ""))
         path = self.path.partition("?")[0]
         if path == "/page":
             with _lock:
@@ -146,3 +159,4 @@ def start():
         print(f"[browser] couldn't listen on port {port()} for the browser extension: {e}")
         return
     threading.Thread(target=_server.serve_forever, daemon=True, name="browser-bridge").start()
+    print(f"[browser] waiting for the Jarvis eyes extension on 127.0.0.1:{port()}")
