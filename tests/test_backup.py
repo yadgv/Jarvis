@@ -42,6 +42,10 @@ def tool_chunks(name, args):
 def llm(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "MEMORY_DIR", str(tmp_path))
     monkeypatch.setattr(config, "OPENROUTER_API_KEY", "sk-or-test")
+    # These tests cover the Claude-first order (still available in config.BRAIN_ORDER).
+    monkeypatch.setattr(config, "BRAIN_ORDER", ["claude", "openrouter"])
+    from brain import providers
+    monkeypatch.setattr(providers, "_resting", {})
     from brain import llm
     llm._history.clear()
     monkeypatch.setattr(llm, "_claude_off_until", 0.0)

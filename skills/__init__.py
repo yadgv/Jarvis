@@ -90,12 +90,48 @@ def anthropic_tools(exclude=()):
     ]
 
 
-def openai_tools(exclude=()):
+def _short(text, limit=160):
+    """The first sentence of a description, for models with small token limits."""
+    first = text.split(". ")[0].rstrip(".") + "."
+    return first if len(first) <= limit else first[:limit - 1] + "…"
+
+
+def openai_tools(exclude=(), short=False):
     return [
         {"type": "function",
-         "function": {"name": s["name"], "description": s["description"], "parameters": s["parameters"]}}
+         "function": {"name": s["name"], "description": _short(s["description"]) if short else s["description"],
+                      "parameters": s["parameters"]}}
         for s in SKILLS if s["name"] not in exclude
     ]
+
+
+# Tools every turn gets, even on a small model where only the relevant ones are sent.
+CORE_TOOLS = ("remember", "forget", "set_timer", "get_weather", "web_search", "shut_down")
+_STOP = set("a an the and or for of to in on at by with is are be it its his him he you your your's this that "
+            "what when where how do does from into as can i me my please jarvis sir up out".split())
+
+
+def _words(text):
+    import re
+    return {w for w in re.findall(r"[a-z]+", text.lower()) if len(w) > 2 and w not in _STOP}
+
+
+def pick_tools(text, limit=12, exclude=()):
+    """Names of the tools that look relevant to what he said (plus CORE_TOOLS),
+    so a model with a small token budget isn't sent all of them. Scores each
+    tool by the words its name and description share with the request."""
+    said = _words(text)
+    scored = []
+    for s in SKILLS:
+        if s["name"] in exclude:
+            continue
+        name_words = set(s["name"].split("_"))
+        score = 3 * len(said & name_words) + len(said & _words(s["description"]))
+        if score:
+            scored.append((score, s["name"]))
+    scored.sort(key=lambda x: -x[0])
+    keep = {n for _, n in scored[:limit]}
+    return keep | {n for n in CORE_TOOLS if n in _BY_NAME and n not in exclude}
 
 
 # ---------- spoken progress ----------

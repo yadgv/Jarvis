@@ -57,14 +57,9 @@ def extract(user_text: str, reply: str, known: list) -> list:
     try:
         from brain import llm
         known_text = "\n".join(f"- {f}" for f in known[-60:]) or "(none)"
-        msg = llm._client.messages.create(
-            model=config.LLM_MODEL,
-            max_tokens=300,
-            system=SYSTEM,
-            messages=[{"role": "user", "content":
-                       f"Known facts:\n{known_text}\n\nExchange:\nUser: {user_text}\nAssistant: {reply}"}],
-        )
-        return parse("".join(b.text for b in msg.content if getattr(b, "type", "") == "text"))
+        text = llm.complete(SYSTEM, f"Known facts:\n{known_text}\n\nExchange:\nUser: {user_text}\n"
+                                    f"Assistant: {reply}", max_tokens=300, small=True)
+        return parse(text)
     except Exception as e:
         print(f"[memory] auto-extract skipped ({type(e).__name__})")
         return []
