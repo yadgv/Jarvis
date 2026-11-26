@@ -40,6 +40,11 @@ OPENROUTER_MODELS = [
     "cohere/north-mini-code:free",         # backup choice
     "openrouter/free",                     # last resort: whichever free model is up
 ]
+# Optional free local model for easy questions (no tools needed), so they
+# cost nothing and work offline. Off when empty. To turn on: install Ollama
+# (ollama.com/download), run `ollama pull llama3.2:3b`, then set it here.
+# Anything harder, or anything it isn't sure of, still goes to Claude.
+LOCAL_MODEL = ""                         # e.g. "llama3.2:3b" (or "qwen2.5:3b")
 BACKUP_MINUTES = 15                      # after Claude fails, use the backup this long before retrying Claude
 MAX_HISTORY_TURNS = 10                   # conversation memory (pairs)
 MEMORY_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "memory")
