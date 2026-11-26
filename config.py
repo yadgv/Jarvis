@@ -147,6 +147,12 @@ DICTATION_KEY = "f9"
 MODE = "wake"
 WAKE_WORD_MODEL = "hey_jarvis"
 WAKE_THRESHOLD = 0.5
+# Also wake on just "Jarvis": a short word said on its own (a pause before and
+# after) is transcribed on the PC and wakes him only if it's his name.
+WAKE_ON_NAME = True
+NAME_MIN_SECONDS = 0.25                  # shorter sounds (clicks, coughs) are ignored
+NAME_MAX_SECONDS = 1.2                   # longer than this is talking, not calling his name
+NAME_PAUSE_SECONDS = 0.3                 # quiet needed before and after the word
 WAKE_CONSECUTIVE_FRAMES = 2              # frames in a row above threshold (raise if it misfires)
 WAKE_CHIME = True                        # beep when Jarvis starts listening
 WAKE_DEBUG = False                       # print wake-word scores to help tuning

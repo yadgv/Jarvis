@@ -1,13 +1,17 @@
-"""Listens for "Hey Jarvis" using openWakeWord (free, runs on the Pi)."""
+"""Listens for "Hey Jarvis" using openWakeWord (free, runs on the Pi),
+and for just "Jarvis" (WAKE_ON_NAME) with a two-step check: a short word said
+on its own, with a pause before and after, is transcribed locally and wakes
+him only if it was his name. Ordinary talking never gets transcribed."""
 import collections
 import os
+import re
 
 import numpy as np
 import openwakeword
 from openwakeword.model import Model
 
 import config
-from audio.recorder import CHUNK
+from audio.recorder import CHUNK, is_speech
 
 openwakeword.utils.download_models()  # one-time download (also the voice detector), cached after
 
@@ -64,12 +68,77 @@ def take_room_audio():
     return np.concatenate(chunks).astype(np.float32) / 32768.0
 
 
+NAME = re.compile(r"^(?:(?:hey|hi|ok|okay|yo|oi)[ ,]+)?(?:jarvis|jervis|jarvas|javis|jarvi|jarves)$")
+
+
+def is_name(text: str) -> bool:
+    """True if the transcript is just his name ("Jarvis", "Jarvis?", "Hey Jarvis.")."""
+    words = re.sub(r"[^a-z ,]", "", (text or "").lower()).strip(" ,")
+    return bool(NAME.match(words))
+
+
+class NameSpotter:
+    """Finds short words said on their own (pause, a word, pause), the shape of
+    someone calling "Jarvis". Feed it every 80 ms chunk; it returns that
+    word's audio (int16) when one ends, else None."""
+    def __init__(self):
+        sec = 16000 / CHUNK  # chunks per second
+        self.min_chunks = max(1, int(config.NAME_MIN_SECONDS * sec))
+        self.max_chunks = max(self.min_chunks, int(config.NAME_MAX_SECONDS * sec))
+        self.quiet_after = max(1, int(config.NAME_PAUSE_SECONDS * sec))
+        self.quiet_before = max(1, int(config.NAME_PAUSE_SECONDS * sec))
+        self.reset()
+
+    def reset(self):
+        self.speech, self.silence, self.quiet_run, self.too_long = [], 0, self.quiet_before, False
+        self.last = self.pad = None
+
+    def feed(self, chunk, speaking: bool):
+        if speaking:
+            if not self.speech:
+                if self.quiet_run < self.quiet_before:  # no pause before it: part of a sentence
+                    self.too_long = True
+                self.pad = self.last
+            self.speech.append(chunk)
+            self.silence = 0
+            if len(self.speech) > self.max_chunks:
+                self.too_long = True
+            self.quiet_run = 0
+            self.last = chunk
+            return None
+        self.quiet_run += 1
+        self.last = chunk
+        if not self.speech:
+            return None
+        self.silence += 1
+        self.speech.append(chunk)  # keep the word's tail
+        if self.silence < self.quiet_after:
+            return None
+        word = self.speech[:-self.silence + 1] if self.silence > 1 else self.speech
+        spoken = len(self.speech) - self.silence
+        ok = not self.too_long and spoken >= self.min_chunks
+        pad = self.pad
+        self.speech, self.silence, self.too_long = [], 0, False
+        if not ok:
+            return None
+        return np.concatenate(([pad] if pad is not None else []) + word)
+
+
+def _heard_name(audio) -> bool:
+    from audio.stt import transcribe
+    text = transcribe(audio.astype(np.float32) / 32768.0)
+    if config.WAKE_DEBUG or text:
+        print(f"[wake] short word heard: {text!r}")
+    return is_name(text)
+
+
 def wait_for_wake_word(stream, poll=None):
     """Blocks until the wake word is heard in WAKE_CONSECUTIVE_FRAMES frames in a row.
     Requiring a few frames filters out one-off spikes from TV, music or coughs.
     If poll() returns something (e.g. a message typed in the window), returns that."""
     _model.reset()
     hits = 0
+    spotter = NameSpotter() if config.WAKE_ON_NAME else None
     while True:
         if poll is not None:
             request = poll()
@@ -78,6 +147,12 @@ def wait_for_wake_word(stream, poll=None):
         data, _ = stream.read(CHUNK)
         if config.ROOM_CONTEXT:
             _room.append(data[:, 0].copy())
+        if spotter is not None:
+            word = spotter.feed(data[:, 0].copy(), is_speech(data[:, 0]))
+            if word is not None and _heard_name(word):
+                print("[wake] heard his name")
+                _model.reset()
+                return
         scores = _model.predict(data[:, 0])
         score = max(scores.values())
         if config.WAKE_DEBUG and score > 0.1:
