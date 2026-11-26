@@ -164,6 +164,24 @@ def is_exit(said: str) -> bool:
     return " ".join(words) in EXIT_PHRASES
 
 
+def pending_task_result():
+    """A finished background job's report waiting in the inbox (taken out), or None.
+    Said during the conversation it belongs to, not minutes later out of the blue."""
+    found, others = None, []
+    while True:
+        try:
+            item = ui_events.inbox.get_nowait()
+        except queue.Empty:
+            break
+        if found is None and item and item[0] == "task_result":
+            found = item[1]
+        else:
+            others.append(item)
+    for item in others:
+        ui_events.inbox.put(item)
+    return found
+
+
 def respond(text: str, t_heard: float = None, stream=None, followup: bool = False, note: str = "") -> bool:
     """Think and speak at the same time: while one sentence plays, the next
     is already being written by Claude and turned into audio.
@@ -373,6 +391,16 @@ def main():
                     ui_events.emit("status", "listening")
                     audio = record_until_silence(stream, ignore_seconds=beep or 0)
             else:
+                note = pending_task_result()
+                if note:
+                    # A job he started finished while we were talking: tell him now.
+                    stream.stop()
+                    was_interrupted = respond(note, None, stream)
+                    stream.start()
+                    conv_until = time.time() + conversation_seconds()
+                    if was_interrupted:
+                        need_wake, already_woken = True, True
+                    continue
                 left = conv_until - time.time()
                 if left <= 0.5:
                     print("[conversation over: quiet for a while; say the wake word to start again]")

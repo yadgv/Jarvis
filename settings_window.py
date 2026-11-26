@@ -286,7 +286,7 @@ class SettingsWindow:
         moved = "position" in values and values["position"] is None and self.values.get("position") is not None
         moved = moved or values.get("corner", self.values.get("corner")) != self.values.get("corner")
         settings.save(values)
-        if login is not None and IS_WINDOWS:
+        if login is not None and IS_WINDOWS and bool(login) != bool(self.values.get("start_at_login")):
             import autostart
             print("[settings] " + autostart.set_on(bool(login)))
             if self.widget is not None and hasattr(self.widget, "autostart"):

@@ -65,15 +65,29 @@ def save_history(messages: list):
 
 
 # ---------- long-term facts ----------
+_META_FACT = re.compile(r"\b(?:wants|asked|asks|told)\b.{0,20}\b(?:assistant|jarvis|you)\b.{0,10}\bto remember\b", re.I)
+
+
+def is_junk(fact: str) -> bool:
+    """Not a fact worth keeping: a lone word ("Tuesday", a misheard sentence) or a
+    note about remembering rather than the thing itself."""
+    words = re.findall(r"[\w'-]+", fact or "")
+    return len(words) < 3 or bool(_META_FACT.search(fact or ""))
+
+
 def load_facts() -> list:
     facts = _read("facts.json", [])
-    return [f for f in facts if isinstance(f, str)] if isinstance(facts, list) else []
+    return [f for f in facts if isinstance(f, str) and not is_junk(f)] if isinstance(facts, list) else []
 
 
 def add_fact(fact: str) -> str:
     fact = fact.strip()
     if not fact:
         return "Nothing to remember."
+    if is_junk(fact):
+        print(f"[memory] not saved (not a clear fact): {fact}")
+        return ("Not saved: that isn't a clear fact. Ask him what exactly to remember, as a full sentence "
+                "(e.g. 'my exam is on Tuesday').")
     facts = load_facts()
     if fact.lower() in (f.lower() for f in facts):
         return "Already remembered."

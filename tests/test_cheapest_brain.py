@@ -196,3 +196,15 @@ def test_lean_model_gets_fewer_tools_and_turns(brain, monkeypatch):
     sent = brain.sent[0][1]
     assert len([m for m in sent["messages"] if m["role"] == "user"]) == 3      # 2 past turns + this one
     assert len(sent["tools"]) <= 6 + len(skills.CORE_TOOLS)
+
+
+def test_scrap_before_a_tool_call_isnt_spoken(brain, monkeypatch):
+    """Seen in his log: the model wrote "You", called remember, then said nothing."""
+    ran = []
+    monkeypatch.setitem(skills._BY_NAME, "remember", dict(skills._BY_NAME["remember"],
+                                                           run=lambda a: ran.append(a) or "Saved."))
+    scrap_then_tool = says("You")
+    scrap_then_tool.lines = scrap_then_tool.lines[:-1] + calls_tool("remember", {"fact": "x y z"}).lines
+    brain.replies += [scrap_then_tool, says()]
+    out = list(brain.llm.think_stream("remember my exam is on tuesday"))
+    assert ran and out == ["Saved."]
