@@ -4,7 +4,6 @@ rewrites it and pastes the new version over it.
 
 Idea from OpenLive's "Edit by voice" (github.com/katipally/openlive, Apache-2.0).
 Needs: pip install pyperclip pyautogui"""
-import config
 from skills.text_tools import copy_selection, paste_text
 
 MAX_CHARS = 8000
@@ -15,13 +14,8 @@ SYSTEM = ("You rewrite text exactly as instructed. Reply with only the rewritten
 
 def rewrite(text: str, instruction: str) -> str:
     from brain import llm
-    msg = llm._client.messages.create(
-        model=config.LLM_MODEL,
-        max_tokens=4000,
-        system=SYSTEM,
-        messages=[{"role": "user", "content": f"Instruction: {instruction}\n\n<text>\n{text}\n</text>"}],
-    )
-    return "".join(b.text for b in msg.content if b.type == "text").strip()
+    return llm.complete(SYSTEM, f"Instruction: {instruction}\n\n<text>\n{text}\n</text>",
+                        max_tokens=4000, small=False)
 
 
 def edit_selected_text(a):

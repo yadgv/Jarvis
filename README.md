@@ -15,11 +15,20 @@ Wake word → Whisper → Claude → Piper voice. Runs on Windows now and on a R
    mkdir voices
    python -m piper.download_voices en_GB-alan-medium --data-dir voices
    ```
-4. Set your API key (from console.anthropic.com). Easiest: create a file named `.env`
-   in the `jarvis` folder containing:
+4. Set your API keys. Create a file named `.env` in the `jarvis` folder. Jarvis uses the
+   cheapest brain that works, in the order in `BRAIN_ORDER` (config.py): Groq's free models
+   first, then OpenRouter's free models, and Claude (paid) only as the last resort.
+   Screen control and looking at the screen always use Claude.
+   - **Groq (free, main brain):** sign in at console.groq.com, open **API Keys**, press
+     **Create API Key** and copy it (shown once).
+   - **Claude (paid, last resort):** console.anthropic.com > API Keys.
    ```
+   GROQ_API_KEY=gsk_...
    ANTHROPIC_API_KEY=sk-ant-...
    ```
+   Groq's free limits are per model, so when one model is busy the next in `GROQ_MODELS` answers,
+   and the log shows which one did (`[brain] Groq ... answered`). Free models only get the tools
+   that look relevant to what you said, to stay under their token limits.
    (It's git-ignored. Or use `setx ANTHROPIC_API_KEY "sk-ant-..."` and restart your terminal/VS Code.)
    If you run Jarvis with a different Python than the one you installed packages into,
    install them with that Python: `"path\to\python.exe" -m pip install -r requirements.txt`.
@@ -32,14 +41,12 @@ Wake word → Whisper → Claude → Piper voice. Runs on Windows now and on a R
    local Kokoro voice (British "George", downloads ~120 MB into `voices/` the first
    time), then the Piper "Alan" voice, then the Windows system voice. Set
    `LOCAL_VOICE = "piper"` in config.py to skip Kokoro.
-   Optional backup brain for when Claude credits run out: make a free account at
-   openrouter.ai, create a key at openrouter.ai/keys, and add it to the same `.env`:
+   Optional second free brain: make a free account at openrouter.ai, create a key at
+   openrouter.ai/keys, and add it to the same `.env`:
    ```
    OPENROUTER_API_KEY=sk-or-...
    ```
-   If Claude fails with a credit, key or rate-limit error, Jarvis switches to a free
-   OpenRouter model for 15 minutes (`BACKUP_MINUTES`), then tries Claude again. The
-   models are tried in the order in `OPENROUTER_MODELS` in `config.py`. Free models
+   It answers when Groq is busy, before Claude. Its models are tried in the order in `OPENROUTER_MODELS` in `config.py`. Free models
    allow 20 requests a minute and 50 a day (1000 a day once you've bought $10 of
    OpenRouter credit, ever); a reply that uses a tool costs two requests.
    Optional free local brain for easy questions ("how many ounces in a pound",

@@ -7,7 +7,7 @@ from datetime import datetime
 import anthropic
 
 import config
-from brain import auto_memory, backup, local_llm, memory, settings
+from brain import auto_memory, backup, local_llm, memory, providers, settings
 import skills
 
 # The SDK's defaults (10 minute timeout, 2 retries) let one stuck request
@@ -74,9 +74,7 @@ BACKUP_MINUTES = getattr(config, "BACKUP_MINUTES", 15)
 _claude_off_until = 0.0
 last_ignored = False  # the last follow-up wasn't meant for Jarvis
 def _use_claude() -> bool:
-    if not config.ANTHROPIC_API_KEY and backup.available():
-        return False
-    return time.monotonic() >= _claude_off_until
+    return bool(config.ANTHROPIC_API_KEY) and time.monotonic() >= _claude_off_until
 
 
 def _first_break(buf, said):
@@ -139,17 +137,25 @@ def _claude_turn(user_text, system, said, tools_used, exclude=(), history=None):
         print(f"[brain] Claude finished without saying anything (stop: {stop_reason})")
 
 
-def _backup_turn(user_text, system, said, tools_used, exclude=(), history=None):
-    """The same turn on the free OpenRouter model (OpenAI message format)."""
-    messages = ([{"role": "system", "content": system}] + list(_history if history is None else history)
-                + [{"role": "user", "content": user_text}])
+def _openai_turn(user_text, system, said, tools_used, exclude=(), history=None, target=None):
+    """The same turn on an OpenAI-style model: Groq, or OpenRouter when target is None."""
+    past = list(_history if history is None else history)
+    if target and target.get("short_tools"):
+        # Small free token budgets: the last few turns and only the tools that look relevant.
+        past = past[-2 * getattr(config, "GROQ_HISTORY_TURNS", 4):]
+        keep = skills.pick_tools(user_text, exclude=exclude)
+        # "Yes" to a question about a draft or a click needs the tool from the last turn.
+        last = past[-1]["content"] if past and past[-1]["role"] == "assistant" else ""
+        keep |= set(re.findall(r"(?:\[tools used: |; )([a-z_]+) ->", last))
+        exclude = tuple(exclude) + tuple(s["name"] for s in skills.SKILLS if s["name"] not in keep)
+    messages = [{"role": "system", "content": system}] + past + [{"role": "user", "content": user_text}]
     t0 = time.perf_counter()
     model = None
     for _ in range(MAX_TOOL_ROUNDS + 1):
         result = {}
 
         def pieces():
-            for kind, value in backup.stream_round(messages, exclude):
+            for kind, value in backup.stream_round(messages, exclude, target):
                 if kind == "text":
                     yield value
                 else:
@@ -164,7 +170,98 @@ def _backup_turn(user_text, system, said, tools_used, exclude=(), history=None):
             out = skills.run(name, backup.parse_args(call))
             tools_used.append(f"{name} -> {str(out)[:80]}")
             messages.append({"role": "tool", "tool_call_id": call["id"], "content": out})
-    print(f"[brain] backup model {model or '?'} answered in {time.perf_counter() - t0:.1f}s")
+    who = (target or {}).get("who") or "backup model"
+    print(f"[brain] {who} ({model or '?'}) answered in {time.perf_counter() - t0:.1f}s")
+
+
+def _backup_turn(user_text, system, said, tools_used, exclude=(), history=None):
+    """The same turn on the free OpenRouter model (OpenAI message format)."""
+    yield from _openai_turn(user_text, system, said, tools_used, exclude, history)
+
+
+def _already_done(asked, tools_used):
+    """A brain failed after running tools: tell the next one so it doesn't repeat them."""
+    if not tools_used:
+        return asked
+    return (f"[Already done this turn, don't repeat these tools, just tell him the result: "
+            f"{'; '.join(tools_used)}]\n" + asked)
+
+
+def _chain(asked, system, said, tools_used, exclude=(), history=None):
+    """Answer with the cheapest brain that works (providers.order()): Groq's
+    free models, then OpenRouter's, then Claude. One that fails before saying
+    anything is rested and the next takes over."""
+    global _claude_off_until
+    errors = []
+    for name in providers.order():
+        if name == "groq":
+            for target in providers.groq_targets():
+                try:
+                    yield from _openai_turn(_already_done(asked, tools_used), system, said, tools_used,
+                                            exclude, history, target)
+                    return
+                except Exception as e:
+                    if said:
+                        raise
+                    providers.rest(target["model"], e)
+                    errors.append(e)
+        elif name == "openrouter":
+            try:
+                yield from _openai_turn(_already_done(asked, tools_used), system, said, tools_used,
+                                        exclude, history)
+                return
+            except Exception as e:
+                if said:
+                    raise
+                providers.rest("openrouter", e)
+                errors.append(e)
+        elif name == "claude":
+            if not _use_claude():
+                continue
+            try:
+                yield from _claude_turn(_already_done(asked, tools_used), system, said, tools_used,
+                                        exclude, **({"history": history} if history is not None else {}))
+                return
+            except Exception as e:
+                # Only switch if nothing was spoken yet, so he never hears a reply twice.
+                if said or not backup.claude_unavailable(e):
+                    raise
+                _claude_off_until = time.monotonic() + BACKUP_MINUTES * 60
+                print(f"[brain] Claude unavailable ({type(e).__name__}: {str(e)[:150]}), "
+                      f"resting it for {BACKUP_MINUTES} minutes")
+                errors.append(e)
+    if errors:
+        raise errors[-1]
+    raise RuntimeError("No brain is set up or available: add GROQ_API_KEY (free, console.groq.com) "
+                       "or ANTHROPIC_API_KEY to the .env file.")
+
+
+def complete(system: str, user: str, max_tokens: int = 400, small: bool = True) -> str:
+    """A one-off text answer with no tools (fact extraction, rewriting text),
+    from the cheapest brain that works. Raises if none does."""
+    messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+    errors = []
+    for name in providers.order():
+        targets = []
+        if name == "groq":
+            targets = [dict(t, tools=False, max_tokens=max_tokens) for t in providers.groq_targets(small=small)]
+        elif name == "openrouter":
+            targets = [dict(backup.openrouter_target(), tools=False, max_tokens=max_tokens)]
+        for target in targets:
+            try:
+                text = "".join(v for k, v in backup.stream_round(messages, (), target) if k == "text")
+                if text.strip():
+                    return text.strip()
+            except Exception as e:
+                providers.rest(target["model"] if name == "groq" else "openrouter", e)
+                errors.append(e)
+        if name == "claude" and _use_claude():
+            msg = _client.messages.create(model=config.LLM_MODEL, max_tokens=max_tokens, system=system,
+                                          messages=[{"role": "user", "content": user}])
+            return "".join(b.text for b in msg.content if getattr(b, "type", "") == "text").strip()
+    if errors:
+        raise errors[-1]
+    raise RuntimeError("No brain available")
 
 
 class _HandOff(Exception):
@@ -275,25 +372,12 @@ def _think_stream(user_text: str, followup: bool = False, note: str = "", exclud
                 yield from _local_turn(user_text, said)
                 return
             except _HandOff:
-                print("[brain] local model passed it to Claude")
+                print("[brain] local model passed it on")
             except Exception as e:
                 if said:
                     raise
                 local_llm.failed(e)
-        if not _use_claude():
-            yield from _backup_turn(asked, system, said, tools_used, exclude)
-            return
-        try:
-            yield from _claude_turn(asked, system, said, tools_used, exclude)
-        except Exception as e:
-            # Only switch if nothing was spoken yet, so he never hears a reply twice.
-            if said or not backup.available() or not backup.claude_unavailable(e):
-                raise
-            _claude_off_until = time.monotonic() + BACKUP_MINUTES * 60
-            print(f"[brain] Claude unavailable ({type(e).__name__}: {str(e)[:150]}), "
-                  f"using the backup model for the next {BACKUP_MINUTES} minutes")
-            tools_used.clear()
-            yield from _backup_turn(asked, system, said, tools_used, exclude)
+        yield from _chain(asked, system, said, tools_used, exclude)
 
     gen = turn()
     try:
@@ -327,19 +411,12 @@ def run_job(prompt: str, exclude_tools=()) -> str:
     said, used = [], []
     exclude = tuple(exclude_tools) + ("shut_down",)
     try:
-        if not _use_claude():
-            raise RuntimeError("Claude is off")
-        for _ in _claude_turn(prompt, system, said, used, exclude, history=[]):
+        for _ in _chain(prompt, system, said, used, exclude, history=[]):
             pass
     except Exception as e:
-        if said:
-            pass  # keep what came back before it failed
-        elif not backup.available():
+        if not said:
             raise
-        else:
-            print(f"[jobs] Claude failed ({e}); trying the backup model")
-            for _ in _backup_turn(prompt, system, said, used, exclude, history=[]):
-                pass
+        print(f"[jobs] the brain failed part-way ({e}); keeping what came back")
     return " ".join(said).strip()
 
 

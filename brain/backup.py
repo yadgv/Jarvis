@@ -40,33 +40,46 @@ def available() -> bool:
     return bool(config.OPENROUTER_API_KEY)
 
 
+class ProviderError(RuntimeError):
+    """An OpenAI-style server said no; status is the HTTP code (429 = rate limit)."""
+    def __init__(self, message, status=None, retry_after=None):
+        super().__init__(message)
+        self.status, self.retry_after = status, retry_after
+
+
+def openrouter_target():
+    models = list(config.OPENROUTER_MODELS)
+    t = {"url": URL, "model": models[0], "who": "OpenRouter", "tools": True, "max_tokens": 1500,
+         "headers": {"Authorization": f"Bearer {config.OPENROUTER_API_KEY}", "X-Title": "Jarvis"}}
+    if len(models) > 1:
+        t["extra"] = {"models": models}  # OpenRouter tries these in order if the first one is busy or gone
+    return t
+
+
 def _post(messages, exclude=(), target=None):
-    """target: {"url", "model", "headers"} for another OpenAI-style server
-    (the local Ollama model); tools are left out there."""
-    if target:
-        body = {"model": target["model"], "messages": messages, "max_tokens": 400, "stream": True}
-        url, headers, who = target["url"], target.get("headers") or {}, "Local model"
-    else:
-        models = list(config.OPENROUTER_MODELS)
-        body = {
-            "model": models[0],
-            "messages": messages,
-            "tools": skills.openai_tools(exclude),
-            "max_tokens": 1500,
-            "stream": True,
-        }
-        if len(models) > 1:
-            # OpenRouter tries these in order if the first one is busy or gone.
-            body["models"] = models
-        url, who = URL, "OpenRouter"
-        headers = {"Authorization": f"Bearer {config.OPENROUTER_API_KEY}", "X-Title": "Jarvis"}
-    r = requests.post(url, headers=headers, json=body, stream=True, timeout=(5 if target else 10, 60))
+    """target: {"url", "model", "headers", "who", "tools", "short_tools", "max_tokens", "extra"}
+    for any OpenAI-style server (OpenRouter, Groq, the local Ollama model).
+    No target means OpenRouter with all tools."""
+    target = target or openrouter_target()
+    body = {"model": target["model"], "messages": messages,
+            "max_tokens": target.get("max_tokens", 400), "stream": True}
+    if target.get("tools"):
+        body["tools"] = skills.openai_tools(exclude, short=target.get("short_tools", False))
+    body.update(target.get("extra") or {})
+    who = target.get("who", "Local model")
+    r = requests.post(target["url"], headers=target.get("headers") or {}, json=body, stream=True,
+                      timeout=(10 if target.get("tools") else 5, 60))
     if r.status_code != 200:
         try:
             detail = r.json().get("error", {}).get("message", r.text)
         except ValueError:
             detail = r.text
-        raise RuntimeError(f"{who} error {r.status_code}: {str(detail)[:200]}")
+        retry = None
+        try:
+            retry = float(r.headers.get("retry-after"))
+        except (AttributeError, TypeError, ValueError):
+            pass
+        raise ProviderError(f"{who} error {r.status_code}: {str(detail)[:200]}", r.status_code, retry)
     return r
 
 
@@ -80,7 +93,9 @@ def _events(response):
             return
         chunk = json.loads(data)
         if "error" in chunk:
-            raise RuntimeError(f"OpenRouter error: {chunk['error'].get('message', chunk['error'])}")
+            err = chunk["error"]
+            raise ProviderError(f"Model error: {err.get('message', err) if isinstance(err, dict) else err}",
+                                err.get("code") if isinstance(err, dict) else None)
         yield chunk
 
 
