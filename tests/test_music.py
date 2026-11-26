@@ -24,4 +24,6 @@ def test_playlist_looks_in_library_first(monkeypatch):
 def test_app_missing(monkeypatch):
     monkeypatch.setattr(pc_control, "open_app", lambda a: "I don't know an app called apple music.")
     assert music.play_music({"query": "x"}).startswith("I don't know")
-    assert music.play_music({}) == "What should I play?"
+    pressed = []
+    monkeypatch.setattr(pc_control, "media", lambda a: pressed.append(a["action"]) or "Done.")
+    assert music.play_music({}) == "Done." and pressed == ["play"]  # "play some music": media key

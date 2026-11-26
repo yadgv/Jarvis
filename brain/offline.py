@@ -172,6 +172,11 @@ def _command(t: str):
 
     if re.search(r"\bunmute\b|\bmute\b", t) and not re.search(r"\bmic", t):
         return "set_volume", {"action": "mute"}
+    if re.search(r"\b(?:max(?:imum)?|full) (?:the )?volume\b|\bvolume (?:to |at |all the way )?(?:max(?:imum)?|full|100)\b|"
+                 r"\b(?:max|crank) it(?: up)?$", t):
+        return "set_volume", {"action": "set", "level": 100}
+    if re.search(r"\bhalf (?:the )?volume\b|\bvolume (?:to |at )?half\b", t):
+        return "set_volume", {"action": "set", "level": 50}
     level = re.search(r"\bvolume (?:to |at )?(\d{1,3})\b|\b(?:set|put|turn) (?:the )?volume (?:to|at) (\d{1,3})\b", t)
     if level:
         return "set_volume", {"action": "set", "level": min(100, int(level.group(1) or level.group(2)))}
@@ -191,7 +196,8 @@ def _command(t: str):
 
     if re.fullmatch(r"lock (?:the |my )?(?:screen|computer|pc|laptop)", t):
         return "lock_screen", {}
-    m = re.fullmatch(r"(?:open|launch|start|run)(?: up)? (?:the |my )?([a-z0-9][a-z0-9 .+'-]{0,40}?)(?: app| application| program)?", t)
+    m = re.fullmatch(r"(?:open|launch|start|run)(?: up)? (?:the |my )?([a-z0-9][a-z0-9 .+'-]{0,40}?)(?: app| application| program)?"
+                     r"(?: for me| now| real quick)?", t)
     if m and not re.search(r"\.(?:com|org|net|ca)\b|\bwebsite\b|\bsite\b|\bfolder\b|\bsettings\b|"
                            r"\btimer\b|\bfile\b", m.group(1)):
         return "open_app", {"name": m.group(1).strip()}

@@ -113,8 +113,13 @@ def find_calendar(name=None):
 
 
 def _report(url, start, end):
+    return [ics for _, _, ics in _report_items(url, start, end)]
+
+
+def _report_items(url, start, end):
+    """(href, etag, ics text) for each event between two UTC times."""
     body = ('<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">'
-            '<d:prop><c:calendar-data/></d:prop><c:filter><c:comp-filter name="VCALENDAR">'
+            '<d:prop><d:getetag/><c:calendar-data/></d:prop><c:filter><c:comp-filter name="VCALENDAR">'
             '<c:comp-filter name="VEVENT">'
             f'<c:time-range start="{start:%Y%m%dT%H%M%SZ}" end="{end:%Y%m%dT%H%M%SZ}"/>'
             '</c:comp-filter></c:comp-filter></c:filter></c:calendar-query>')
@@ -123,8 +128,13 @@ def _report(url, start, end):
     if r.status_code == 401:
         raise PermissionError("iCloud refused the sign-in")
     r.raise_for_status()
-    return [el.text for el in ET.fromstring(r.content).iter("{urn:ietf:params:xml:ns:caldav}calendar-data")
-            if el.text and el.text.strip()]
+    out = []
+    for resp in ET.fromstring(r.content).findall("d:response", NS):
+        ics = resp.findtext(".//c:calendar-data", "", NS)
+        if ics and ics.strip():
+            out.append((urljoin(url, resp.findtext("d:href", "", NS).strip()),
+                        (resp.findtext(".//d:getetag", "", NS) or "").strip(), ics))
+    return out
 
 
 def read_events(start, end):
@@ -218,6 +228,95 @@ def add_event(a):
     return f"Added '{title}'{where} on {_say(start, all_day)}."
 
 
+_pending_delete = None  # (href, etag, description, turn asked)
+
+
+def _field(ics, name):
+    """Value of the first NAME (or NAME;params) line inside the VEVENT."""
+    body = ics.split("BEGIN:VEVENT", 1)[-1].replace("\r\n ", "").replace("\n ", "")
+    for line in body.splitlines():
+        key, _, value = line.partition(":")
+        if key.split(";")[0].upper() == name:
+            return value.strip()
+    return ""
+
+
+def _start(ics):
+    """(local datetime or date, all_day) of the event's DTSTART."""
+    raw = _field(ics, "DTSTART")
+    if len(raw) == 8:
+        return datetime.strptime(raw, "%Y%m%d").date(), True
+    dt = datetime.strptime(raw[:15], "%Y%m%dT%H%M%S")
+    if raw.endswith("Z"):
+        dt = dt.replace(tzinfo=timezone.utc).astimezone()
+    return dt, False
+
+
+def delete_event(a):
+    """Two steps, because a deleted event can't be brought back: the first call
+    finds the event and asks; a later turn with confirmed=true deletes it."""
+    global _pending_delete
+    import skills  # the package, for its turn counter (imported late: it imports us)
+    if not (config.ICLOUD_USERNAME and config.ICLOUD_APP_PASSWORD):
+        return "Deleting events needs the iCloud sign-in (ICLOUD_USERNAME and ICLOUD_APP_PASSWORD in .env)."
+    try:
+        if a.get("confirmed"):
+            if _pending_delete is None:
+                return "Nothing is waiting to be deleted. Find the event first (without confirmed)."
+            href, etag, what, asked = _pending_delete
+            if skills.turn <= asked:
+                return f"Not deleted yet: ask him first whether to delete {what}, and wait for a yes."
+            headers = {"If-Match": etag} if etag else {}
+            r = requests.request("DELETE", href, auth=_auth(), timeout=15, headers=headers)
+            if r.status_code == 401:
+                raise PermissionError("iCloud refused the sign-in")
+            if r.status_code == 412:
+                _pending_delete = None
+                return "That event changed since I found it, so I didn't delete it. Ask again."
+            r.raise_for_status()
+            _pending_delete = None
+            try:
+                from skills import calendar_events
+                calendar_events._cache.clear()
+            except Exception:
+                pass
+            return f"Deleted {what}."
+
+        title = (a.get("title") or "").strip().lower()
+        try:
+            day = date.fromisoformat((a.get("date") or "").strip()[:10])
+        except ValueError:
+            return "Give the event's date as YYYY-MM-DD."
+        t0 = datetime.combine(day, datetime.min.time()).astimezone(timezone.utc)
+        t1 = t0 + timedelta(days=1)
+        calendars = [find_calendar(a["calendar"])] if a.get("calendar") else list_calendars()
+        found = []
+        for cal_name, url in calendars:
+            for href, etag, ics in _report_items(url, t0, t1):
+                summary = _field(ics, "SUMMARY").replace("\\,", ",").replace("\\;", ";")
+                if title and title not in summary.lower():
+                    continue
+                if _field(ics, "RRULE"):
+                    continue  # a repeating event: deleting the file would remove every one
+                when, all_day = _start(ics)
+                if (when if all_day else when.date()) != day:
+                    continue
+                found.append((href, etag, f"'{summary}' on {_say(when, all_day)} ({cal_name})"))
+    except LookupError as e:
+        return str(e)
+    except PermissionError:
+        return "iCloud refused the sign-in. The app-specific password in .env is wrong."
+    except Exception as e:
+        return f"Couldn't reach iCloud: {e}"
+    if not found:
+        return f"No single (non-repeating) event matching '{a.get('title') or ''}' on {day:%A %d %B}."
+    if len(found) > 1:
+        return "More than one match; ask which: " + "; ".join(f[2] for f in found)
+    _pending_delete = (*found[0], skills.turn)
+    return (f"Found {found[0][2]}. Ask him to confirm, then call delete_calendar_event again with "
+            "confirmed=true.")
+
+
 SKILLS = [
     {
         "name": "add_calendar_event",
@@ -241,5 +340,23 @@ SKILLS = [
             "required": ["title", "start"],
         },
         "run": add_event,
+    },
+    {
+        "name": "delete_calendar_event",
+        "description": (
+            "Delete (cancel, remove, get rid of) one event from his iCloud calendar. First call with the "
+            "title and date: it finds the event. Read it back and ask him to confirm; only after he says "
+            "yes, call again with confirmed=true."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Words from the event's title, e.g. 'Appointment'"},
+                "date": {"type": "string", "description": "The event's local date, YYYY-MM-DD"},
+                "calendar": {"type": "string", "description": "Which calendar, if he names one"},
+                "confirmed": {"type": "boolean", "description": "He said yes to deleting the event found"},
+            },
+        },
+        "run": delete_event,
     },
 ]

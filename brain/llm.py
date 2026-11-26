@@ -40,7 +40,9 @@ _HISTORY_NOTE = (
     "\nEarlier turns are stored as plain text; any tools you used then are noted "
     "in [square brackets] at the end of your reply; [interrupted] means he cut you "
     "off there and didn't hear the rest. Never read those notes aloud, "
-    "and don't apologise for or correct earlier replies unless he says something was wrong."
+    "and don't apologise for or correct earlier replies unless he says something was wrong. "
+    "Those notes are past actions only: if he asks for the same thing again ('max volume' "
+    "twice), call the tool again. Never say you did something this turn without calling its tool."
 )
 
 
