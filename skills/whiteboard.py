@@ -553,7 +553,7 @@ def _user32():
     for name, args, res in (
             ("IsWindowVisible", [H], w.BOOL), ("GetWindowTextLengthW", [H], ctypes.c_int),
             ("GetWindowTextW", [H, w.LPWSTR, ctypes.c_int], ctypes.c_int),
-            ("IsIconic", [H], w.BOOL), ("ShowWindow", [H, ctypes.c_int], w.BOOL),
+            ("IsIconic", [H], w.BOOL), ("IsZoomed", [H], w.BOOL), ("ShowWindow", [H, ctypes.c_int], w.BOOL),
             ("SetWindowPos", [H, H, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, w.UINT], w.BOOL),
             ("GetForegroundWindow", [], H), ("GetWindowThreadProcessId", [H, ctypes.c_void_p], w.DWORD),
             ("AttachThreadInput", [w.DWORD, w.DWORD, w.BOOL], w.BOOL),
@@ -634,7 +634,7 @@ def _see_through(user32, hwnd, percent: int):
     user32.SetLayeredWindowAttributes(hwnd, 0, int(255 * percent / 100), LWA_ALPHA)
 
 
-def _to_front(wait: float = 15.0):
+def _to_front(wait: float = 15.0, rect=None):
     """Windows: once the board's window has opened, put it on top of
     everything (Settings > "Keep the whiteboard on top") and focus it."""
     if sys.platform != "win32":
@@ -649,6 +649,9 @@ def _to_front(wait: float = 15.0):
             while time.monotonic() < end:
                 hwnd = _find_window(user32)
                 if hwnd:
+                    if rect:
+                        from skills import hudwin
+                        hudwin.place(user32, hwnd, rect)
                     _raise(user32, hwnd, pin)
                     try:
                         _see_through(user32, hwnd, opacity())
@@ -676,8 +679,10 @@ def open_window():
     exe = _app_browser()
     try:
         if exe:
-            subprocess.Popen([exe, f"--app={link}", "--start-maximized"])  # big = readable
-            _to_front()
+            from skills import hudwin
+            rect = hudwin.wide_rect()   # wide (16:9), not tall
+            subprocess.Popen([exe] + hudwin.browser_args(link, rect))
+            _to_front(rect=rect)
             return
     except Exception as e:
         print(f"[whiteboard] couldn't open an app window ({e}); using the browser")

@@ -49,6 +49,7 @@ from skills import canvas  # noqa: E402
 from skills import recap  # noqa: E402
 from skills import vocab  # noqa: E402
 from skills import viewer3d  # noqa: E402
+from skills import workspace  # noqa: E402
 
 MODULES = [
     briefing,
@@ -81,6 +82,7 @@ MODULES = [
     documents,
     cad,
     viewer3d,
+    workspace,
     personality,
     background,
     study,
@@ -190,6 +192,9 @@ _STUDY = re.compile(r"\b(quiz|flash ?cards?|pomodoro|study|studying|revise|revis
 _CANVAS = re.compile(r"\b(canvas|class files|course files|lecture (?:notes|slides|files)|my (?:classes|courses)|"
                      r"due|assignments?|homework|deadlines?)\b", re.I)
 CANVAS_TOOLS = ("canvas_setup", "canvas_sign_in", "canvas_courses", "canvas_download", "canvas_due")
+_BRIEF = re.compile(r"\b(brief|summari[sz]e|summary|outline|tl;?dr|this (?:article|page|pdf|paper|document|doc)|"
+                    r"the brief|section \d|sections?|reader|lab manual)\b", re.I)
+BRIEF_TOOLS = ("brief_document", "edit_brief", "read_brief", "save_brief_as_word", "view_document")
 _RECAP = re.compile(r"\b(what did (?:i|we) do|recap|my day|today so far|what have i (?:done|been doing))\b", re.I)
 _TASKS = re.compile(r"\b(working on|doing|busy|done yet|finished|progress|status|cancel|stop|abort|tasks?|jobs?)\b", re.I)
 
@@ -227,6 +232,8 @@ def pick_tools(text, limit=12, exclude=()):
         keep |= {"quiz_me", "quiz_next", "pomodoro", "find_files"}
     if _CANVAS.search(text or ""):
         keep |= set(CANVAS_TOOLS)
+    if _BRIEF.search(text or ""):
+        keep |= set(BRIEF_TOOLS)
     if _RECAP.search(text or ""):
         keep.add("daily_recap")
     if _TASKS.search(text or "") and background.active():
@@ -254,6 +261,8 @@ FILLERS = {
     "daily_briefing": "Pulling that together, sir.",
     "show_diagram": "Drawing that up for you, sir.",
     "canvas_download": "Fetching your class files from Canvas, sir.",
+    "brief_document": "Reading it now, sir.",
+    "edit_brief": "Changing that now, sir.",
 }
 _local = threading.local()
 
@@ -302,7 +311,8 @@ def _guard():
 NEEDS_INTERNET = {"get_weather", "get_news", "web_search", "whats_the_buzz", "get_calendar_events",
                   "check_email", "reply_email", "add_calendar_event", "delete_calendar_event", "stock_price", "look_at_screen",
                   "use_computer", "plan_claude_code_task", "start_claude_code_task", "plan_new_app", "edit_selected_text",
-                  "daily_briefing", "open_website", "show_diagram", "make_document", "make_3d_model"}
+                  "daily_briefing", "open_website", "show_diagram", "make_document", "make_3d_model",
+                  "brief_document", "edit_brief"}
 
 
 # What the chip next to the orb says while a tool runs. Quick lookups
@@ -315,6 +325,7 @@ TASK_LABELS = {
     "show_diagram": "Drawing on the whiteboard", "make_document": "Making the document",
     "make_3d_model": "Designing the 3D part", "organize_folder": "Sorting {folder}", "play_music": "Starting the music", "daily_briefing": "Getting your briefing",
     "plan_new_app": "Planning the app", "start_claude_code_task": "Starting Claude Code",
+    "brief_document": "Writing the brief", "edit_brief": "Editing the brief",
 }
 
 
