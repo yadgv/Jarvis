@@ -3,11 +3,18 @@ from faster_whisper import WhisperModel
 
 import config
 
-_model = WhisperModel(
-    config.WHISPER_MODEL,
-    device=config.WHISPER_DEVICE,
-    compute_type=config.WHISPER_COMPUTE,
-)
+
+def _load():
+    """Use the copy already on disk first, so starting with no internet doesn't
+    wait on a download check; download it only if it isn't there yet."""
+    opts = dict(device=config.WHISPER_DEVICE, compute_type=config.WHISPER_COMPUTE)
+    try:
+        return WhisperModel(config.WHISPER_MODEL, local_files_only=True, **opts)
+    except Exception:
+        return WhisperModel(config.WHISPER_MODEL, **opts)
+
+
+_model = _load()
 
 
 import numpy as np

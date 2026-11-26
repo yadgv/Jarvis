@@ -190,10 +190,22 @@ def _guard():
     return g
 
 
+# Tools that can't work without the internet; offline they say so at once
+# instead of waiting on a timeout.
+NEEDS_INTERNET = {"get_weather", "get_news", "web_search", "whats_the_buzz", "get_calendar_events",
+                  "check_email", "reply_email", "add_calendar_event", "stock_price", "look_at_screen",
+                  "use_computer", "plan_claude_code_task", "start_claude_code_task", "edit_selected_text",
+                  "daily_briefing", "open_website"}
+
+
 def run(name: str, args: dict) -> str:
     skill = _BY_NAME.get(name)
     if skill is None:
         return f"Unknown tool {name}."
+    if name in NEEDS_INTERNET:
+        from brain import network
+        if not network.online():
+            return f"The internet is down, so {name} can't work right now. Tell him briefly."
     from brain import safety
     verdict, note = _guard().check(name, args)
     if verdict == "block":
