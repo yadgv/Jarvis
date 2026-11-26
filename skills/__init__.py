@@ -194,7 +194,7 @@ def _guard():
 # Tools that can't work without the internet; offline they say so at once
 # instead of waiting on a timeout.
 NEEDS_INTERNET = {"get_weather", "get_news", "web_search", "whats_the_buzz", "get_calendar_events",
-                  "check_email", "reply_email", "add_calendar_event", "stock_price", "look_at_screen",
+                  "check_email", "reply_email", "add_calendar_event", "delete_calendar_event", "stock_price", "look_at_screen",
                   "use_computer", "plan_claude_code_task", "start_claude_code_task", "edit_selected_text",
                   "daily_briefing", "open_website"}
 

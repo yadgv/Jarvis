@@ -232,7 +232,44 @@ def play_in_app(app, query, wait=1.5):
     return _in_thread(lambda: _play_in_app(app, query, wait))
 
 
+def _front(win):
+    """Bring the window forward; a minimised Apple Music ignores SetActive alone."""
+    for method in ("ShowWindow", "SetActive", "SetTopmost"):
+        try:
+            if method == "ShowWindow":
+                win.ShowWindow(9)  # SW_RESTORE
+            elif method == "SetTopmost":
+                win.SetTopmost(True)
+                win.SetTopmost(False)
+            else:
+                win.SetActive()
+        except Exception:
+            pass
+
+
+def _media_play():
+    """Press the Play/Pause media key (instant, no screenshots)."""
+    try:
+        from skills import pc_control
+        pc_control._press("play_pause")
+        return True
+    except Exception:
+        return False
+
+
+def _started(win, tries=6):
+    for _ in range(tries):
+        if _has_pause(win):
+            return True
+        time.sleep(0.5)
+    return False
+
+
 def _play_in_app(app, query, wait):
+    def give_up(why):
+        print(f"[pc] tier 2 music: {why}; falling back to screen control")
+        return None
+
     win = None
     for _ in range(10):
         win = find_window(app)
@@ -240,23 +277,27 @@ def _play_in_app(app, query, wait):
             break
         time.sleep(0.5)
     if win is None:
-        return None
+        return give_up(f"no '{app}' window found")
     try:
-        win.SetActive()
+        _front(win)
         box = _find(win, "search", None, TYPEABLE) or next((c for c in _walk(win) if _kind(c) in TYPEABLE), None)
         if box is None:
-            return None
+            return give_up("no search box")
         was_playing = _has_pause(win)
         _type_into(box, query, enter=True)
-        time.sleep(wait)
         words = _words(query)
         if not words:
-            return None
-        hits = [c for c in _walk(win) if _kind(c) in ("ListItemControl", "DataItemControl", "ButtonControl",
-                                                     "HyperlinkControl", "TreeItemControl")
-                and all(w in _name(c).lower() for w in words[:2])]
+            return give_up("nothing to search for")
+        hits = []
+        for _ in range(max(1, int(wait / 0.5)) + 6):  # results can take a few seconds to appear
+            time.sleep(0.5)
+            hits = [c for c in _walk(win) if _kind(c) in ("ListItemControl", "DataItemControl", "ButtonControl",
+                                                         "HyperlinkControl", "TreeItemControl")
+                    and all(w in _name(c).lower() for w in words[:2])]
+            if hits:
+                break
         if not hits:
-            return None
+            return give_up(f"no result named like '{query}'")
         hit = hits[0]
         play = next((c for c in _walk(hit) if _kind(c) == "ButtonControl" and _name(c).lower().startswith("play")),
                     None)
@@ -268,12 +309,22 @@ def _play_in_app(app, query, wait):
             except Exception:
                 _press(hit)
         time.sleep(1.0)
-        if _has_pause(win) and not was_playing:
+        if not was_playing and not _has_pause(win):
+            # An artist or album opens its own page: press its Play button.
+            page_play = next((c for c in _walk(win) if _kind(c) == "ButtonControl"
+                              and _name(c).lower() in ("play", "play all")), None)
+            if page_play is not None:
+                _press(page_play)
+        if not was_playing and not _started(win):
+            # Picked but not playing yet: the media key starts it without a screenshot.
+            _media_play()
+        if _started(win, tries=2) and not was_playing:
             log_tier(2, f"played '{query}' in {app}")
             return _name(hit)
         if was_playing and _has_pause(win):
             log_tier(2, f"played '{query}' in {app} (was already playing, not verified)")
             return _name(hit)
+        return give_up("picked a result but it didn't start playing")
     except Exception as e:
         print(f"[pc] tier 2 music failed ({e}); falling back to screen control")
     return None

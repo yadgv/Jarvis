@@ -7,6 +7,7 @@ so Jarvis can't be talked into running arbitrary commands.
 """
 import glob
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -65,6 +66,10 @@ def open_app(a):
             hits = sorted((k for k in shortcuts if name in k and "uninstall" not in k), key=len)
             target = shortcuts[hits[0]] if hits else None
     if target is None:
+        site = re.sub(r"\s+(?:for me|please|now)$", "", name)
+        from skills.quick_actions import SITES, open_website
+        if site in SITES:  # "youtube" is a website, not an installed app
+            return open_website({"site": site})
         return f"I don't know an app called {name}. Add it to APPS in config.py."
     try:
         if IS_WINDOWS:
@@ -132,7 +137,7 @@ def lock_screen(a=None):
 SKILLS = [
     {
         "name": "open_app",
-        "description": "Open an app on the user's computer by name, e.g. Chrome, Spotify, Apple Music, Notepad, Calculator, VS Code.",
+        "description": "Open an installed app on the user's computer by name, e.g. Chrome, Spotify, Apple Music, Notepad, Calculator, VS Code. Websites (YouTube, Gmail, Netflix...) use open_website instead.",
         "parameters": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]},
         "run": open_app,
     },

@@ -54,6 +54,10 @@ def test_simple_commands_are_understood():
     assert cmd("open spotify") == ("open_app", {"name": "spotify"})
     assert cmd("can you open the calculator app") == ("open_app", {"name": "calculator"})
     assert cmd("lock the computer") == ("lock_screen", {})
+    assert cmd("Open up YouTube for me.") == ("open_app", {"name": "youtube"})  # open_app opens the site
+    assert cmd("max volume") == ("set_volume", {"action": "set", "level": 100})
+    assert cmd("volume to max") == ("set_volume", {"action": "set", "level": 100})
+    assert cmd("half volume") == ("set_volume", {"action": "set", "level": 50})
 
 
 def test_other_things_are_not_guessed():

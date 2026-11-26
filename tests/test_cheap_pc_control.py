@@ -138,6 +138,34 @@ def test_music_falls_back_to_screenshots(desktop, monkeypatch):
     assert music.play_music({"query": "Some Unknown Song"}) == "Playing via screen."
 
 
+def test_artist_page_play_then_media_key_before_screenshots(desktop, monkeypatch):
+    """An artist result opens a page: press its Play; if still not playing, the media key."""
+    artist = C("ListItem", "Drake, Artist", patterns={ui_automation.INVOKE})
+    page_play = C("Button", "Play", patterns={ui_automation.INVOKE})
+    pressed = []
+
+    def after_search(v):
+        desktop.win.kids.append(artist)
+    desktop.search.GetPattern = lambda pid: types.SimpleNamespace(SetValue=after_search)
+    desktop.win.kids[0].kids.remove(desktop.play)
+    artist.DoubleClick = lambda: desktop.win.kids.append(page_play)
+    monkeypatch.setattr(music.pc_control, "_press",
+                        lambda key, times=1: pressed.append(key) or desktop.win.kids.append(C("Button", "Pause")))
+    monkeypatch.setattr(music.pc_control, "open_app", lambda a: "Opened apple music.")
+    monkeypatch.setattr(music.time, "sleep", lambda s: None)
+    monkeypatch.setattr(music.computer, "use_computer", lambda a: pytest.fail("used screenshots"))
+    assert music.play_music({"query": "Drake", "kind": "artist"}) == "Playing: Drake, Artist."
+    assert page_play.log == ["invoke"] and pressed == ["play_pause"]
+
+
+def test_tier_two_says_why_it_gave_up(desktop, monkeypatch, capsys):
+    monkeypatch.setattr(music.pc_control, "open_app", lambda a: "Opened apple music.")
+    monkeypatch.setattr(music.time, "sleep", lambda s: None)
+    monkeypatch.setattr(music.computer, "use_computer", lambda a: "Playing via screen.")
+    music.play_music({"query": "Some Unknown Song"})
+    assert "no result named like 'Some Unknown Song'" in capsys.readouterr().out
+
+
 # ---------- tier 3 ----------
 def test_screen_control_logs_tokens(capsys):
     from skills import computer

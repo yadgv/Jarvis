@@ -26,6 +26,10 @@ def test_open_app_from_config_and_start_menu(monkeypatch):
     assert skills.run("open_app", {"name": "word"}) == "Opened word."
     assert opened == [config.APPS["calculator"], r"C:\sm\Spotify.lnk", r"C:\sm\Word.lnk"]
     assert "don't know" in skills.run("open_app", {"name": "rm -rf"})
+    sites = []
+    monkeypatch.setattr("skills.quick_actions.webbrowser.open", sites.append)
+    assert skills.run("open_app", {"name": "youtube for me"}) == "Opened https://www.youtube.com."
+    assert sites == ["https://www.youtube.com"]
 
 
 def test_linux_without_tools(monkeypatch):

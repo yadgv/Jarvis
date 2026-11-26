@@ -17,8 +17,8 @@ KINDS = ("song", "artist", "album", "playlist")
 
 def play_music(a):
     query = (a.get("query") or "").strip()
-    if not query:
-        return "What should I play?"
+    if not query:  # "play some music": the media key resumes whatever was on, instantly
+        return pc_control.media({"action": "play"})
     kind = (a.get("kind") or "song").strip().lower()
     if kind not in KINDS:
         kind = "song"

@@ -1,3 +1,4 @@
+from datetime import date as date_
 from types import SimpleNamespace as NS
 
 import pytest
@@ -53,6 +54,8 @@ def icloud(monkeypatch):
     def request(method, url, **kw):
         calls.append((method, url, kw))
         assert kw["auth"] == ("z@icloud.com", "abcd-efgh-ijkl-mnop")
+        if method == "DELETE":
+            return NS(status_code=204, raise_for_status=lambda: None)
         if method == "REPORT":
             return NS(status_code=207, content=REPORTS.get(url.rstrip("/").rsplit("/", 1)[-1], EMPTY),
                       raise_for_status=lambda: None)
@@ -122,4 +125,33 @@ def test_reading_sees_every_calendar(icloud, monkeypatch):
     calendar_events._cache.clear()
     out = skills.run("get_calendar_events", {"day": "today"})
     assert "Gym (Home)" in out and "Shift (Work)" in out
+    REPORTS.clear()
+
+
+def test_delete_needs_a_yes_in_a_later_turn(icloud, monkeypatch):
+    import skills
+    monkeypatch.setattr(ic, "_pending_delete", None)
+    REPORTS.update(home=_report("Appointment", date_(2026, 11, 26)).replace(
+        b"<propstat><prop>", b"<propstat><prop><getetag>\"e1\"</getetag>"))
+    monkeypatch.setattr(skills, "turn", 5)
+    out = ic.delete_event({"title": "appointment", "date": "2026-11-26"})
+    assert out.startswith("Found 'Appointment' on Thursday 26 November at 10:00 AM (Home)")
+    assert "Not deleted yet" in ic.delete_event({"confirmed": True})  # same turn
+    assert not [c for c in icloud if c[0] == "DELETE"]
+    monkeypatch.setattr(skills, "turn", 6)
+    assert ic.delete_event({"confirmed": True}).startswith("Deleted 'Appointment'")
+    method, url, kw = icloud[-1]
+    assert method == "DELETE" and url == "https://p176-caldav.icloud.com:443/x.ics"
+    assert kw["headers"] == {"If-Match": '"e1"'}
+    assert "Nothing is waiting" in ic.delete_event({"confirmed": True})
+    REPORTS.clear()
+
+
+def test_delete_finds_nothing_or_several(icloud, monkeypatch):
+    monkeypatch.setattr(ic, "_pending_delete", None)
+    day = date_(2026, 11, 26)
+    REPORTS.update(home=_report("Gym", day), work=_report("Gym class", day))
+    assert "No single" in ic.delete_event({"title": "dentist", "date": "2026-11-26"})
+    assert "More than one match" in ic.delete_event({"title": "gym", "date": "2026-11-26"})
+    assert "YYYY-MM-DD" in ic.delete_event({"title": "gym", "date": "tomorrow"})
     REPORTS.clear()
