@@ -56,3 +56,10 @@ def no_network(monkeypatch):
     from brain import network
     monkeypatch.setattr(network, "_check", lambda: True)
     monkeypatch.setattr(network, "_state", {"online": None, "until": 0.0})
+
+
+@pytest.fixture(autouse=True)
+def private_whiteboard(monkeypatch, tmp_path):
+    """The whiteboard saves its last drawing in memory/; keep tests' drawings out of it."""
+    from skills import whiteboard
+    monkeypatch.setattr(whiteboard, "_saved_path", lambda: str(tmp_path / "whiteboard.json"))

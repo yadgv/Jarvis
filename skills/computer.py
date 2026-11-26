@@ -19,6 +19,7 @@ Needs: pip install pillow pyautogui (Windows).
 import base64
 import io
 import math
+import re
 import sys
 import time
 
@@ -314,9 +315,18 @@ def _loop(gui, scr, messages):
             "if he wants you to keep going; if he says yes, call use_computer again with confirmed=true.")
 
 
+_DRAWING = re.compile(r"\bwhite ?board\b|\b(?:draw|sketch)\b.*\b(?:diagram|wiring|wire|circuit|schematic|arduino)\b|"
+                      r"\bpaint\b.*\b(?:diagram|wiring|circuit)\b", re.I | re.S)
+
+
 def use_computer(a):
     global _pending
     task = (a.get("task") or "").strip()
+    if _DRAWING.search(task):
+        # Jarvis has his own whiteboard: never draw in Paint or Microsoft Whiteboard.
+        from skills import whiteboard
+        print("[computer] drawing request -> Jarvis's whiteboard")
+        return whiteboard.show_diagram({"topic": task})
     if ImageGrab is None:
         return "Controlling the computer needs Pillow and pyautogui: pip install pillow pyautogui"
     try:

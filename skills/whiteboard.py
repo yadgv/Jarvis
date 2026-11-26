@@ -59,11 +59,47 @@ _JSON = re.compile(r"\{.*\}", re.DOTALL)
 _board = {"version": 0, "title": "", "svg": "", "steps": [], "step": 0, "topic": "", "spec": None,
           "closed": False}
 _lock = threading.Lock()
+_KEEP = ("title", "svg", "steps", "topic", "spec")
+
+
+def _saved_path() -> str:
+    return os.path.join(config.MEMORY_DIR, "whiteboard.json")
+
+
+def _save():
+    """Keep the last drawing, so 'open the whiteboard' works after a restart or a clear."""
+    try:
+        os.makedirs(config.MEMORY_DIR, exist_ok=True)
+        with open(_saved_path(), "w", encoding="utf-8") as f:
+            json.dump({k: _board[k] for k in _KEEP}, f)
+    except (OSError, TypeError, ValueError) as e:
+        print(f"[whiteboard] couldn't save the drawing: {e}")
+
+
+def _restore() -> bool:
+    """Put the last saved drawing back on the board. False if there isn't one."""
+    try:
+        with open(_saved_path(), encoding="utf-8") as f:
+            last = json.load(f)
+    except (OSError, ValueError):
+        return False
+    if not isinstance(last, dict) or not last.get("svg"):
+        return False
+    with _lock:
+        _board.update({k: last.get(k) for k in _KEEP}, step=1 if last.get("steps") else 0,
+                      version=_board["version"] + 1, closed=False)
+    return True
+
+
 _server = None
 _opened = False
 _last_seen = 0.0     # when the page last asked for the board (it asks every 0.4 s)
 _launched = 0.0      # when we last opened a window
-GONE_AFTER = 3.0     # no ask for this long = the window was closed
+_said_bye = 0.0      # when the page told us it was closing
+# The page says goodbye when its window closes. If that's ever missed, no
+# polling for this long also counts as closed (a window behind others, or
+# minimized for a while, may be slowed to about one poll a minute).
+GONE_AFTER = 75.0
 
 
 # ---------- making the drawing ----------
@@ -235,6 +271,8 @@ function show(n) {
     li.className = (i + 1 === n) ? 'on' : (n > 0 && i + 1 < n ? 'done' : '');
   });
 }
+// Tell Jarvis when this window closes, so he opens a new one next time.
+window.addEventListener('pagehide', () => { try { navigator.sendBeacon('/bye'); } catch (e) {} });
 function go(n) { fetch('/step?n=' + n, {cache: 'no-store'}); }
 document.getElementById('next').onclick = () => go(step + 1);
 document.getElementById('back').onclick = () => go(Math.max(1, step - 1));
@@ -290,6 +328,14 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         else:
             self.send_error(404)
 
+    def do_POST(self):
+        global _said_bye
+        if self.path.partition("?")[0] == "/bye":
+            _said_bye = time.monotonic()
+            self._send("{}", "application/json")
+        else:
+            self.send_error(404)
+
     def log_message(self, *a):  # keep jarvis.log clean
         pass
 
@@ -318,6 +364,8 @@ def window_open() -> bool:
     so it's right even after he closes the window with the X."""
     now = time.monotonic()
     if not _opened:
+        return False
+    if _said_bye > max(_last_seen, _launched):  # closed with the X (or by "close the whiteboard")
         return False
     if _last_seen >= _launched:              # the page has loaded since we opened it
         return now - _last_seen < GONE_AFTER
@@ -376,11 +424,8 @@ def show_diagram(a):
     wants = action if action in ("clear", "close", "open") else (_wants(change) or (not change and _wants(topic)))
     if wants in ("clear", "close"):
         return clear(close=wants == "close")
-    if wants == "open" or (not topic and not change and _board["svg"]):
-        open_window()
-        return "The whiteboard is open." if _board["svg"] else "The whiteboard is open and empty."
-    if not topic and not change:
-        return "Say what to draw."
+    if wants == "open" or (not topic and not change):
+        return reopen()
     try:
         board = draw(topic or _board["topic"], change)
     except ValueError as e:
@@ -388,6 +433,7 @@ def show_diagram(a):
     with _lock:
         _board.update(board, topic=topic or _board["topic"], step=1 if board["steps"] else 0,
                       version=_board["version"] + 1)
+    _save()
     open_window()
     return _summary("Redrawn:" if change else "On the whiteboard:")
 
@@ -404,15 +450,25 @@ def clear(close=False) -> str:
     return "Cleared the whiteboard."
 
 
+def reopen() -> str:
+    """Open the window again, with the last drawing if the board was cleared
+    or Jarvis was restarted."""
+    restored = not _board["svg"] and _restore()
+    open_window()
+    if _board["svg"]:
+        return (_summary("Back on the whiteboard:") if restored
+                else f"The whiteboard is open, showing \"{_board['title']}\".")
+    return "The whiteboard is open but nothing has been drawn yet. Use show_diagram with what to draw."
+
+
 def whiteboard_step(a):
     action = (a.get("action") or "next").lower()
     if action in ("clear", "close"):
         return clear(close=action == "close")
-    if action == "open":
-        open_window()
-        return "The whiteboard is open." if _board["svg"] else "The whiteboard is open and empty."
-    if not _board["svg"]:
-        return "The whiteboard is empty. Use show_diagram first."
+    if action in ("open", "draw", "show", "redraw"):
+        return reopen()
+    if not _board["svg"] and not _restore():
+        return "Nothing has been drawn yet. Use show_diagram with what to draw."
     if action == "goto":
         n = set_step(a.get("step") or 1)
     elif action == "back":
@@ -458,7 +514,7 @@ SKILLS = [
         "parameters": {
             "type": "object",
             "properties": {
-                "action": {"type": "string", "enum": ["next", "back", "goto", "all", "clear", "close", "open"]},
+                "action": {"type": "string", "enum": ["next", "back", "goto", "all", "clear", "close", "open", "draw"]},
                 "step": {"type": "integer", "description": "for goto"},
             },
             "required": ["action"],
