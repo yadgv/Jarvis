@@ -45,7 +45,7 @@ Wake word → Whisper → Claude → Piper voice. Runs on Windows now and on a R
    ```
    python main.py
    ```
-   Say **"Hey Jarvis"**, then talk. Say **"Goodbye Jarvis"** to quit.
+   Say **"Hey Jarvis"** (or just **"Jarvis"**, then a short pause), then talk. Say **"Goodbye Jarvis"** to quit.
 
 ## Desktop widget
 ```
@@ -76,7 +76,11 @@ or switch off "Jarvis" in Task Manager > Startup apps.
   a finished sentence ends after 0.3 s, a thinking pause ("I want to… um") waits up to 2 s.
   The 8 MB model downloads to `memory/` the first time. The log shows `[turn] finished? 0.93`.
 - You can start talking during the beep; those words are kept.
-- Wake word misfires → raise `WAKE_THRESHOLD` (e.g. 0.6). A voice detector (`WAKE_VAD_THRESHOLD`) already
+- Wake word misfires → raise `WAKE_THRESHOLD` (e.g. 0.6).
+- Just "Jarvis" works too: a short word said on its own, with a pause before and after, is transcribed on the
+  PC and wakes him only if it was his name (ordinary talking is never transcribed). If he misses it, pause a
+  little before and after his name or raise `NAME_MAX_SECONDS`; if other words wake him, set `WAKE_ON_NAME = False`.
+  The log shows `[wake] short word heard: '...'` for each check. A voice detector (`WAKE_VAD_THRESHOLD`) already
   stops most TV/music wakes.
 - **Only wake for your voice:** `pip install scikit-learn scipy tqdm`, then `python train_my_voice.py`
   (about 3 minutes: say "Hey Jarvis" 8 times, read 4 sentences, 5 s of quiet). Delete
