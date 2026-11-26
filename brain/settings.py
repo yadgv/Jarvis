@@ -76,6 +76,8 @@ def app_defaults() -> dict:
     return {
         "show_panel": True,            # what you said and his reply, next to the orb
         "show_text_box": True,         # "Click here to type" under the reply
+        "type_key": "ctrl+alt+j",      # shortcut: type to Jarvis (hotkeys.py)
+        "panel_key": "ctrl+alt+h",     # shortcut: show/hide the whole text panel
         **COLOURS,
         "orb_size": "medium",
         "corner": "top-right",
@@ -123,6 +125,9 @@ def _clean(key, value, default):
         return value if value in ORB_SIZES else default
     if key == "corner":
         return value if value in CORNERS else default
+    if key in ("type_key", "panel_key"):
+        import hotkeys
+        return hotkeys.normal(str(value or "")) or default
     if key == "temperature_unit":
         return "fahrenheit" if str(value).lower().startswith("f") else "celsius"
     if isinstance(default, bool):
