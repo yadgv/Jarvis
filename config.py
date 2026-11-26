@@ -45,6 +45,7 @@ MAX_HISTORY_TURNS = 10                   # conversation memory (pairs)
 MEMORY_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "memory")
 HISTORY_MAX_AGE_HOURS = 6                # pick up the last conversation if it's newer than this
 MAX_FACTS = 100                          # long-term facts kept in memory/facts.json
+AUTO_MEMORY = True                       # after each chat, save lasting facts he mentioned without being asked
 FACTS_IN_PROMPT = 25                     # past this many saved facts, only the most relevant ones go to Claude
 SYSTEM_PROMPT = (
     "You are JARVIS, a British AI assistant for Ziad. "

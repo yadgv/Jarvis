@@ -97,6 +97,9 @@ or switch off "Jarvis" in Task Manager > Startup apps.
   Say **"new conversation"** to start fresh.
 - Say **"remember that..."** and he saves it for good; he may also save personal details you mention.
   Say **"forget that..."** to remove one. Facts live in `memory/facts.json`, which you can edit by hand.
+- **He also remembers without being asked** (`AUTO_MEMORY`, on): after each chat a quick background check picks out
+  lasting facts you mentioned ("my sister Mona is visiting" -> "His sister is called Mona") and saves them. The log
+  shows `[memory] auto-saved: ...`; "forget that..." removes one. Idea from OpenJarvis (Apache-2.0).
 - Past `FACTS_IN_PROMPT` (25) facts, only the newest few and the ones matching what you said are sent to Claude.
 - If you cut him off with "Hey Jarvis", he remembers only what he actually got to say.
 - When a tool takes a while (searching, the screen, email) he says a short "One moment, sir." after 4 seconds

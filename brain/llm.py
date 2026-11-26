@@ -7,7 +7,7 @@ from datetime import datetime
 import anthropic
 
 import config
-from brain import backup, memory, settings
+from brain import auto_memory, backup, memory, settings
 import skills
 
 # The SDK's defaults (10 minute timeout, 2 retries) let one stuck request
@@ -266,11 +266,13 @@ def _think_stream(user_text: str, followup: bool = False, note: str = "", exclud
             reply = " ".join(said) if _pending_clip is None else _clipped(_pending_clip)
             _turn_running, _pending_clip = False, None
         if reply and not last_ignored:
+            spoken_reply = reply
             if tools_used:
                 reply += " [tools used: " + "; ".join(tools_used) + "]"
             _history.append({"role": "user", "content": user_text})
             _history.append({"role": "assistant", "content": reply})
             memory.save_history(_history)
+            auto_memory.run_in_background(user_text, spoken_reply, tools_used)
 
 
 def run_job(prompt: str, exclude_tools=()) -> str:
