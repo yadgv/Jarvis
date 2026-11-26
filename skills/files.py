@@ -529,7 +529,11 @@ def _carry_out(this_turn):
         return "That plan is too old now. Make it again and ask him."
     _plan = None
     done, trashed, problems = [], [], []
-    for src, dst in plan["moves"]:
+    import ui_events
+    total = len(plan["moves"]) + len(plan["trash"])
+    for i, (src, dst) in enumerate(plan["moves"], 1):
+        if total > 1:
+            ui_events.task("Moving files", i, total)
         try:
             if not (allowed(src) and allowed(os.path.dirname(dst))):
                 raise OSError("outside his folders")

@@ -120,6 +120,12 @@ never fight over the mic. `python install_app.py remove` takes the shortcuts awa
   starting with Windows. Save applies it straight away (the microphone from the next start) and it's
   kept in `memory/settings.json`.
 - The **whiteboard** opens in front of everything (and keeps on top until you close it; untick that in Settings).
+- **Animations:** the orb eases between colours and moods and glows with his voice; the text panel slides and
+  fades out of the orb; while he works a small chip by the orb says what he's doing ("Opening Chrome...",
+  "Moving files 3/20") with a spinner or progress bar, then a tick; during screen control a ripple shows
+  where he clicks; the whiteboard fades drawings in and out, draws each step's lines and glides the view to
+  the step he's on. Settings > **Reduce animations** turns the extras off and runs the orb at 30 frames a
+  second (it already drops to 30 while standing by, to save CPU).
 - While you talk to him a panel slides out with what you said and his reply, then tucks away
   after a few seconds. Click the panel (or right-click > Type a message) to open the text box; Esc closes it.
 - The orb is silver when standing by, green while listening, amber while thinking, blue while speaking.

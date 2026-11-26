@@ -47,6 +47,7 @@ KEY = "#010203" if IS_WINDOWS else "#0b0f14"
 PANEL, PANEL_EDGE = "#0f141a", "#1c2631"
 TEXT, MUTED = "#f2f6fa", "#b4c0cc"
 YOU_TEXT = "#cfd9e3"
+ACCENT = "#78c3ff"   # the task chip's progress bar
 SHADOW = "#000000"   # behind the text; not the see-through KEY colour
 # On Windows the window stays one size and the panel area is see-through;
 # elsewhere (no see-through colour) it shrinks to the orb when collapsed.
@@ -59,7 +60,9 @@ PANEL_H = 190
 MARGIN = (24, 24)    # distance from the right and top of the screen
 COLLAPSE_AFTER = 7   # seconds of quiet before the panel tucks away
 PARTICLES = 220
-FPS = 30
+FPS = 60             # Settings > Reduce animations: 30, and no slides, fades or ripples
+CALM_FPS = 30
+PANEL_ANIM = 0.24    # seconds for the text panel to slide and fade in or out
 
 # status -> (label, colour, spin, swirl, resting ripple)
 SILVER = (205, 215, 225)
@@ -82,6 +85,12 @@ def _mix(a, b, t):
     return tuple(x + (y - x) * t for x, y in zip(a, b))
 
 
+def _smooth(t):
+    """Ease in and out: slow at both ends, so movement never starts or stops with a jerk."""
+    t = max(0.0, min(1.0, t))
+    return t * t * (3 - 2 * t)
+
+
 class Orb:
     """A small sphere of particles with one thin ring, on a Canvas."""
 
@@ -91,7 +100,11 @@ class Orb:
         self.colours = {}    # status -> colour chosen in Settings
         self.energy = 0.0
         self.angle = 0.0
-        self.t0 = time.perf_counter()
+        self.t0 = self.last = time.perf_counter()
+        # spin, swirl and ripple ease to each state's values instead of jumping
+        self.motion = list(STATES["starting"][2:])
+        # Soft glow: two faint rings just outside the dots that swell with his voice.
+        self.glow = [canvas.create_oval(0, 0, 0, 0, outline=_hex(SILVER), width=w) for w in (3, 1)]
         rr = radius * 1.42
         self.ring = canvas.create_arc(cx - rr, cy - rr, cx + rr, cy + rr, start=90, extent=300,
                                       style="arc", outline=_hex(SILVER), width=2)
@@ -104,15 +117,22 @@ class Orb:
             self.points.append((ring * math.cos(theta), y, ring * math.sin(theta),
                                 random.uniform(0, math.tau), random.uniform(0.6, 1.4)))
             self.dots.append(canvas.create_oval(0, 0, 0, 0, outline="", fill=_hex(SILVER)))
+        self.turns = [0.0] * PARTICLES   # each dot's own angle, so swirling starts and stops smoothly
 
     def frame(self, status, level=0.0):
-        _, target, spin, swirl, ripple = STATES.get(status, STATES["idle"])
+        _, target, *goal = STATES.get(status, STATES["idle"])
         target = self.colours.get(status, target)
-        t = time.perf_counter() - self.t0
-        self.colour = _mix(self.colour, target, 0.1)
-        self.energy += (level - self.energy) * (0.5 if level > self.energy else 0.15)
+        now = time.perf_counter()
+        dt, self.last = min(0.1, max(0.001, now - self.last)), now
+        t = now - self.t0
+        ease = lambda rate: 1 - math.exp(-rate * dt)   # the same feel at 30 or 60 frames a second
+        self.colour = _mix(self.colour, target, ease(4.0))
+        self.motion = [m + (g - m) * ease(3.0) for m, g in zip(self.motion, goal)]
+        spin, swirl, ripple = self.motion
+        self.energy += (level - self.energy) * ease(18.0 if level > self.energy else 5.0)
         energy = self.energy
-        self.angle += spin / FPS * (1 + energy)
+        step = spin * dt * (1 + energy)
+        self.angle += step
         c, cx, cy, r = self.c, self.cx, self.cy, self.r
         breathe = 1 + 0.02 * math.sin(t * 1.3) + 0.1 * energy
 
@@ -120,6 +140,10 @@ class Orb:
         c.itemconfigure(self.ring, start=(90 - math.degrees(self.angle) * 1.5) % 360,
                         extent=300 if busy else 359,
                         outline=_hex(_mix((95, 105, 115), self.colour, 0.75 if busy else 0.3)))
+        for i, g in enumerate(self.glow):
+            gr = r * breathe * (1.12 + 0.1 * i + 0.22 * energy + 0.015 * math.sin(t * 2 + i))
+            c.coords(g, cx - gr, cy - gr, cx + gr, cy + gr)
+            c.itemconfigure(g, outline=_hex(_mix((40, 46, 54), self.colour, (0.1 + 0.55 * energy) / (1 + i))))
 
         cos_t, sin_t = math.cos(0.35), math.sin(0.35)
         amp = ripple + energy * 0.28
@@ -127,8 +151,10 @@ class Orb:
         # far-side dots are a dimmer shade of the colour (not near-black), and
         # each dot gets a thin darker rim so it still shows on a white window.
         dim = _mix(self.colour, (70, 78, 86), 0.55)
-        for (x, y, z, phase, speed), dot in zip(self.points, self.dots):
-            a = (self.angle * speed if swirl else self.angle) + swirl * y * 1.5 * math.sin(t * 0.7)
+        turns = self.turns
+        for i, ((x, y, z, phase, speed), dot) in enumerate(zip(self.points, self.dots)):
+            turns[i] += step * (1 + swirl * (speed - 1))
+            a = turns[i] + swirl * y * 1.5 * math.sin(t * 0.7)
             ca, sa = math.cos(a), math.sin(a)
             x2, z2 = x * ca - z * sa, x * sa + z * ca
             y2, z3 = y * cos_t - z2 * sin_t, y * sin_t + z2 * cos_t
@@ -171,6 +197,9 @@ class JarvisWidget:
         self.typing = False
         self.canvas = self.entry = self.hit = None
         self.settings_window = None
+        self.reveal, self.slid = 0.0, 0.0      # panel animation: 0 hidden .. 1 shown
+        self.task = None                       # {"label", "step", "total", "done", "ok", "at"}
+        self.last_tick = time.perf_counter()
 
         root.overrideredirect(True)          # no title bar
         root.attributes("-topmost", True)    # stays above other windows
@@ -197,7 +226,7 @@ class JarvisWidget:
         self.set_status("starting")
         self.set_expanded(False, force=True)
         ui_events.on(lambda kind, text: self.events.put((kind, text)))
-        root.after(1000 // FPS, self.tick)
+        root.after(self._frame_ms(), self.tick)
 
     # ----- settings -----
     def load_settings(self):
@@ -208,6 +237,13 @@ class JarvisWidget:
                         for name, key in (("idle", "orb"), ("listening", "listening"),
                                           ("thinking", "thinking"), ("speaking", "speaking"))}
         self.text_colour = self.prefs["text_color"]
+        self.calm = bool(self.prefs.get("reduce_motion"))
+
+    def _frame_ms(self):
+        """60 frames a second while something moves; 30 while he stands by (the
+        slow idle drift looks the same and it halves the work)."""
+        busy = self.status in ACTIVE or self.task or 0 < self.reveal < 1
+        return 1000 // (FPS if busy and not self.calm else CALM_FPS)
 
     def _corner(self, corner=None):
         """(right edge, top) of the orb in one corner of the screen."""
@@ -275,6 +311,8 @@ class JarvisWidget:
         # has a thin black outline so it stays readable on light windows too.
         self.panel_items = []
         self.shadows = {}
+        self.fills = {}
+        self.slid = 0.0
         self.status_item = self._text(px + 20, py + 18, anchor="w", font=(SANS, 9, "bold"), fill=MUTED)
         self.you_item = self._text(px + 20, py + 40, anchor="nw", width=PANEL_W - 44, font=(SANS, 9, "bold"),
                                    fill=YOU_TEXT)
@@ -291,17 +329,29 @@ class JarvisWidget:
                                           height=28)
         self.hint_item = self._text(px + 20, py + PANEL_H - 24, anchor="w", text="Click here to type",
                                     font=(SANS, 8, "bold"), fill=MUTED)
-        for item in (self.status_item, self.you_item, self.jarvis_item, self.hint_item):
+        # The task chip: a spinner and a progress bar by the status line while a job runs.
+        self.spinner = c.create_arc(0, 0, 0, 0, start=0, extent=110, style="arc", width=2, outline=MUTED,
+                                    state="hidden")
+        self.tick_mark = self._text(0, py + 18, anchor="w", text="", font=(SANS, 10, "bold"), fill="#78eba9")
+        self.bar_track = c.create_line(px + 20, py + 29, px + PANEL_W - 44, py + 29, fill="#2a3440", width=3,
+                                       capstyle="round", state="hidden")
+        self.bar = c.create_line(px + 20, py + 29, px + 20, py + 29, fill=ACCENT, width=3, capstyle="round",
+                                 state="hidden")
+        self.chip_items = [self.spinner, self.bar_track, self.bar]
+        for item in self.chip_items:
+            c.addtag_withtag("panel", item)
+        for item in (self.status_item, self.you_item, self.jarvis_item, self.hint_item, self.tick_mark):
             c.addtag_withtag("panel", item)
             for s in self.shadows[item]:
                 c.addtag_withtag("panel", s)
         c.tag_bind("panel", "<Button-1>", lambda e: self.open_typing() if self.prefs["show_text_box"] else None)
-        self.panel_items += [self.status_item, self.you_item, self.jarvis_item, self.entry_item, self.hint_item]
+        self.panel_items += [self.status_item, self.you_item, self.jarvis_item, self.entry_item, self.hint_item,
+                             self.tick_mark]
         self.panel_items += [s for group in self.shadows.values() for s in group]
         # Orb: just the particles and ring, no disc behind them
         self.orb = Orb(c, self.ox, self.oy, S * 0.28)
         self.orb.colours = self.colours
-        for item in [self.orb.ring] + self.orb.dots:
+        for item in [self.orb.ring] + self.orb.glow + self.orb.dots:
             c.addtag_withtag("orb", item)
         c.tag_bind("orb", "<ButtonPress-1>", self._press)
         c.tag_bind("orb", "<B1-Motion>", self._move)
@@ -318,9 +368,14 @@ class JarvisWidget:
         group = [self.canvas.create_text(x + dx, y + dy, **{**kw, "fill": SHADOW}) for dx, dy in self.OUTLINE]
         item = self.canvas.create_text(x, y, **kw)
         self.shadows[item] = group
+        self.fills[item] = kw.get("fill", TEXT)
         return item
 
     def set_text(self, item, **kw):
+        if "fill" in kw:
+            self.fills[item] = kw["fill"]
+            if self.reveal < 1:   # still fading in: the fade puts the colour on
+                kw["fill"] = _hex(_mix((12, 16, 20), _rgb(kw["fill"], (242, 246, 250)), _smooth(self.reveal)))
         self.canvas.itemconfigure(item, **kw)
         kw.pop("fill", None)
         if kw:
@@ -328,6 +383,7 @@ class JarvisWidget:
                 self.canvas.itemconfigure(s, **kw)
 
     def move_text(self, item, x, y):
+        x += self.slid   # mid-slide: keep it in step with the rest of the panel
         self.canvas.coords(item, x, y)
         for s, (dx, dy) in zip(self.shadows[item], self.OUTLINE):
             self.canvas.coords(s, x + dx, y + dy)
@@ -359,17 +415,49 @@ class JarvisWidget:
         if not on:
             self.typing = False
         self.expanded = on
+        if on or self.calm or self.reveal <= 0:
+            self._show_items(on)
+        else:
+            self._show_items(True)   # stays up while it slides and fades away; tick() hides it after
+        self._place()
+
+    def _show_items(self, on):
         for item in self.panel_items:
             show = on
             if item == self.entry_item:
-                show = on and self.typing   # the text box only appears when you click to type
+                show = on and self.typing and self.expanded   # the text box only appears when you click to type
                 # Some Tk builds (seen on Windows) ignore "hidden" for embedded
                 # widgets, so also move the box far outside the canvas.
                 self.canvas.coords(item, self.entry_xy if show else (-5000, -5000))
             elif item == self.hint_item or item in self.shadows.get(self.hint_item, ()):
                 show = on and not self.typing and self.prefs["show_text_box"]
+            elif item == self.tick_mark or item in self.shadows.get(self.tick_mark, ()):
+                show = on and bool(self.task and self.task["done"])
             self.canvas.itemconfigure(item, state="normal" if show else "hidden")
-        self._place()
+        self._show_chip(on)
+
+    def _animate_panel(self, dt):
+        """Slide the panel out from the orb and fade its text in (or back)."""
+        goal = 1.0 if self.expanded else 0.0
+        if self.reveal == goal:
+            return
+        if self.calm:
+            self.reveal = goal
+        elif goal > self.reveal:
+            self.reveal = min(goal, self.reveal + dt / PANEL_ANIM)
+        else:
+            self.reveal = max(goal, self.reveal - dt / (PANEL_ANIM * 1.2))
+        e = _smooth(self.reveal)
+        toward_orb = -1 if self.flip_x else 1
+        off = (1 - e) * 22 * toward_orb
+        self.canvas.move("panel", off - self.slid, 0)
+        self.slid = off
+        for item, base in self.fills.items():
+            if item in self.shadows:
+                self.canvas.itemconfigure(item, fill=_hex(_mix((12, 16, 20), _rgb(base, (242, 246, 250)), e)))
+        if self.reveal <= 0 and not self.expanded:
+            self._show_items(False)
+            self._place()
 
     def _place(self):
         # Keep the orb on screen whatever happens (e.g. a different screen size).
@@ -377,7 +465,7 @@ class JarvisWidget:
         sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
         self.right = min(max(self.right, S), sw)
         self.top = min(max(self.top, 0), max(0, sh - S))
-        if FIXED_SIZE or self.expanded:
+        if FIXED_SIZE or self.expanded or self.reveal > 0:
             # On Windows the window never changes size: the panel area is
             # see-through and clicks pass through it, so opening the panel can't move the orb.
             w, h = self.W, self.H
@@ -482,6 +570,8 @@ class JarvisWidget:
 
     # ----- updates -----
     def tick(self):
+        now = time.perf_counter()
+        dt, self.last_tick = min(0.1, now - self.last_tick), now
         try:
             while True:
                 kind, text = self.events.get_nowait()
@@ -501,6 +591,12 @@ class JarvisWidget:
                 elif kind == "info":
                     self.you_text, self.jarvis_text, self.jarvis_turn_open = "", text, False
                     self._show_text()
+                elif kind == "task":
+                    self.start_task(text)
+                elif kind == "task_done":
+                    self.finish_task((text or {}).get("ok", True))
+                elif kind == "click":
+                    self.ripple(*text)
         except queue.Empty:
             pass
 
@@ -516,10 +612,12 @@ class JarvisWidget:
         except tk.TclError:
             pass
 
-        if self.status in ACTIVE or (self.typing and (self.entry.get() or self.root.focus_get() == self.entry)):
+        self._animate_panel(dt)
+        self._animate_chip()
+        if self.task or self.status in ACTIVE or (self.typing and (self.entry.get() or self.root.focus_get() == self.entry)):
             self.last_activity = time.time()
         self.set_expanded(time.time() - self.last_activity < self.prefs["panel_seconds"])
-        self.root.after(1000 // FPS, self.tick)
+        self.root.after(self._frame_ms(), self.tick)
 
     def _show_text(self, quiet=False):
         jarvis = self.jarvis_text
@@ -539,9 +637,142 @@ class JarvisWidget:
             self.jarvis_turn_open = False  # the next reply replaces the old one
         label, colour, *_ = STATES.get(status, (status, SILVER, 0, 0, 0))
         colour = self.colours.get(status, colour)
-        self.set_text(self.status_item, text=label.upper(), fill=_hex(colour))
+        if self.task:   # the task chip has the status line; keep its words, take the colour
+            self.set_text(self.status_item, fill=_hex(colour))
+        else:
+            self.set_text(self.status_item, text=label.upper(), fill=_hex(colour))
         if status in ACTIVE:
             self.last_activity = time.time()
+
+    # ----- the task chip: "Opening Chrome...", "Moving files 3/20", then a tick -----
+    def start_task(self, info):
+        info = info if isinstance(info, dict) else {"label": str(info)}
+        label = str(info.get("label") or "Working...")
+        step, total = info.get("step"), info.get("total")
+        fresh = not self.task or self.task["done"] or self.task["label"] != label
+        self.task = {"label": label, "step": step, "total": total, "done": False, "ok": True,
+                     "at": time.perf_counter() if fresh else self.task["at"],
+                     "shown": 0.0 if fresh else self.task.get("shown", 0.0)}
+        text = label.rstrip(".").rstrip() + (f"  {step}/{total}" if step and total else "...")
+        self.set_text(self.status_item, text=text.upper())
+        self.last_activity = time.time()
+        self.set_expanded(True)
+        self._show_chip(self.expanded)
+
+    def finish_task(self, ok=True):
+        if not self.task:
+            return
+        self.task.update(done=True, ok=bool(ok), at=time.perf_counter())
+        self.set_text(self.tick_mark, text="\u2713" if ok else "\u2715", fill="#78eba9" if ok else "#e65f6e")
+        if self.task["total"] and ok:
+            self.task["step"] = self.task["total"]
+            self.set_text(self.status_item, text=f"{self.task['label'].rstrip('.')}  "
+                                                 f"{self.task['total']}/{self.task['total']}".upper())
+        self._show_chip(self.expanded)
+
+    def _show_chip(self, on):
+        if not hasattr(self, "spinner"):
+            return
+        task = self.task
+        spin = on and bool(task) and not task["done"]
+        bar = on and bool(task) and bool(task.get("total"))
+        mark = on and bool(task) and task["done"]
+        self.canvas.itemconfigure(self.spinner, state="normal" if spin else "hidden")
+        for item in (self.bar_track, self.bar):
+            self.canvas.itemconfigure(item, state="normal" if bar else "hidden")
+        for item in [self.tick_mark] + self.shadows[self.tick_mark]:
+            self.canvas.itemconfigure(item, state="normal" if mark else "hidden")
+
+    def _animate_chip(self):
+        task = self.task
+        if not task:
+            return
+        now = time.perf_counter()
+        c = self.canvas
+        x0, y0, x1, y1 = c.bbox(self.status_item) or (0, 0, 0, 0)
+        cx, cy = x1 + 12, (y0 + y1) / 2   # just after the words
+        if task["done"]:
+            age = now - task["at"]
+            # the tick pops: a little bigger, then settles
+            size = 10 if self.calm else round(10 + 4 * math.sin(min(1.0, age / 0.35) * math.pi))
+            self.set_text(self.tick_mark, font=(SANS, size, "bold"))
+            self.move_text(self.tick_mark, cx - 5 - self.slid, cy)
+            if age > 1.6:
+                self.task = None
+                self._show_chip(False)
+                self.set_status(self.status)
+                return
+        else:
+            r = 5
+            c.coords(self.spinner, cx - r, cy - r, cx + r, cy + r)
+            c.itemconfigure(self.spinner, start=(-(now - task["at"]) * 360) % 360, outline=ACCENT)
+        if task.get("total"):
+            target = min(1.0, (task.get("step") or 0) / max(1, task["total"]))
+            task["shown"] += (target - task["shown"]) * (1.0 if self.calm else 0.18)   # the bar glides
+            left = self.px + 20 + self.slid
+            right = left + (PANEL_W - 64) * task["shown"]
+            y = self.py + 29
+            c.coords(self.bar_track, left, y, self.px + PANEL_W - 44 + self.slid, y)
+            c.coords(self.bar, left, y, max(left + 1, right), y)
+
+    # ----- a ripple where he clicks during PC control -----
+    def ripple(self, x, y):
+        if self.calm:
+            return
+        try:
+            RippleWindow(self.root, x, y, _hex(self.colours.get("speaking", (120, 195, 255))))
+        except tk.TclError as e:
+            print(f"[gui] no click ripple: {e}")
+
+
+class RippleWindow:
+    """A ring that grows and fades where the mouse clicked. The middle is
+    see-through and, on Windows, the whole window lets clicks pass through,
+    so it never gets in the way of the click it shows."""
+    SIZE, LIFE = 90, 0.5
+
+    def __init__(self, root, x, y, colour):
+        self.win = w = tk.Toplevel(root)
+        w.overrideredirect(True)
+        w.attributes("-topmost", True)
+        w.configure(bg=KEY)
+        if IS_WINDOWS:
+            w.attributes("-transparentcolor", KEY)
+        half = self.SIZE // 2
+        w.geometry(f"{self.SIZE}x{self.SIZE}+{int(x) - half}+{int(y) - half}")
+        self.c = tk.Canvas(w, width=self.SIZE, height=self.SIZE, bg=KEY, highlightthickness=0)
+        self.c.pack()
+        self.ring = self.c.create_oval(0, 0, 0, 0, outline=colour, width=3)
+        self.colour = _rgb(colour, (120, 195, 255))
+        self.t0 = time.perf_counter()
+        if IS_WINDOWS:
+            self._click_through()
+        self.frame()
+
+    def _click_through(self):
+        try:
+            import ctypes
+            self.win.update_idletasks()
+            hwnd = int(self.win.wm_frame(), 16)
+            u = ctypes.windll.user32
+            u.SetWindowLongW(hwnd, -20, u.GetWindowLongW(hwnd, -20) | 0x20 | 0x80000 | 0x08000000)
+        except Exception:
+            pass
+
+    def frame(self):
+        t = (time.perf_counter() - self.t0) / self.LIFE
+        if t >= 1:
+            self.win.destroy()
+            return
+        e = 1 - (1 - t) ** 3   # fast out, slow stop
+        r = 6 + (self.SIZE / 2 - 8) * e
+        mid = self.SIZE / 2
+        self.c.coords(self.ring, mid - r, mid - r, mid + r, mid + r)
+        self.c.itemconfigure(self.ring, width=max(1, round(3 * (1 - t))),
+                             outline=_hex(_mix(self.colour, (40, 46, 54), t)))
+        if IS_WINDOWS:
+            self.win.attributes("-alpha", max(0.05, 1 - t))
+        self.win.after(16, self.frame)
 
 
 def run_voice_loop():

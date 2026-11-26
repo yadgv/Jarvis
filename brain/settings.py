@@ -82,6 +82,7 @@ def app_defaults() -> dict:
         "position": None,              # [right edge, top] after dragging; None = the corner
         "panel_seconds": 7,            # how long the text stays after he's done
         "whiteboard_on_top": True,
+        "reduce_motion": False,        # fewer animations (slower PCs, or if they're distracting)
         "wake_sensitivity": _sensitivity(_orig("WAKE_THRESHOLD", 0.5)),
         "wake_chime": bool(_orig("WAKE_CHIME", True)),
         "followup_seconds": int(_orig("FOLLOWUP_SECONDS", 5)),
