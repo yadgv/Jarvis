@@ -104,6 +104,13 @@ def check_offline(turn, request, prev_tools):
     return {"tools": direct, "offered": sorted(shown), "spoken": "", "problems": problems}
 
 
+def rest_wait(delay, most=120):
+    """How long until a free model that's resting (after a rate limit) can be tried again."""
+    now = time.monotonic()
+    soon = [t - now for t in providers._resting.values() if t > now]
+    return max(delay * 4, min(min(soon) + 1, most) if soon else 0)
+
+
 def check_live(turn, request, rec, followup, delay):
     want = as_list(turn.get("tool"))
     for attempt in (1, 2):
@@ -117,8 +124,9 @@ def check_live(turn, request, rec, followup, delay):
         took = time.perf_counter() - start
         if not error or spoken or attempt == 2:
             break
-        print(f"    brain failed ({error}); waiting {delay * 4:.0f}s and trying once more")
-        time.sleep(delay * 4)
+        wait = rest_wait(delay)
+        print(f"    brain failed ({error}); waiting {wait:.0f}s for the free models and trying once more")
+        time.sleep(wait)
     calls = rec.calls[n:]
     used = [c[0] for c in calls]
     text = " ".join(spoken).strip()

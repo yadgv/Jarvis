@@ -160,6 +160,10 @@ def stream_round(messages, exclude=(), target=None):
                                         {"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
                 if tc.get("id"):
                     slot["id"] = tc["id"]
+                if tc.get("extra_content"):
+                    # Gemini's thought_signature: it must come back with the call, or the
+                    # next round fails ("Function call is missing a thought_signature").
+                    slot["extra_content"] = tc["extra_content"]
                 fn = tc.get("function") or {}
                 slot["function"]["name"] += fn.get("name") or ""
                 slot["function"]["arguments"] += fn.get("arguments") or ""

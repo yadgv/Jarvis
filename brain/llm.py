@@ -159,6 +159,9 @@ _TOOL_ECHO = re.compile(r"Started in the background:|what's on his screen|never 
 
 
 def _speakable(sentence: str) -> bool:
+    if re.match(r"\s*\[[a-z][^\]]* ", sentence, re.I) or re.search(r"\bwithout calling a tool\b", sentence, re.I):
+        print(f"[brain] not spoken (a bracketed note): {sentence[:120]}")
+        return False
     if re.fullmatch(r"\W*(?:ziad|sir|jarvis)\W*", sentence, re.I):
         print(f"[brain] not spoken (a lone word): {sentence}")
         return False
@@ -276,12 +279,20 @@ def _openai_turn(user_text, system, said, tools_used, exclude=(), history=None, 
                 else:
                     result["done"] = value
         held, tail = [], []
-        for sentence in _sentences(pieces(), said, tail):
-            if not tools_used and _CLAIM.search(sentence):
-                said.pop()          # "Saved and opened, sir" with no tool run yet: hold it
-                held.append(sentence)
-                continue
-            yield sentence
+        try:
+            for sentence in _sentences(pieces(), said, tail):
+                if not tools_used and _CLAIM.search(sentence):
+                    said.pop()          # "Saved and opened, sir" with no tool run yet: hold it
+                    held.append(sentence)
+                    continue
+                yield sentence
+        except backup.ProviderError as e:
+            if not tools_used or said or getattr(e, "status", None) == 429:
+                raise   # rate limited: the next model can still word the reply
+            # The tools ran but the model broke on the words after them ("no answer in the
+            # reply"): don't run them all again on the next model; say what they reported.
+            print(f"[brain] {(target or {}).get('who') or 'model'} failed after the tools ran ({str(e)[:120]})")
+            break
         text, tool_calls, model = result["done"]
         if not (text or "").strip() and not tool_calls and not said and not tools_used:
             # An empty answer (a broken or overloaded model): let the next brain try.
@@ -316,16 +327,19 @@ def _openai_turn(user_text, system, said, tools_used, exclude=(), history=None, 
             messages.append({"role": "tool", "tool_call_id": call["id"], "content": out})
     if not said and tools_used:
         # The tools ran but it said nothing after them: say what they reported.
-        out = tools_used[-1].split(" -> ", 1)[-1].strip()
-        if out.startswith("Started in the background"):
-            line = "On it, sir. I'll tell you when it's done."
-        else:
-            line = out if out and len(out) < 90 and not out.startswith("[") and not _TOOL_ECHO.search(out) \
-                and "Tell him" not in out else "Done, sir."
+        line = _tool_result_line(tools_used)
         said.append(line)
         yield line
     who = (target or {}).get("who") or "backup model"
     print(f"[brain] {who} ({model or '?'}) answered in {time.perf_counter() - t0:.1f}s")
+
+
+def _tool_result_line(tools_used) -> str:
+    out = tools_used[-1].split(" -> ", 1)[-1].strip()
+    if out.startswith("Started in the background"):
+        return "On it, sir. I'll tell you when it's done."
+    return out if out and len(out) < 90 and not out.startswith("[") and not _TOOL_ECHO.search(out) \
+        and "Tell him" not in out else "Done, sir."
 
 
 def _backup_turn(user_text, system, said, tools_used, exclude=(), history=None):
@@ -377,7 +391,7 @@ def _chain(asked, system, said, tools_used, exclude=(), history=None, can_ask=Tr
                 continue
             if not paid.allowed():
                 # Claude costs money: ask him first (or, with nobody to ask, go without).
-                if can_ask and not said:
+                if can_ask and not said and not tools_used:   # done already: just report it
                     print(f"[paid] free models failed ({errors[-1] if errors else 'no answer'}); asking before Claude")
                     paid.asked(asked)
                     said.append(paid.QUESTION)
@@ -397,6 +411,14 @@ def _chain(asked, system, said, tools_used, exclude=(), history=None, can_ask=Tr
                 print(f"[brain] Claude unavailable ({type(e).__name__}: {str(e)[:150]}), "
                       f"resting it for {BACKUP_MINUTES} minutes")
                 errors.append(e)
+    if tools_used and not said:
+        # Every model failed, but the job itself was done: tell him so instead of an error.
+        print(f"[brain] no model could word the reply ({errors[-1] if errors else 'none left'}); "
+              "saying what the tool reported")
+        line = _tool_result_line(tools_used)
+        said.append(line)
+        yield line
+        return
     if errors:
         raise errors[-1]
     raise RuntimeError("No brain is set up or available: add GROQ_API_KEY (free, console.groq.com) "
