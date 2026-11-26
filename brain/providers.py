@@ -34,6 +34,8 @@ def rest(key, e: Exception):
             wait = int(m.group(1) or 0) * 60 + float(m.group(2))
     if status in (401, 403):
         seconds = 3600                       # bad key: don't keep hammering it
+    elif status == 404 or "does not exist" in text or "decommissioned" in text:
+        seconds = 24 * 3600                  # the model is gone (retired): skip it for the day
     elif status == 413 or "too large" in text or "context" in text and "length" in text:
         seconds = 0                          # this request was too big; the next may fit
     elif status == 429 or "rate limit" in text:
@@ -62,7 +64,10 @@ def groq_targets(small=False, models=None):
             continue
         seen.add(m)
         extra = {"reasoning_effort": "low"} if m.startswith("openai/gpt-oss") else {}
+        if m.startswith("qwen/"):
+            extra = {"reasoning_format": "hidden"}  # its thinking was being spoken aloud
         out.append({"url": GROQ_URL, "model": m, "who": f"Groq {m}", "tools": True, "short_tools": True,
+                    "lean": m in getattr(config, "GROQ_LEAN_MODELS", ()),
                     "max_tokens": 1024, "extra": extra,
                     "headers": {"Authorization": f"Bearer {config.GROQ_API_KEY}"}})
     return out

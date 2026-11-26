@@ -20,7 +20,7 @@ SPEC = {"title": "Thermodynamics: the first law", "subtitle": "Study notes",
 def model(monkeypatch):
     asked = []
 
-    def complete(system, user, max_tokens=400, small=True, models=None):
+    def complete(system, user, max_tokens=400, small=True, models=None, check=None):
         asked.append(user)
         return "Here:\n```json\n" + json.dumps(SPEC) + "\n```"
     from brain import llm

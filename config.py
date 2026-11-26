@@ -39,14 +39,17 @@ BRAIN_ORDER = ["groq", "openrouter", "claude"]
 # its own free limits, so when one is busy the next takes over.
 GROQ_MODELS = [
     "openai/gpt-oss-120b",                 # best tool use on Groq's free tier
-    "qwen/qwen3.8-27b",
-    "llama-3.3-70b-versatile",
+    "qwen/qwen3.8-27b",                    # small free token limit: gets fewer tools and less history
     "openai/gpt-oss-20b",
 ]
+# (llama-3.3-70b-versatile was shut down by Groq on 16 Aug 2026.)
+# Models with small free per-minute token limits ("Request too large"): sent
+# only the most relevant tools and the last couple of turns.
+GROQ_LEAN_MODELS = ["qwen/qwen3.8-27b", "openai/gpt-oss-20b"]
 GROQ_SMALL_MODELS = ["openai/gpt-oss-20b"]  # tried first for small background jobs (saving facts)
 # Drawing diagrams on the whiteboard ("show me how to wire a servo"): a big
 # model writes the picture, so these are tried first (then the usual order).
-WHITEBOARD_MODELS = ["llama-3.3-70b-versatile", "openai/gpt-oss-120b"]
+WHITEBOARD_MODELS = ["openai/gpt-oss-120b", "qwen/qwen3.8-27b"]
 GROQ_HISTORY_TURNS = 4                   # free models have small token limits: send the last few turns only
 LLM_MODEL = "claude-haiku-5-5"          # Claude, when it's needed (fast + cheap for voice)
 # Backup brain for when Claude credits run out: free models on OpenRouter
@@ -82,7 +85,8 @@ AUTO_MEMORY = True                       # after each chat, save lasting facts h
 FACTS_IN_PROMPT = 25                     # past this many saved facts, only the most relevant ones go to Claude
 SYSTEM_PROMPT = (
     "You are JARVIS, a British AI assistant for Ziad. "
-    "Replies are spoken aloud, so no markdown, no lists, no emojis. "
+    "Replies are spoken aloud, so no markdown, no lists, no emojis, and never code: if he wants code or a "
+    "file, make it with a tool and just say what you made. Never think out loud or talk about your tools. "
     "When he tells you something worth knowing later, or asks you to remember "
     "something, save it with the remember tool. Use your tools for timers, "
     "alarms, weather, his calendar, share prices, opening apps, volume and music, looking at and using his screen, and anything "
