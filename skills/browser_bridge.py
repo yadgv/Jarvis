@@ -27,6 +27,7 @@ _wants = queue.Queue()     # commands waiting for the extension ("html")
 _html_ready = threading.Event()
 _server = None
 _last_contact = 0.0
+_refused = set()
 
 
 def port() -> int:
@@ -73,14 +74,20 @@ def _touch(agent: str):
 
 
 def not_connected_hint() -> str:
-    return (f"[browser] no word from the Jarvis eyes extension on port {port()}: load the browser_extension folder "
-            "at brave://extensions or chrome://extensions (Developer mode > Load unpacked), then reload the page")
+    return (f"[browser] no word from the Jarvis eyes extension on port {port()}. In Brave: open brave://extensions, "
+            "check 'Jarvis eyes' is there and switched on (if not: Developer mode > Load unpacked > the "
+            "browser_extension folder), click its reload arrow, then reload the page. Its toolbar badge says ON "
+            "when it reaches Jarvis")
 
 
 class _Handler(http.server.BaseHTTPRequestHandler):
     def _allowed(self) -> bool:
         origin = self.headers.get("Origin", "")
-        return origin.startswith(("chrome-extension://", "extension://", "moz-extension://"))
+        ok = origin.startswith(("chrome-extension://", "extension://", "moz-extension://"))
+        if not ok and origin not in _refused:
+            _refused.add(origin)
+            print(f"[browser] refused a request from {origin or 'no origin'} (only the Jarvis eyes extension may post)")
+        return ok
 
     def _send(self, obj, code=200):
         data = json.dumps(obj).encode()
@@ -105,13 +112,17 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         if not self._allowed():
             return self.send_error(403)
         _touch(self.headers.get("User-Agent", ""))
-        if path == "/next":   # the extension waits here for a command
-            try:
-                want = _wants.get(timeout=20)
-            except queue.Empty:
-                want = ""
-            return self._send({"want": want})
+        if path == "/next":
+            return self._next()
         self.send_error(404)
+
+    def _next(self):
+        """The extension waits here for a command (POST: browsers only send Origin on POSTs)."""
+        try:
+            want = _wants.get(timeout=20)
+        except queue.Empty:
+            want = ""
+        return self._send({"want": want})
 
     def do_POST(self):
         if not self._allowed():
@@ -125,6 +136,8 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             return self.send_error(400)
         _touch(self.headers.get("User-Agent", ""))
         path = self.path.partition("?")[0]
+        if path == "/next":
+            return self._next()
         if path == "/page":
             with _lock:
                 _page.clear()

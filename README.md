@@ -390,8 +390,10 @@ Ask "what's on my screen?", "read me this error", "what does this page say?" or
   Install once in Brave, Chrome or Edge: open `brave://extensions` (or `chrome://extensions`,
   `edge://extensions`), turn on **Developer mode**, click **Load unpacked**, pick the
   `browser_extension` folder. The log says `[browser] Jarvis eyes extension connected` once it
-  works; if it says `no word from the Jarvis eyes extension`, click the extension's reload
-  button and reload the page.
+  works, and the extension's toolbar icon shows a green **ON** badge (grey **OFF** means it can't
+  reach Jarvis). If it says `no word from the Jarvis eyes extension`, click the extension's reload
+  button and reload the page. Without the extension, Jarvis copies the page's address and downloads
+  it (public pages), or reads the text the browser shows.
 - **Other apps** (Word, VS Code, error boxes, Settings): the text the app itself shows,
   through Windows UI Automation (`pip install uiautomation`).
 - **Pictures and video**: Windows' built-in OCR (`pip install -r requirements.txt` adds it).

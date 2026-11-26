@@ -208,6 +208,27 @@ _RECAP = re.compile(r"\b(what did (?:i|we) do|recap|my day|today so far|what hav
 _TASKS = re.compile(r"\b(working on|doing|busy|done yet|finished|progress|status|cancel|stop|abort|tasks?|jobs?)\b", re.I)
 
 
+BRIEF_INTENT = re.compile(
+    r"\b(?:brief|breathe|summari[sz]e|sum\s+up|tl;?dr)\s+(?:me\s+on\s+)?(?:this|that|it|the\s+(?:article|page|story|"
+    r"pdf|document|doc|paper|post)|what\s+i(?:'m|\s+am)\s+(?:reading|looking\s+at)|what\s+i\s+have\s+(?:up|open))\b"
+    r"|\b(?:write|make|create|give|do)\s+(?:me\s+)?(?:a\s+|the\s+)?(?:brief|summary|tl;?dr)\b"
+    r"(?!\s+(?:of|on|about|for)\s+(?:my|the|today|this\s+week)\b(?!\s+(?:article|page|story|pdf|document|doc|paper)))",
+    re.I)
+_BRIEF_EDIT = re.compile(r"\b(?:change|edit|add|remove|shorter|longer|save|read|rewrite|update|fix)\b", re.I)
+
+
+def brief_intent(text: str) -> bool:
+    """He wants what's on his screen briefed ("brief this article", "write me a brief")."""
+    t = text or ""
+    if not BRIEF_INTENT.search(t) or re.search(r"https?://|\.(?:pdf|docx?|pptx|txt|md)\b", t, re.I):
+        return False
+    if _BRIEF_EDIT.search(t):
+        with workspace._lock:
+            if workspace._ws.get("doc"):
+                return False   # a brief is open: he's asking to change it (edit_brief)
+    return True
+
+
 def pick_tools(text, limit=12, exclude=()):
     """Names of the tools that look relevant to what he said (plus CORE_TOOLS),
     so a model with a small token budget isn't sent all of them. Scores each

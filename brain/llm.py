@@ -597,8 +597,15 @@ def _think_stream(user_text: str, followup: bool = False, note: str = "", exclud
                 if said:
                     raise
                 local_llm.failed(e)
+        brief_now = skills.brief_intent(request) and "brief_document" not in exclude
+        if brief_now:
+            # "Brief this article": open the split screen straight away, don't leave it to the model.
+            print("[brain] brief request: opening the brief workspace directly")
+            out = skills.run("brief_document", {"source": ""})
+            tools_used.append(f"brief_document -> {str(out)[:300]}")
         try:
-            yield from _chain(asked, system, said, tools_used, exclude)
+            yield from _chain(_already_done(asked, tools_used) if brief_now else asked, system, said, tools_used,
+                              exclude + (("brief_document",) if brief_now else ()))
         except Exception as e:
             # The wifi dropped mid-way: do what can be done offline instead.
             if said or not network.is_network_error(e):

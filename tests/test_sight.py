@@ -56,8 +56,7 @@ def test_page_code_on_request(bridge):
     got = {}
     t = threading.Thread(target=lambda: got.update(browser_bridge.page_code(timeout=5) or {}))
     t.start()
-    req = urllib.request.Request(bridge + "/next", headers=EXT)                           # the extension waiting
-    assert json.loads(urllib.request.urlopen(req, timeout=25).read())["want"] == "html"
+    assert _post(bridge, "/next", {})["want"] == "html"                                  # the extension waiting
     _post(bridge, "/html", {"url": PAGE["url"], "html": "<html><body><h1>Entropy</h1></body></html>"})
     t.join(5)
     assert got["html"].startswith("<html>")
