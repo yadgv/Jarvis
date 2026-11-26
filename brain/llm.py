@@ -634,31 +634,24 @@ def _think_stream(user_text: str, followup: bool = False, note: str = "", exclud
                 if said:
                     raise
                 local_llm.failed(e)
-        if not skills.brief_intent(request) and skills.screen_intent(request):
+        plan = skills.route(request)   # the steps that don't depend on the model choosing well
+        exclude = tuple(exclude) + tuple(plan["exclude"])
+        if plan["screen"]:
             # "Make slides on this article": read the screen first, so it never searches the web for "this".
             note_text = _screen_note(fresh=True)
             if note_text:
                 asked = note_text + asked
-                if not re.search(r"\b(?:search|look up|google)\b", request, re.I):
-                    exclude = tuple(exclude) + ("web_search",)
-        elif (prev := skills.sight.recent()) and skills.mentions_screen_followup(request):
+        elif plan.get("followup") and (prev := skills.sight.recent()):
             asked = (f"[Earlier you read his screen: \"{prev['title']}\". If he means it, pass source=\"screen\" "
                      "to the tool, or call read_screen again.]\n" + asked)
-        if skills.phone_test_intent(request) and "test_phone_alerts" not in exclude:
-            print("[brain] phone test request: running it directly")
-            tools_used.append(f"test_phone_alerts -> {str(skills.run('test_phone_alerts', {}))[:300]}")
-            exclude = tuple(exclude) + ("test_phone_alerts",)
-        if skills.restyle_intent(request):
-            exclude = tuple(exclude) + ("make_document",)   # a new look, never a new deck
-        brief_now = skills.brief_intent(request) and "brief_document" not in exclude
-        if brief_now:
-            # "Brief this article": open the split screen straight away, don't leave it to the model.
-            print("[brain] brief request: opening the brief workspace directly")
-            out = skills.run("brief_document", {"source": ""})
-            tools_used.append(f"brief_document -> {str(out)[:300]}")
+        brief_now = False
+        for name, args in plan["direct"]:
+            print(f"[brain] {name} request: running it directly")
+            tools_used.append(f"{name} -> {str(skills.run(name, args))[:300]}")
+            brief_now = True
         try:
             yield from _chain(_already_done(asked, tools_used) if brief_now else asked, system, said, tools_used,
-                              exclude + (("brief_document",) if brief_now else ()))
+                              exclude)
         except Exception as e:
             # The wifi dropped mid-way: do what can be done offline instead.
             if said or not network.is_network_error(e):

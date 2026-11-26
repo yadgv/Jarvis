@@ -514,6 +514,19 @@ The script installs everything, asks for your API key, lists your microphones, a
 Jarvis to start on boot (and restart if he crashes). On a Pi, Jarvis uses the faster
 `tiny.en` speech model automatically. If he doesn't hear you, set `MIC_DEVICE` in `config.py`.
 
+## Test conversations (see how he answers)
+
+`python3.13 run_tests.py` asks Jarvis about 60 real questions from your logs (brief this article, slides on
+it, make it prettier, whiteboard, 3D, YouTube, Brave, files, Canvas, reminders, goodbyes, his name
+mid-sentence...) and scores each answer. Only the free models answer (never Claude), and every tool is a
+**dry run**: written down, not done, so nothing opens, moves or rings your phone. It waits 5 s between
+questions for the free rate limits (`--delay 8` to slow it down).
+
+- `--only brief` runs just the cases with "brief" in their name; `--limit 10` the first 10.
+- `--offline` skips the AI and checks only what Jarvis decides himself (routing, goodbyes, his name).
+- The report goes to `testbench/reports/` (Markdown to read, JSON to compare runs). Send me the .md file.
+- Add your own questions to `testbench/cases.py`.
+
 ## Logs and tests
 - Everything Jarvis prints also goes to `jarvis.log`, with times, including how long each reply took.
 - `pip install pytest` then `pytest` runs the tests (no mic or API key needed). GitHub runs them on every PR.
