@@ -571,6 +571,9 @@ def _svg(width, height, base, steps):
 
 def render(spec: dict):
     """(svg, list of wires/edges that couldn't be drawn)."""
+    from skills import visuals
+    if str(spec.get("kind", "")).lower() in visuals.KINDS:
+        return visuals.render(spec)
     if str(spec.get("kind", "")).lower() == "flowchart" or (spec.get("nodes") and not spec.get("wires")):
         return render_flowchart(spec)
     return render_wiring(spec)
