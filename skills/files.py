@@ -385,11 +385,54 @@ def organize_folder(a):
         sub = os.path.basename(os.path.dirname(dst))
         counts[sub] = counts.get(sub, 0) + 1
     summary = ", ".join(f"{n} into {sub}" for sub, n in sorted(counts.items(), key=lambda x: -x[1]))
+    groups = {}
+    for src, dst in moves:
+        groups.setdefault(os.path.basename(os.path.dirname(dst)), []).append(os.path.basename(src))
+    groups = dict(sorted(groups.items(), key=lambda kv: -len(kv[1])))
+    shown = _show_plan(folder, files, groups, trash)
+    saved = _save_plan(folder, groups, trash) if a.get("save_plan") else ""
     _plan = {"what": f"sort {_show(folder)}", "moves": moves, "trash": trash, "turn": skills.turn, "at": time.time()}
     dupes = f" and send {len(trash)} duplicate copies to the Recycle Bin" if trash else ""
-    return (f"Plan for {_show(folder)}: move {len(moves)} files ({summary}){dupes}. Nothing has changed yet. "
+    return (f"Plan for {_show(folder)}: move {len(moves)} files ({summary}){dupes}. Nothing has changed yet.{shown}{saved} "
             "Tell him the plan in one or two sentences and ask \"Shall I go ahead?\". Only call organize_folder "
             "with confirmed=true after he says yes in his next message. He can say \"undo that\" afterwards.")
+
+
+def _show_plan(folder, files, groups, trash):
+    """The plan as a before-and-after tree on the whiteboard."""
+    try:
+        from skills import diagram, whiteboard
+        name = os.path.basename(folder) or folder
+        svg, _ = diagram.render_tree(f"Plan: sort {name}", name, [os.path.basename(p) for p in files], groups,
+                                     [os.path.basename(p) for p in trash])
+        steps = [f"{sub}: {len(names)} file{'s' if len(names) != 1 else ''}" for sub, names in groups.items()]
+        if trash:
+            steps.append(f"{len(trash)} duplicate copies to the Recycle Bin")
+        whiteboard.show_svg(f"Plan: sort {name}", svg, steps)
+        return " The before-and-after is on the whiteboard."
+    except Exception as e:  # the plan still works without the drawing
+        print(f"[files] couldn't draw the plan: {e}")
+        return ""
+
+
+def _save_plan(folder, groups, trash):
+    """The plan as a checklist in Documents/Jarvis plans."""
+    docs = _folder("documents")
+    if not docs:
+        return ""
+    lines = [f"# Plan: sort {_show(folder)}", f"Made by Jarvis on {datetime.now():%A %d %B %Y, %H:%M}", ""]
+    for sub, names in groups.items():
+        lines.append(f"## {sub} ({len(names)})")
+        lines += [f"- [ ] {n}" for n in names]
+        lines.append("")
+    if trash:
+        lines.append(f"## To the Recycle Bin (duplicates, {len(trash)})")
+        lines += [f"- [ ] {os.path.basename(p)}" for p in trash]
+    path = _unique(os.path.join(docs, "Jarvis plans", f"Sort {os.path.basename(folder)} {datetime.now():%Y-%m-%d}.md"))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    return f" The plan is saved as a checklist in {_show(path)}."
 
 
 def file_action(a):
@@ -593,13 +636,14 @@ SKILLS = [
     {
         "name": "organize_folder",
         "description": ("Sort or tidy one of his folders (Downloads, Desktop, ...): loose files into subfolders by "
-                        "type or by month, optionally binning duplicate copies. Step 1 makes a plan and changes "
-                        "nothing; tell him and ask. Step 2: call with confirmed=true only after he says yes in his "
+                        "type or by month, optionally binning duplicate copies. Step 1 makes a plan, shows it on the "
+                        "whiteboard as a before-and-after tree, and changes nothing; tell him and ask. Step 2: call with confirmed=true only after he says yes in his "
                         "next message (this also carries out a delete planned by file_action). cancel=true drops it."),
         "parameters": {"type": "object", "properties": {
             "folder": {"type": "string", "description": "downloads (default), desktop, documents, pictures, ..."},
             "by": {"type": "string", "enum": ["type", "date"]},
             "dedupe": {"type": "boolean", "description": "also send duplicate copies to the Recycle Bin"},
+            "save_plan": {"type": "boolean", "description": "also save the plan as a checklist in Documents"},
             "confirmed": {"type": "boolean"}, "cancel": {"type": "boolean"}}},
         "run": organize_folder,
     },

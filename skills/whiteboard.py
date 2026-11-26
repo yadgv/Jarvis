@@ -359,6 +359,15 @@ def _app_browser():
     return shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
 
 
+def show_svg(title: str, svg: str, steps: list, topic: str = "") -> None:
+    """Put a drawing made elsewhere (a folder plan, a chart, ...) on the board and open it."""
+    with _lock:
+        _board.update(title=title, svg=svg, steps=list(steps), topic=topic or title, spec=None,
+                      step=1 if steps else 0, version=_board["version"] + 1)
+    _save()
+    open_window()
+
+
 def window_open() -> bool:
     """Is the whiteboard window showing? Judged by the page still polling,
     so it's right even after he closes the window with the X."""
