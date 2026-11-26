@@ -5,7 +5,10 @@ Each skill module exposes SKILLS: a list of dicts with
 That's provider-neutral: anthropic_tools() and openai_tools() turn it into the
 format Claude or an OpenAI-style API (Groq, OpenAI, Ollama...) expects.
 """
+import re
 import threading
+
+import ui_events
 
 # One module per line, so adding a skill doesn't clash with other changes.
 from skills import arduino  # noqa: E402
@@ -258,6 +261,31 @@ NEEDS_INTERNET = {"get_weather", "get_news", "web_search", "whats_the_buzz", "ge
                   "daily_briefing", "open_website", "show_diagram", "make_document", "make_3d_model"}
 
 
+# What the chip next to the orb says while a tool runs. Quick lookups
+# (time, timers, memory) show nothing: a chip that flashes is just noise.
+TASK_LABELS = {
+    "open_app": "Opening {name}", "open_website": "Opening {url}", "open_file": "Opening the file", "open_folder": "Opening {folder}",
+    "use_computer": "Working on the screen", "look_at_screen": "Looking at the screen",
+    "web_search": "Searching the web", "get_weather": "Checking the weather", "get_news": "Getting the news",
+    "check_email": "Checking email", "get_calendar_events": "Checking the calendar",
+    "show_diagram": "Drawing on the whiteboard", "make_document": "Making the document",
+    "make_3d_model": "Designing the 3D part", "organize_folder": "Sorting {folder}", "play_music": "Starting the music", "daily_briefing": "Getting your briefing",
+    "plan_new_app": "Planning the app", "start_claude_code_task": "Starting Claude Code",
+}
+
+
+def task_label(name: str, args: dict) -> str:
+    label = TASK_LABELS.get(name)
+    if not label:
+        return ""
+    fields = {k: str(v)[:28] for k, v in (args or {}).items() if isinstance(v, (str, int, float))}
+    try:
+        label = label.format(**fields)
+    except (KeyError, IndexError):
+        label = re.sub(r" ?\{\w+\}", "", label)
+    return label + "..."
+
+
 def run(name: str, args: dict) -> str:
     skill = _BY_NAME.get(name)
     if skill is None:
@@ -274,9 +302,14 @@ def run(name: str, args: dict) -> str:
     handler = getattr(_local, "handler", None)
     if handler:
         threading.Thread(target=_watch_progress, args=(name, done, handler), daemon=True).start()
+    label = task_label(name, args)
+    ok = False
+    if label:
+        ui_events.task(label)
     try:
         print(f"[tool] {name} {args}")
         result = str(skill["run"](args or {}))
+        ok = True
         print(f"[tool] -> {result[:150].replace(chr(10), ' | ')}")
         if name not in TRUSTED_RESULTS:
             result = safety.guard_content(result, name)
@@ -286,3 +319,5 @@ def run(name: str, args: dict) -> str:
         return f"The {name} tool failed: {e}"
     finally:
         done.set()
+        if label:
+            ui_events.task_done(ok)

@@ -154,6 +154,8 @@ def _act(gui, scr, name, a):
     if name in clicks:
         button, n = clicks[name]
         x, y = pos()
+        if x is not None:
+            ui_events.click_at(x, y)   # a ripple on screen where he clicks
         _with_modifiers(gui, a.get("text"), lambda: gui.click(x=x, y=y, clicks=n, interval=0.08, button=button))
     elif name == "mouse_move":
         gui.moveTo(*pos())

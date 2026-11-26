@@ -190,6 +190,12 @@ g[id^="step-"].later{opacity:.08}g[id^="step-"].past{opacity:.45}
 g[id^="step-"].now .wire{stroke-width:9}
 g[id^="step-"].now{filter:drop-shadow(0 0 5px #ffd43b) drop-shadow(0 0 10px #fab005)}
 .hint{margin-top:16px;font-size:14px;color:#7b8494;line-height:1.4}
+@keyframes enter{from{opacity:0;transform:scale(.985)}to{opacity:1;transform:none}}
+body{animation:enter .32s cubic-bezier(.2,.8,.2,1)}
+#board svg{transition:opacity .28s ease}#board svg.going{opacity:0}
+#empty{transition:opacity .3s}
+li{transition:color .3s,background-color .3s,padding .3s,margin .3s}
+body.calm,body.calm *{animation:none!important;transition:none!important}
 </style></head>
 <body><div id="board"><div id="zoom"><button class="alt" id="zin">+</button><button class="alt" id="zout">&minus;</button>
 <button class="alt" id="fit" style="width:60px;font-size:15px">Fit</button></div><div id="empty">The whiteboard is clear.</div></div>
@@ -200,13 +206,19 @@ g[id^="step-"].now{filter:drop-shadow(0 0 5px #ffd43b) drop-shadow(0 0 10px #fab
 
 APP_JS = """
 let version = -1, step = -1, svg = null, home = null, view = null, drawn = new Set(), queue = 0;
-const calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let handMoved = false;   // he dragged or zoomed: don't glide away from where he looked
 async function poll() {
   try {
     const b = await (await fetch('/board.json', {cache: 'no-store'})).json();
     if (b.closed) { window.close(); }
+    if (b.calm !== undefined) { calm = calm || !!b.calm; document.body.classList.toggle('calm', calm); }
     if (b.version !== version) {
       version = b.version;
+      if (svg && !calm) {   // the old drawing fades out before the new one comes in
+        const old = svg; old.classList.add('going'); svg = null;
+        await new Promise(r => setTimeout(r, 280)); old.remove();
+      }
       document.title = b.title || 'Jarvis whiteboard';
       document.getElementById('title').textContent = b.title || 'Whiteboard';
       const doc = new DOMParser().parseFromString(b.svg || '<svg xmlns="http://www.w3.org/2000/svg"/>', 'image/svg+xml');
@@ -215,8 +227,10 @@ async function poll() {
       svg = document.importNode(doc.documentElement, true);
       board.insertBefore(svg, board.firstChild);
       home = (svg.getAttribute('viewBox') || '0 0 1000 700').split(/\\s+/).map(Number);
-      view = home.slice(); setView();
-      document.getElementById('empty').style.display = b.svg ? 'none' : 'flex';
+      view = home.slice(); setView(); handMoved = false;
+      const empty = document.getElementById('empty');
+      empty.style.display = 'flex'; empty.style.opacity = b.svg ? 0 : 1;
+      if (b.svg) later(300, () => { empty.style.display = 'none'; });
       drawn = new Set(); queue = 0; sweepIn();
       const ol = document.getElementById('steps');
       ol.replaceChildren(...(b.steps || []).map((s, i) => {
@@ -224,7 +238,7 @@ async function poll() {
         li.onclick = () => go(i + 1); return li; }));
       step = -1;
     }
-    if (b.step !== step) { step = b.step; show(step); }
+    if (b.step !== step) { step = b.step; handMoved = false; show(step); }
   } catch (e) {}
   setTimeout(poll, 400);
 }
@@ -266,11 +280,39 @@ function drawStep(g) {
   queue = Date.now() + start + dur + 150;  // the next step's wires start after this one
 }
 function setView() { if (svg) svg.setAttribute('viewBox', view.join(' ')); }
+// ---- the camera glides (eased) to a new view instead of jumping
+let glideId = 0;
+function glideTo(target, ms) {
+  if (!svg || !target) return;
+  const id = ++glideId;
+  if (calm) { view = target.slice(); setView(); return; }
+  const from = view.slice(), t0 = performance.now(), dur = ms || 650;
+  const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  function frame(now) {
+    if (id !== glideId) return;
+    const t = Math.min(1, (now - t0) / dur), e = ease(t);
+    view = from.map((v, i) => v + (target[i] - v) * e); setView();
+    if (t < 1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+function stepView(g) {
+  // frame the current step (and keep its aspect), never closer than 1.6x the whole board
+  let bb; try { bb = g.getBBox(); } catch (e) { return null; }
+  if (!bb || !bb.width || !bb.height) return null;
+  const ar = home[2] / home[3];
+  let w = Math.max(bb.width * 1.6, home[2] / 1.6), h = Math.max(bb.height * 1.6, w / ar);
+  w = Math.max(w, h * ar); h = w / ar;
+  if (w >= home[2] * 0.95) return home.slice();
+  const cx = bb.x + bb.width / 2, cy = bb.y + bb.height / 2;
+  return [cx - w / 2, cy - h / 2, w, h];
+}
 function zoom(f, cx, cy) {
   if (!view) return;
   const r = svg.getBoundingClientRect();
   const px = cx === undefined ? 0.5 : (cx - r.left) / r.width, py = cy === undefined ? 0.5 : (cy - r.top) / r.height;
   const w = Math.min(home[2] * 3, Math.max(home[2] / 6, view[2] * f)), h = w * view[3] / view[2];
+  glideId++; handMoved = true;
   view = [view[0] + (view[2] - w) * px, view[1] + (view[3] - h) * py, w, h]; setView();
 }
 const boardEl = document.getElementById('board');
@@ -281,12 +323,13 @@ window.addEventListener('mouseup', () => { dragFrom = null; boardEl.classList.re
 window.addEventListener('mousemove', e => {
   if (!dragFrom || !view) return;
   const r = svg.getBoundingClientRect(), s = Math.max(view[2] / r.width, view[3] / r.height);
+  glideId++; handMoved = true;
   view[0] -= (e.clientX - dragFrom[0]) * s; view[1] -= (e.clientY - dragFrom[1]) * s;
   dragFrom = [e.clientX, e.clientY]; setView();
 });
 document.getElementById('zin').onclick = () => zoom(1 / 1.25);
 document.getElementById('zout').onclick = () => zoom(1.25);
-document.getElementById('fit').onclick = () => { if (home) { view = home.slice(); setView(); } };
+document.getElementById('fit').onclick = () => { if (home) { handMoved = false; glideTo(home, 450); } };
 function show(n) {
   const groups = Array.from(document.querySelectorAll('g[id^="step-"]'));
   groups.sort((a, b) => parseInt(a.id.slice(5)) - parseInt(b.id.slice(5)));
@@ -298,11 +341,15 @@ function show(n) {
   });
   document.querySelectorAll('#steps li').forEach((li, i) => {
     li.className = (i + 1 === n) ? 'on' : (n > 0 && i + 1 < n ? 'done' : '');
+    if (i + 1 === n) li.scrollIntoView({block: 'nearest', behavior: calm ? 'auto' : 'smooth'});
   });
+  // glide to the step he's on (the whole board for "all"), after it starts drawing
+  const now = groups.find(g => parseInt(g.id.slice(5)) === n);
+  if (home && !handMoved) later(120, () => glideTo(n > 0 && now ? stepView(now) || home : home));
 }
 // Tell Jarvis when this window closes, so he opens a new one next time.
 window.addEventListener('pagehide', () => { try { navigator.sendBeacon('/bye'); } catch (e) {} });
-function go(n) { fetch('/step?n=' + n, {cache: 'no-store'}); }
+function go(n) { handMoved = false; fetch('/step?n=' + n, {cache: 'no-store'}); }
 document.getElementById('next').onclick = () => go(step + 1);
 document.getElementById('back').onclick = () => go(Math.max(1, step - 1));
 document.getElementById('all').onclick = () => go(0);
@@ -311,13 +358,22 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowLeft') go(Math.max(1, step - 1));
   if (e.key === '+' || e.key === '=') zoom(1 / 1.25);
   if (e.key === '-') zoom(1.25);
-  if (e.key === '0') { view = home.slice(); setView(); }
+  if (e.key === '0') { handMoved = false; glideTo(home, 450); }
 });
 poll();
 """
 
 # The page may only run our own script, never anything inside the drawing.
 CSP = "default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; img-src data:"
+
+
+def _calm() -> bool:
+    """Settings > Reduce animations: the page skips its animations too."""
+    try:
+        from brain import settings
+        return bool(settings.app().get("reduce_motion"))
+    except Exception:
+        return False
 
 
 def set_step(n: int) -> int:
@@ -348,8 +404,9 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             global _last_seen
             _last_seen = time.monotonic()
             with _lock:
-                self._send(json.dumps({k: _board.get(k) for k in ("version", "title", "svg", "steps", "step", "closed")}),
-                           "application/json")
+                data = {k: _board.get(k) for k in ("version", "title", "svg", "steps", "step", "closed")}
+            data["calm"] = _calm()
+            self._send(json.dumps(data), "application/json")
         elif path == "/step":
             m = re.search(r"(?:^|&)n=(-?\d+)", query)
             set_step(int(m.group(1)) if m else 0)

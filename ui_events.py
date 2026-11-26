@@ -20,12 +20,27 @@ def on(fn):
 
 
 def emit(kind, text=""):
-    """kind: status (idle/listening/thinking/speaking), you, jarvis, info."""
+    """kind: status (idle/listening/thinking/speaking), you, jarvis, info, task, task_done, click."""
     for fn in list(_listeners):
         try:
             fn(kind, text)
         except Exception:
             pass
+
+
+def task(label, step=None, total=None):
+    """A job is under way: the orb shows a small chip ("Opening Chrome...",
+    "Sorting files 3/20") until task_done()."""
+    emit("task", {"label": str(label), "step": step, "total": total})
+
+
+def task_done(ok=True):
+    emit("task_done", {"ok": bool(ok)})
+
+
+def click_at(x, y):
+    """He clicked at this screen point (PC control): the orb draws a ripple there."""
+    emit("click", (int(x), int(y)))
 
 
 def poll():

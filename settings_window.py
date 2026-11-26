@@ -153,6 +153,7 @@ class SettingsWindow:
         self.values["corner_choice"] = "keep where I put it" if self.values.get("position") else self.values["corner"]
         self._row(card, "Position", self._combo("corner_choice", corners, 18))
         self._row(card, "Colours", self._colours)
+        self._row(card, "Animations", self._check("reduce_motion", "Reduce animations"))
 
     def _colours(self, parent):
         f = tk.Frame(parent, bg=CARD)
@@ -197,6 +198,19 @@ class SettingsWindow:
         self.win.deiconify()
         self.win.lift()
         self.win.focus_force()
+        if not self.values.get("reduce_motion"):
+            self._fade_in()
+
+    def _fade_in(self, steps=9, ms=18):
+        """Fade the window in rather than popping it up (Windows and most Linux desktops)."""
+        def frame(i):
+            try:
+                self.win.attributes("-alpha", min(1.0, (i / steps) ** 0.6))
+                if i < steps:
+                    self.win.after(ms, frame, i + 1)
+            except tk.TclError:
+                pass
+        frame(1)
 
     def alive(self):
         try:
