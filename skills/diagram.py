@@ -82,7 +82,8 @@ def wire_colour(a: str, b: str, index: int) -> str:
 
 def plain(text) -> str:
     """Arrows and fancy dashes as plain text, so no font shows them as boxes."""
-    text = str(text)
+    from brain import textfix
+    text = textfix.fix(text)
     for a, b in (("→", "->"), ("⟶", "->"), ("←", "<-"), ("↔", "<->"), ("—", "-"), ("–", "-"), ("Ω", " ohm")):
         text = text.replace(a, b)
     return text

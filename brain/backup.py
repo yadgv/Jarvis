@@ -88,6 +88,9 @@ def _post(messages, exclude=(), target=None):
 
 def _events(response):
     """The JSON chunks of a server-sent-events stream."""
+    # These streams are UTF-8, but say "text/event-stream" with no charset, so
+    # requests would decode them as Latin-1 and "servo's" becomes "servoâs".
+    response.encoding = "utf-8"
     for line in response.iter_lines(decode_unicode=True):
         if not line or not line.startswith("data:"):
             continue  # blank lines and ": OPENROUTER PROCESSING" keep-alives
