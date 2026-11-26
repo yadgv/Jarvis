@@ -34,6 +34,7 @@ from skills import ui_automation  # noqa: E402
 from skills import weather  # noqa: E402
 from skills import whiteboard  # noqa: E402
 from skills import files  # noqa: E402
+from skills import documents  # noqa: E402
 from skills import web_search  # noqa: E402
 
 MODULES = [
@@ -63,6 +64,7 @@ MODULES = [
     arduino,
     whiteboard,
     files,
+    documents,
     personality,
 ]
 # Counts conversation turns, so a tool can tell "he said yes" (a later turn)
@@ -133,6 +135,9 @@ _FILES = _re.compile(r"\b(files?|folders?|downloads|desktop|documents|pictures|o
                      r"\b(?:make|create|write|save|start) (?:me |up )?(?:a |an |my )?[\w' -]{0,30}?\b(?:note|notes|list|document|doc|"
                      r"script|file|letter|essay|spreadsheet|table|program|sketch)\b|"
                      r"\b(?:find|where(?:'s| is| are)|locate|open) my\b|\bresume\b|\bcv\b)", _re.I)
+_DOCS = _re.compile(r"\b(word doc(?:ument)?|docx|power ?point|slides?|slide deck|presentation|excel|spreadsheet|"
+                    r"pdf|graph|chart|plot)\b", _re.I)
+DOC_TOOLS = ("make_document", "show_chart")
 FILE_TOOLS = ("make_file", "find_files", "read_file", "open_file", "organize_folder", "file_action", "undo_files")
 
 
@@ -163,6 +168,8 @@ def pick_tools(text, limit=12, exclude=()):
         keep |= set(BOARD_TOOLS)
     if mentions_files(text):
         keep |= set(FILE_TOOLS)
+    if _DOCS.search(text or ""):
+        keep |= set(DOC_TOOLS) | {"find_files", "read_file"}
     keep -= set(exclude)
     return keep | {n for n in CORE_TOOLS if n in _BY_NAME and n not in exclude}
 
@@ -181,6 +188,7 @@ FILLERS = {
     "web_search": "Searching now, sir.",
     "find_files": "Looking through your files, sir.",
     "organize_folder": "Going through the folder, sir.",
+    "make_document": "Writing it up now, sir.",
     "check_email": "Checking your email, sir.",
     "daily_briefing": "Pulling that together, sir.",
     "show_diagram": "Drawing that up for you, sir.",
@@ -232,7 +240,7 @@ def _guard():
 NEEDS_INTERNET = {"get_weather", "get_news", "web_search", "whats_the_buzz", "get_calendar_events",
                   "check_email", "reply_email", "add_calendar_event", "delete_calendar_event", "stock_price", "look_at_screen",
                   "use_computer", "plan_claude_code_task", "start_claude_code_task", "edit_selected_text",
-                  "daily_briefing", "open_website", "show_diagram"}
+                  "daily_briefing", "open_website", "show_diagram", "make_document"}
 
 
 def run(name: str, args: dict) -> str:

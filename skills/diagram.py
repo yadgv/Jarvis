@@ -444,6 +444,118 @@ def _clip(text, n):
     return text if len(text) <= n else text[: n - 1] + "…"
 
 
+# ---------- charts ----------
+
+def _nums(values):
+    out = []
+    for v in values or []:
+        try:
+            out.append(float(str(v).replace(",", "").replace("%", "").strip()))
+        except ValueError:
+            out.append(0.0)
+    return out
+
+
+def _tick(v):
+    return f"{v:,.0f}" if abs(v) >= 100 or float(v).is_integer() else f"{v:,.2f}".rstrip("0").rstrip(".")
+
+
+def render_chart(spec: dict):
+    """Bar, line or pie chart. spec: {"title", "type", "labels", "series": [{"name", "values"}],
+    "x_label", "y_label"}. One step per series, so the board draws them in turn."""
+    kind = str(spec.get("type") or "bar").lower()
+    labels = [str(l) for l in spec.get("labels") or []]
+    series = [s for s in spec.get("series") or [] if isinstance(s, dict)]
+    if not series and spec.get("values"):
+        series = [{"name": spec.get("y_label") or "", "values": spec["values"]}]
+    for s_ in series:
+        s_["values"] = _nums(s_.get("values"))[: len(labels) or None]
+    if not labels and series:
+        labels = [str(i + 1) for i in range(len(series[0]["values"]))]
+    W, H = 1200, 760
+    base, steps = [_t(60, 46, spec.get("title") or "Chart", 36, weight="700")], {}
+    if not labels or not series:
+        base.append(_t(60, 120, "No numbers to chart.", 24, fill=MUTED))
+        return _svg(W, 200, base, steps), ["no data"]
+    if kind == "pie":
+        import math
+        vals = [max(0.0, v) for v in series[0]["values"]]
+        total = sum(vals) or 1
+        cx, cy, r, a0 = 420, 420, 270, -math.pi / 2
+        for i, (lab, v) in enumerate(zip(labels, vals)):
+            a1 = a0 + 2 * math.pi * v / total
+            big = 1 if a1 - a0 > math.pi else 0
+            x0, y0, x1, y1 = cx + r * math.cos(a0), cy + r * math.sin(a0), cx + r * math.cos(a1), cy + r * math.sin(a1)
+            colour = SIGNALS[i % len(SIGNALS)]
+            path = (f"M {cx} {cy} L {x0:.1f} {y0:.1f} A {r} {r} 0 {big} 1 {x1:.1f} {y1:.1f} Z" if v < total
+                    else f"M {cx - r} {cy} A {r} {r} 0 1 1 {cx + r} {cy} A {r} {r} 0 1 1 {cx - r} {cy} Z")
+            ly = 150 + 44 * i
+            steps.setdefault(i + 1, []).append(
+                f'<path d="{path}" fill="{colour}" stroke="#fff" stroke-width="3"/>'
+                f'<rect x="760" y="{ly - 13}" width="26" height="26" rx="5" fill="{colour}"/>'
+                + _t(800, ly, f"{lab}: {_tick(v)} ({100 * v / total:.0f}%)", 22, weight="600"))
+            a0 = a1
+        return _svg(W, max(H, 150 + 44 * len(labels) + 40), base, steps), []
+    # bar / line: axes
+    left, right, top, bottom = 120, W - 60, 110, H - 110
+    allv = [v for s_ in series for v in s_["values"]] + [0]
+    lo, hi = min(allv), max(allv)
+    if hi == lo:
+        hi = lo + 1
+    import math
+    step = 10 ** math.floor(math.log10((hi - lo) / 5 or 1))
+    for m in (1, 2, 5, 10):
+        if (hi - lo) / (step * m) <= 6:
+            step *= m
+            break
+    lo, hi = math.floor(lo / step) * step, math.ceil(hi / step) * step
+
+    def y_of(v):
+        return bottom - (v - lo) / (hi - lo) * (bottom - top)
+    v = lo
+    while v <= hi + 1e-9:
+        y = y_of(v)
+        base.append(f'<line x1="{left}" y1="{y:.1f}" x2="{right}" y2="{y:.1f}" stroke="#e9ecef" stroke-width="2"/>')
+        base.append(_t(left - 14, y, _tick(v), 18, "end", fill=MUTED))
+        v += step
+    base.append(f'<line x1="{left}" y1="{y_of(max(lo, 0)):.1f}" x2="{right}" y2="{y_of(max(lo, 0)):.1f}" '
+                f'stroke="{INK}" stroke-width="2.5"/>')
+    n = len(labels)
+    slot = (right - left) / n
+    for i, lab in enumerate(labels):
+        base.append(_t(left + slot * (i + 0.5), bottom + 28, _clip(lab, max(4, int(slot / 11))), 18, "middle"))
+    if spec.get("x_label"):
+        base.append(_t((left + right) / 2, H - 30, spec["x_label"], 20, "middle", "600", MUTED))
+    if spec.get("y_label"):
+        base.append(_t(40, (top + bottom) / 2, spec["y_label"], 20, "middle", "600", MUTED,
+                       f' transform="rotate(-90 40 {(top + bottom) / 2:.0f})"'))
+    for k, s_ in enumerate(series):
+        colour = SIGNALS[k % len(SIGNALS)] if len(series) > 1 or kind == "line" else "#1c7ed6"
+        g = steps.setdefault(k + 1, [])
+        if kind == "line":
+            pts = [(left + slot * (i + 0.5), y_of(v)) for i, v in enumerate(s_["values"])]
+            g.append(f'<path d="M {" L ".join(f"{x:.1f} {y:.1f}" for x, y in pts)}" fill="none" stroke="{colour}" '
+                     f'stroke-width="5" stroke-linejoin="round" stroke-linecap="round" class="wire"/>')
+            for (x, y), v in zip(pts, s_["values"]):
+                g.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="7" fill="{colour}" stroke="#fff" stroke-width="2"/>')
+                g.append(_t(x, y - 20, _tick(v), 17, "middle", "600"))
+        else:
+            bw = slot * 0.7 / len(series)
+            for i, v in enumerate(s_["values"]):
+                x = left + slot * i + slot * 0.15 + bw * k
+                y0, y1 = y_of(max(v, 0) if lo < 0 else v), y_of(0 if lo < 0 else lo)
+                if lo < 0 and v < 0:
+                    y0, y1 = y_of(0), y_of(v)
+                g.append(f'<rect x="{x:.1f}" y="{min(y0, y1):.1f}" width="{bw:.1f}" height="{abs(y1 - y0):.1f}" '
+                         f'rx="4" fill="{colour}"/>')
+                g.append(_t(x + bw / 2, min(y0, y1) - 14, _tick(v), 17, "middle", "600"))
+        if len(series) > 1 and s_.get("name"):
+            lx = left + 220 * k
+            base.append(f'<rect x="{lx}" y="{H - 48}" width="22" height="22" rx="4" fill="{colour}"/>'
+                        + _t(lx + 32, H - 37, s_["name"], 19, weight="600"))
+    return _svg(W, H, base, steps), []
+
+
 # ---------- both ----------
 
 def _svg(width, height, base, steps):
