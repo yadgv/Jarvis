@@ -403,6 +403,24 @@ class JarvisWidget:
         for s, (dx, dy) in zip(self.shadows[item], self.OUTLINE):
             self.canvas.coords(s, x + dx, y + dy)
 
+    def _round_hit(self, S):
+        """Cut the click area down to a disc the size of the orb, so even its
+        1/255 shade can't show as a square around him on a light page."""
+        if getattr(self, "_hit_round", None) == S or not IS_WINDOWS:
+            return
+        try:
+            import ctypes
+            self.hit.update_idletasks()
+            hwnd = ctypes.windll.user32.GetParent(self.hit.winfo_id()) or self.hit.winfo_id()
+            r = int(S * 0.34)
+            c = S // 2
+            region = ctypes.windll.gdi32.CreateEllipticRgn(c - r, c - r, c + r, c + r)
+            ctypes.windll.user32.SetWindowRgn(hwnd, region, True)   # Windows owns the region now
+            self._hit_round = S
+        except Exception as e:
+            print(f"[gui] couldn't round the click area: {e}")
+            self._hit_round = S
+
     def _hit_area(self):
         """See-through pixels on Windows also let clicks fall through to the
         window underneath, so without a backing disc only the tiny dots would be
@@ -412,7 +430,7 @@ class JarvisWidget:
             hit = tk.Toplevel(self.root)
             hit.overrideredirect(True)
             hit.attributes("-topmost", True)
-            hit.attributes("-alpha", 0.01)
+            hit.attributes("-alpha", 0.006)   # 1/255: the faintest Windows still lets clicks land on
             hit.configure(bg="black")
             hit.bind("<ButtonPress-1>", self._press)
             hit.bind("<B1-Motion>", self._move)
@@ -511,6 +529,7 @@ class JarvisWidget:
             self.orbwin.geometry(f"{S}x{S}+{x}+{y}")
         if getattr(self, "hit", None):
             self.hit.geometry(f"{S}x{S}+{x}+{y}")
+            self._round_hit(S)
         if lift:
             self.root.lift()
             if self.orbwin is not None:

@@ -157,6 +157,9 @@ SCHOOL_FOLDER = os.getenv("SCHOOL_FOLDER", "")   # empty = Documents\School
 # TELEGRAM_BOT_TOKEN from @BotFather; TELEGRAM_ALLOWED_IDS = your Telegram user ID(s).
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_ALLOWED_IDS = os.getenv("TELEGRAM_ALLOWED_IDS", "")
+PHONE_ALERTS = True                      # away from the PC: finished jobs and Approve/Deny questions go to Telegram
+PHONE_AWAY_SECONDS = 180                 # this long without talking to him = you're away
+CALLMEBOT_USER = os.getenv("CALLMEBOT_USER", "")  # your Telegram @username: ring your phone for Approve/Deny (free, callmebot.com)
 TELEGRAM_ON = True                       # the phone bot (also in the orb's right-click Settings)
 GMAIL_ADDRESS = os.getenv("GMAIL_ADDRESS")
 GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
@@ -254,7 +257,8 @@ DUCK_VOLUME = 0.2                        # their volume while ducked (0-1 of wha
 # download) mishears far less than "base.en" on a PC; Pi 4/5: "tiny.en" or "base.en".
 WHISPER_MODEL = "tiny.en" if ON_PI else "small.en"
 WHISPER_FALLBACK_MODEL = "base.en"       # used if the main one can't load (e.g. no internet for the download)
-WHISPER_BEAM_SIZE = 1 if ON_PI else 3    # tries a few readings and keeps the likeliest (1 = fastest)
+WHISPER_BEAM_SIZE = 1                    # readings tried (1 = fastest; 3 is a little more accurate but ~40% slower)
+WHISPER_THREADS = min(8, os.cpu_count() or 4)   # CPU cores Whisper may use
 # Words he uses that Whisper doesn't expect. They're given to Whisper as a hint,
 # so "breadboard" isn't heard as "bare book". Add your own here, or say
 # "Jarvis, learn the word ..." (saved in memory/vocab.json). Canvas class names are added too.

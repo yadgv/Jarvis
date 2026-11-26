@@ -146,12 +146,15 @@ class NameSpotter:
         return np.concatenate(([pad] if pad is not None else []) + word)
 
 
-def _heard_name(audio) -> bool:
+def _heard_name(audio, quiet: bool = False) -> bool:
+    """quiet: while he's talking the mic hears his own voice too ("Certainly,
+    sir."); those checks aren't logged unless it really was his name."""
     from audio.stt import transcribe
     text = transcribe(audio.astype(np.float32) / 32768.0, hints=False)
-    if config.WAKE_DEBUG or text:
+    named = is_name(text)
+    if config.WAKE_DEBUG or (text and (named or not quiet)):
         print(f"[wake] short word heard: {text!r}")
-    return is_name(text)
+    return named
 
 
 def wait_for_wake_word(stream, poll=None):
@@ -196,11 +199,15 @@ def watch_for_interrupt(stream, stop_event, on_wake):
     hits = 0
     # Just "Jarvis" (said on its own) cuts in too, the way you'd say someone's name.
     spotter = NameSpotter() if config.WAKE_ON_NAME and getattr(config, "BARGE_IN_ON_NAME", True) else None
+    if spotter is not None:
+        # "Jarvis" takes about half a second; his own phrases ("Certainly, sir.")
+        # are longer, so they aren't even checked.
+        spotter.max_chunks = min(spotter.max_chunks, max(spotter.min_chunks, int(0.8 * 16000 / CHUNK)))
     while not stop_event.is_set():
         data, _ = stream.read(CHUNK)
         if spotter is not None:
             word = spotter.feed(data[:, 0].copy(), is_speech(data[:, 0]))
-            if word is not None and not stop_event.is_set() and _heard_name(word):
+            if word is not None and not stop_event.is_set() and _heard_name(word, quiet=True):
                 print("[wake] heard his name while talking: stopping")
                 _model.reset()
                 on_wake()

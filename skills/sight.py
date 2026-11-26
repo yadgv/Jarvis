@@ -156,6 +156,8 @@ def read(want_code: bool = False) -> dict:
         return out
     is_browser = bool(BROWSER.search(title or "")) or sys.platform != "win32"
     if is_browser:
+        if not browser_bridge.connected(600):
+            print(browser_bridge.not_connected_hint())
         page = browser_bridge.current(title if sys.platform == "win32" else "")
         if page:
             out.update(title=page["title"], url=page["url"], text=page["text"][:MAX_TEXT],
@@ -233,8 +235,9 @@ SKILLS = [
             "Read what's on his screen as text, free and without a screenshot: the web page in his browser "
             "(address, text, what he selected), or the text in the app in front (documents, errors, dialogs, "
             "code editors). Use FIRST for 'what's on my screen', 'read me this', 'what does this page say', "
-            "'summarise this', 'what did I select'. code=true also gets the web page's HTML ('inspect the "
-            "page', 'check the code of this site')."),
+            "'look at what I have up', 'what did I select'. code=true also gets the web page's HTML: 'check "
+            "the code of this page', 'inspect the page' (never web_search for that). Never ask him for a link "
+            "or to paste text before trying this."),
         "parameters": {"type": "object", "properties": {
             "question": {"type": "string", "description": "what he wants to know, in his words"},
             "code": {"type": "boolean", "description": "also get the page's HTML code"}}},

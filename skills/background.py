@@ -116,7 +116,14 @@ def start(name: str, args: dict, run, label: str = "") -> str:
 
 def _announce(task):
     """Tell him at the next quiet moment: the main loop picks this up while
-    waiting for "Hey Jarvis" (or the next typed message)."""
+    waiting for "Hey Jarvis" (or the next typed message). If he's away from
+    the PC, his phone gets a message too."""
+    try:
+        from skills import phone
+        if phone.notify(f"{'✅' if task.state == 'done' else '⚠️'} {task.label}: {task.result[:1500]}"):
+            print(f"[task {task.id}] sent to his phone")
+    except Exception as e:
+        print(f"[task {task.id}] phone message failed: {e}")
     note = (f"[A background job you started earlier has finished: {task.label}. Its result: {task.result}]\n"
             "Tell him the outcome now in one or two short sentences, starting with something like "
             f"\"Sir, about {task.label[0].lower() + task.label[1:]}:\". If it needs his answer, ask.")

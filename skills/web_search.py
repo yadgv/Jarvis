@@ -67,7 +67,7 @@ SKILLS = [
         "description": (
             "Search the web for current or factual information you don't know: news, scores, "
             "opening hours, recent events, facts about people or places. For share prices use "
-            "stock_price instead. Summarise the answer briefly for speech; don't read out links."
+            "stock_price instead. Never for what's on his own screen or 'this page' (use read_screen). Summarise the answer briefly for speech; don't read out links."
         ),
         "parameters": {
             "type": "object",

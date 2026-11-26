@@ -14,6 +14,9 @@ def _load_one(name):
     """Use the copy already on disk first, so starting with no internet doesn't
     wait on a download check; download it only if it isn't there yet."""
     opts = dict(device=config.WHISPER_DEVICE, compute_type=config.WHISPER_COMPUTE)
+    threads = int(getattr(config, "WHISPER_THREADS", 0) or 0)
+    if threads:
+        opts["cpu_threads"] = threads
     try:
         return WhisperModel(name, local_files_only=True, **opts)
     except Exception:

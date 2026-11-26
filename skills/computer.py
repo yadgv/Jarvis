@@ -20,6 +20,7 @@ import base64
 import io
 import math
 import re
+import threading
 import sys
 import time
 
@@ -284,6 +285,15 @@ def _count(response):
         _tokens["output"] += getattr(usage, "output_tokens", 0) or 0
 
 
+def _ask_phone(text):
+    """A risky step in a job running in the background while he's away from the
+    PC: ask on his phone (Approve / Deny). None = ask him by voice as usual."""
+    if not threading.current_thread().name.startswith("task-"):
+        return None
+    from skills import phone
+    return phone.confirm(re.sub(r"^CONFIRM:?\s*", "", text, flags=re.I))
+
+
 def _loop(gui, scr, messages):
     global _pending
     ui_events.cancel.clear()
@@ -307,6 +317,12 @@ def _loop(gui, scr, messages):
         if not uses:
             text = " ".join(b.text for b in response.content if b.type == "text").strip()
             if text.upper().startswith("CONFIRM"):
+                answer = _ask_phone(text)
+                if answer is True:
+                    _add_user_text(messages, "Yes, go ahead (he approved it on his phone).")
+                    continue
+                if answer is False:
+                    return f"He tapped Deny on his phone, so I stopped before: {text[8:].strip(': ')}"
                 _pending = (gui, scr, messages)
                 return (text + " (Ask the user. Only if he clearly says yes, call use_computer again "
                         "with confirmed=true.)")
