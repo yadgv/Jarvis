@@ -325,6 +325,10 @@ No access token needed: Jarvis signs in to Canvas the way you do.
 
 Then try "what classes do I have on Canvas?", "download my thermo files" (saved to `Documents\School\<class>\<module>`, skipping ones you have), "download my statics files and write notes on them" (a `- notes.md` beside each file plus a class overview, by the free models) and "what's due this week?". What's due also goes in the morning briefing. Optional: paste the link from Canvas > Calendar > Calendar Feed ("my Canvas calendar feed is ...") and "what's due" works even without signing in.
 
+## Recap of your day
+
+"What did I do today?" (or "yesterday") gives a short spoken recap, from `jarvis.log`: what you asked and what Jarvis did, grouped by morning, afternoon and evening.
+
 ## Several things at once
 
 Long jobs (using the screen, carrying out a file sort, 3D parts, documents, whiteboard drawings, "what's the
