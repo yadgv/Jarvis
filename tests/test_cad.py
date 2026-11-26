@@ -61,24 +61,26 @@ def test_change_uses_the_last_part(model, monkeypatch):
     assert sorted(os.listdir(folder)) == ["phone stand (2).scad", "phone stand.scad"]
 
 
-def test_with_openscad_exports_stl_and_previews(model, monkeypatch):
+def test_with_openscad_exports_stl_and_shows_it_in_the_viewer(model, monkeypatch):
     monkeypatch.setattr(cad, "_exe", lambda: "openscad")
     ran, shown, opened = [], [], []
 
     def render(exe, scad, out, extra=()):
         ran.append((out, list(extra)))
         with open(out, "wb") as f:
-            f.write(b"\x89PNG fake" if out.endswith(".png") else b"solid part")
+            f.write(b"solid part")
         return ""
     monkeypatch.setattr(cad, "_render", render)
-    from skills import whiteboard
-    monkeypatch.setattr(whiteboard, "show_svg", lambda title, svg, steps, topic="": shown.append(svg))
+    from skills import viewer3d
+    monkeypatch.setattr(viewer3d, "open_window", lambda: shown.append(viewer3d.info()))
     monkeypatch.setattr(cad.subprocess, "Popen", lambda cmd, **k: opened.append(cmd))
     out = cad.make_3d_model({"what": "phone stand"})
-    assert ran[0][0].endswith("phone stand.stl") and ran[1][0].endswith(".png")
-    assert "STL for the slicer" in out and "preview is on the whiteboard" in out and "open in OpenSCAD" in out
-    assert "data:image/png;base64," in shown[0]
-    assert opened and opened[0][1].endswith("phone stand.scad")
+    assert len(ran) == 1 and ran[0][0].endswith("phone stand.stl")     # no PNG preview needed
+    assert "STL for the slicer" in out and "3D viewer" in out and "OpenSCAD" not in out
+    assert shown and shown[0]["name"] == "phone stand" and shown[0]["has_model"] and shown[0]["openscad"]
+    assert not opened                                                   # OpenSCAD's window only when asked
+    cad.make_3d_model({"what": "phone stand", "open": True})
+    assert opened and opened[0][1].endswith(".scad")
 
 
 def test_build_errors_are_fixed_once_then_reported(model, monkeypatch):

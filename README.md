@@ -385,8 +385,12 @@ Say "make me a phone stand", "a 40 mm box with a snap-on lid" or "a bracket for
 my SG90 servo". A big free model writes the part as an OpenSCAD file, with every
 size as a named variable at the top, saved in **Documents/Jarvis 3D**. If
 [OpenSCAD](https://openscad.org) (free) is installed he also exports the **STL**
-for your slicer, puts a preview picture on the whiteboard, and opens the file in
-OpenSCAD. "Make it 10 mm taller" changes the last part; "undo that" bins it.
+for your slicer and shows it in **Jarvis's own 3D viewer**: a holographic window
+(pinned on top) with a grid floor, glowing edges, the part's size in mm, volume
+and rough PLA weight. Drag to turn it, right-drag to pan, scroll to zoom,
+double-click to reset. OpenSCAD builds the part in the background without opening
+its own window; press "Open in OpenSCAD" (or say "open it in OpenSCAD") to edit the
+code by hand, and "show me the part" brings the viewer back. "Make it 10 mm taller" changes the last part; "undo that" bins it.
 
 ## Your files
 

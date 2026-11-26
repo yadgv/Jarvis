@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Part · Jarvis 3D viewer</title>
+<style>
+  :root { --c: #3fe6ff; --c2: #9ff4ff; --amber: #ffb547; --bg: #04121a; }
+  html, body { margin: 0; height: 100%; background: radial-gradient(ellipse at 50% 40%, #0a2a38 0%, #05151e 55%, #020a0f 100%);
+    color: var(--c2); font: 13px "Bahnschrift", "Segoe UI", sans-serif; overflow: hidden; user-select: none; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; cursor: grab; }
+  canvas.drag { cursor: grabbing; }
+  .scan { position: fixed; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(63,230,255,.035) 0 1px, transparent 1px 3px); }
+  .corner { position: fixed; width: 28px; height: 28px; border: 2px solid var(--c); opacity: .7; pointer-events: none; }
+  .tl { top: 12px; left: 12px; border-right: 0; border-bottom: 0; } .tr { top: 12px; right: 12px; border-left: 0; border-bottom: 0; }
+  .bl { bottom: 12px; left: 12px; border-right: 0; border-top: 0; } .br { bottom: 12px; right: 12px; border-left: 0; border-top: 0; }
+  .hud { position: fixed; pointer-events: none; text-shadow: 0 0 8px rgba(63,230,255,.6); }
+  #head { top: 22px; left: 30px; }
+  #head .tag { font: 11px Consolas, monospace; letter-spacing: .25em; color: var(--c); opacity: .8; }
+  #head .name { font-size: 24px; letter-spacing: .06em; color: #e8fdff; margin-top: 4px; text-transform: uppercase; }
+  #clock { top: 24px; right: 32px; font: 12px Consolas, monospace; letter-spacing: .15em; text-align: right; color: var(--c); }
+  #stats { bottom: 26px; left: 30px; font: 12px Consolas, monospace; line-height: 1.7; }
+  #stats b { color: #e8fdff; font-weight: normal; }
+  #stats .dim { font-size: 18px; color: #e8fdff; letter-spacing: .04em; font-family: "Bahnschrift", sans-serif; }
+  #buttons { position: fixed; bottom: 24px; right: 30px; display: flex; gap: 8px; }
+  button { background: rgba(63,230,255,.08); color: var(--c2); border: 1px solid rgba(63,230,255,.55);
+    font: 12px "Bahnschrift", sans-serif; letter-spacing: .08em; padding: 7px 12px; cursor: pointer; text-transform: uppercase;
+    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px); }
+  button:hover { background: rgba(63,230,255,.22); color: #fff; }
+  button.on { background: rgba(63,230,255,.3); color: #fff; }
+  .label { position: fixed; transform: translate(-50%, -50%); font: 12px Consolas, monospace; color: var(--amber);
+    background: rgba(4,18,26,.75); border: 1px solid rgba(255,181,71,.5); padding: 1px 6px; pointer-events: none;
+    white-space: nowrap; text-shadow: 0 0 6px rgba(255,181,71,.6); }
+  #empty { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column;
+    font: 13px Consolas, monospace; letter-spacing: .3em; color: var(--c); opacity: .75; pointer-events: none; }
+  #empty .ring { width: 90px; height: 90px; border: 1px dashed var(--c); border-radius: 50%; margin-bottom: 18px;
+    animation: spin 8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #hint { bottom: 92px; left: 30px; font: 11px Consolas, monospace; opacity: .55; letter-spacing: .08em; }
+  #msg { top: 70px; right: 32px; font: 12px Consolas, monospace; color: var(--amber); }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div class="scan"></div>
+<div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+<div id="head" class="hud"><div class="tag">JARVIS // FABRICATION</div><div class="name" id="name">No part loaded</div></div>
+<div id="clock" class="hud"></div>
+<div id="msg" class="hud"></div>
+<div id="hint" class="hud">DRAG ROTATE · RIGHT-DRAG PAN · SCROLL ZOOM · DOUBLE-CLICK RESET</div>
+<div id="stats" class="hud"></div>
+<div id="empty"><div class="ring"></div>AWAITING PART</div>
+<div id="labels"></div>
+<div id="buttons">
+  <button id="bWire" title="Show only the edges">Wireframe</button>
+  <button id="bBox" class="on" title="Show the size box">Dimensions</button>
+  <button id="bReset">Reset view</button>
+  <button id="bFolder">Show file</button>
+  <button id="bScad">Open in OpenSCAD</button>
+</div>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const canvas = $("gl");
+const gl = canvas.getContext("webgl", {antialias: true, alpha: false});
+
+// ---------- tiny matrix helpers (column-major, like WebGL wants) ----------
+const M = {
+  persp(fovy, aspect, near, far) {
+    const f = 1 / Math.tan(fovy / 2), nf = 1 / (near - far);
+    return [f / aspect,0,0,0, 0,f,0,0, 0,0,(far + near) * nf,-1, 0,0,2 * far * near * nf,0];
+  },
+  lookAt(e, c, up) {
+    let z = norm(sub(e, c)), x = norm(cross(up, z)), y = cross(z, x);
+    return [x[0],y[0],z[0],0, x[1],y[1],z[1],0, x[2],y[2],z[2],0, -dot(x,e),-dot(y,e),-dot(z,e),1];
+  },
+  mul(a, b) {
+    const o = new Array(16);
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
+      let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + j] * b[i * 4 + k]; o[i * 4 + j] = s;
+    }
+    return o;
+  },
+};
+function sub(a, b) { return [a[0]-b[0], a[1]-b[1], a[2]-b[2]]; }
+function dot(a, b) { return a[0]*b[0] + a[1]*b[1] + a[2]*b[2]; }
+function cross(a, b) { return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]; }
+function norm(a) { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0]/l, a[1]/l, a[2]/l]; }
+
+// ---------- shaders ----------
+function program(vs, fs) {
+  const p = gl.createProgram();
+  for (const [type, src] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) {
+    const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    gl.attachShader(p, s);
+  }
+  gl.linkProgram(p);
+  return p;
+}
+const meshProg = program(`
+  attribute vec3 pos; attribute vec3 nrm; uniform mat4 mvp; uniform vec3 eye;
+  varying vec3 vN; varying vec3 vV; varying float vZ;
+  void main() { vN = nrm; vV = normalize(eye - pos); vZ = pos.z; gl_Position = mvp * vec4(pos, 1.0); }`, `
+  precision mediump float; varying vec3 vN; varying vec3 vV; varying float vZ; uniform float height; uniform float alpha;
+  void main() {
+    vec3 n = normalize(vN); if (!gl_FrontFacing) n = -n;
+    float key = max(dot(n, normalize(vec3(0.4, -0.5, 0.8))), 0.0);
+    float fill = max(dot(n, normalize(vec3(-0.6, 0.7, 0.3))), 0.0);
+    float rim = pow(1.0 - max(dot(n, normalize(vV)), 0.0), 2.2);
+    float band = 0.5 + 0.5 * sin(vZ / max(height, 1.0) * 40.0);
+    vec3 glass = vec3(0.02, 0.08, 0.12) + vec3(0.05, 0.20, 0.27) * key + vec3(0.03, 0.08, 0.12) * fill;
+    vec3 col = glass + vec3(0.25, 0.9, 1.0) * rim * 1.1 + vec3(0.0, 0.05, 0.06) * band;
+    gl_FragColor = vec4(col, alpha);
+  }`);
+const lineProg = program(`
+  attribute vec3 pos; uniform mat4 mvp; varying vec2 vP;
+  void main() { vP = pos.xy; gl_Position = mvp * vec4(pos, 1.0); }`, `
+  precision mediump float; uniform vec4 color; uniform vec3 center; uniform float fade; varying vec2 vP;
+  void main() {
+    float a = fade > 0.0 ? clamp(1.0 - length(vP - center.xy) / fade, 0.0, 1.0) : 1.0;
+    gl_FragColor = vec4(color.rgb, color.a * a);
+  }`);
+
+function buffer(data) {
+  const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b);
+  gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW); return b;
+}
+
+// ---------- STL ----------
+function parseSTL(buf) {
+  const dv = new DataView(buf);
+  const binary = buf.byteLength >= 84 && 84 + dv.getUint32(80, true) * 50 === buf.byteLength;
+  const tris = [];
+  if (binary) {
+    const n = dv.getUint32(80, true);
+    for (let i = 0; i < n; i++) {
+      const o = 84 + i * 50 + 12, t = [];
+      for (let v = 0; v < 9; v++) t.push(dv.getFloat32(o + v * 4, true));
+      tris.push(t);
+    }
+  } else {
+    const text = new TextDecoder().decode(buf), re = /vertex\s+(\S+)\s+(\S+)\s+(\S+)/g;
+    let m, t = [];
+    while ((m = re.exec(text))) { t.push(+m[1], +m[2], +m[3]); if (t.length === 9) { tris.push(t); t = []; } }
+  }
+  return tris;
+}
+
+let model = null;   // {mesh, edges, count, edgeCount, box, size, center}
+function build(tris) {
+  let lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  for (const t of tris) for (let v = 0; v < 9; v += 3) for (let a = 0; a < 3; a++) {
+    lo[a] = Math.min(lo[a], t[v + a]); hi[a] = Math.max(hi[a], t[v + a]);
+  }
+  // Sit the part on the floor, centred.
+  const off = [-(lo[0] + hi[0]) / 2, -(lo[1] + hi[1]) / 2, -lo[2]];
+  const size = [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]];
+  const pos = new Float32Array(tris.length * 9), nrm = new Float32Array(tris.length * 9);
+  const edgeMap = new Map(), key = (x, y, z) => `${x.toFixed(3)},${y.toFixed(3)},${z.toFixed(3)}`;
+  let volume = 0;
+  tris.forEach((t, i) => {
+    const p = [0, 3, 6].map(v => [t[v] + off[0], t[v + 1] + off[1], t[v + 2] + off[2]]);
+    const n = norm(cross(sub(p[1], p[0]), sub(p[2], p[0])));
+    volume += dot(p[0], cross(p[1], p[2])) / 6;
+    for (let v = 0; v < 3; v++) { pos.set(p[v], i * 9 + v * 3); nrm.set(n, i * 9 + v * 3); }
+    for (let v = 0; v < 3; v++) {
+      const a = p[v], b = p[(v + 1) % 3], ka = key(...a), kb = key(...b);
+      const k = ka < kb ? ka + "|" + kb : kb + "|" + ka;
+      const e = edgeMap.get(k);
+      if (e) e.n.push(n); else edgeMap.set(k, {a, b, n: [n]});
+    }
+  });
+  // Feature edges only (a crease or an open edge), so curved faces don't turn into a mesh of lines.
+  const edges = [];
+  for (const e of edgeMap.values()) {
+    if (e.n.length !== 2 || dot(e.n[0], e.n[1]) < Math.cos(28 * Math.PI / 180)) edges.push(...e.a, ...e.b);
+  }
+  const all = [];   // every triangle edge, for the wireframe view
+  for (const e of edgeMap.values()) all.push(...e.a, ...e.b);
+  const box = boxLines(size);
+  return {
+    pos: buffer(pos), nrm: buffer(nrm), count: tris.length * 3,
+    edges: buffer(new Float32Array(edges)), edgeCount: edges.length / 3,
+    wire: buffer(new Float32Array(all)), wireCount: all.length / 3,
+    box: buffer(new Float32Array(box)), boxCount: box.length / 3,
+    size, volume: Math.abs(volume), tris: tris.length,
+  };
+}
+
+function boxLines(s) {
+  const x = s[0] / 2, y = s[1] / 2, z = s[2];
+  const c = [[-x,-y,0],[x,-y,0],[x,y,0],[-x,y,0],[-x,-y,z],[x,-y,z],[x,y,z],[-x,y,z]];
+  const out = [];
+  for (const [a, b] of [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]]) out.push(...c[a], ...c[b]);
+  return out;
+}
+
+let grid = null;
+function buildGrid(span) {
+  const step = span > 400 ? 50 : span > 150 ? 20 : span > 40 ? 10 : 5;
+  const half = Math.ceil(span * 1.6 / step) * step, out = [], major = [];
+  for (let v = -half; v <= half + 1e-6; v += step) {
+    const target = Math.round(v / step) % 5 === 0 ? major : out;
+    target.push(-half, v, 0, half, v, 0, v, -half, 0, v, half, 0);
+  }
+  grid = {minor: buffer(new Float32Array(out)), minorCount: out.length / 3,
+          major: buffer(new Float32Array(major)), majorCount: major.length / 3, half, step};
+}
+
+// ---------- camera ----------
+const cam = {yaw: -0.65, pitch: 0.55, dist: 100, target: [0, 0, 10], auto: true};
+let fit = {dist: 100, target: [0, 0, 10]};
+function resetView() {
+  cam.yaw = -0.65; cam.pitch = 0.55; cam.dist = fit.dist; cam.target = fit.target.slice(); cam.auto = true;
+}
+function eye() {
+  const c = Math.cos(cam.pitch);
+  return [cam.target[0] + cam.dist * c * Math.cos(cam.yaw), cam.target[1] + cam.dist * c * Math.sin(cam.yaw),
+          cam.target[2] + cam.dist * Math.sin(cam.pitch)];
+}
+
+let drag = null;
+canvas.addEventListener("contextmenu", e => e.preventDefault());
+canvas.addEventListener("mousedown", e => {
+  drag = {x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey}; cam.auto = false; canvas.classList.add("drag");
+});
+addEventListener("mouseup", () => { drag = null; canvas.classList.remove("drag"); });
+addEventListener("mousemove", e => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY;
+  if (drag.pan) {
+    const k = cam.dist / canvas.clientHeight * 0.9, sy = Math.sin(cam.yaw), cy = Math.cos(cam.yaw);
+    const sp = Math.sin(cam.pitch), cp = Math.cos(cam.pitch);
+    const right = [-sy, cy, 0], up = [-sp * cy, -sp * sy, cp];
+    for (let a = 0; a < 3; a++) cam.target[a] += (-right[a] * dx + up[a] * dy) * k;
+  } else {
+    cam.yaw -= dx * 0.008;
+    cam.pitch = Math.max(-1.45, Math.min(1.45, cam.pitch + dy * 0.008));
+  }
+});
+canvas.addEventListener("wheel", e => {
+  e.preventDefault(); cam.auto = false;
+  cam.dist = Math.max(fit.dist * 0.08, Math.min(fit.dist * 8, cam.dist * Math.exp(e.deltaY * 0.0012)));
+}, {passive: false});
+canvas.addEventListener("dblclick", resetView);
+
+// ---------- drawing ----------
+let show = {wire: false, box: true};
+function lines(buf, count, mvp, color, fade, center) {
+  gl.useProgram(lineProg);
+  gl.uniformMatrix4fv(gl.getUniformLocation(lineProg, "mvp"), false, mvp);
+  gl.uniform4fv(gl.getUniformLocation(lineProg, "color"), color);
+  gl.uniform1f(gl.getUniformLocation(lineProg, "fade"), fade || 0);
+  gl.uniform3fv(gl.getUniformLocation(lineProg, "center"), center || [0, 0, 0]);
+  const loc = gl.getAttribLocation(lineProg, "pos");
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, 3, gl.FLOAT, false, 0, 0);
+  gl.drawArrays(gl.LINES, 0, count);
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (cam.auto && model) cam.yaw += dt * 0.25;
+  const w = canvas.clientWidth * devicePixelRatio, h = canvas.clientHeight * devicePixelRatio;
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  gl.viewport(0, 0, w, h);
+  gl.clearColor(0.016, 0.06, 0.085, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  const e = eye();
+  const mvp = M.mul(M.persp(0.75, w / h, cam.dist * 0.01, cam.dist * 30), M.lookAt(e, cam.target, [0, 0, 1]));
+  gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  gl.enable(gl.DEPTH_TEST);
+  if (grid) {
+    gl.depthMask(false);
+    lines(grid.minor, grid.minorCount, mvp, [0.25, 0.9, 1.0, 0.30], grid.half, [0, 0, 0]);
+    lines(grid.major, grid.majorCount, mvp, [0.25, 0.9, 1.0, 0.65], grid.half, [0, 0, 0]);
+    gl.depthMask(true);
+  }
+  if (model) {
+    if (!show.wire) {
+      gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(1, 1);
+      gl.useProgram(meshProg);
+      gl.uniformMatrix4fv(gl.getUniformLocation(meshProg, "mvp"), false, mvp);
+      gl.uniform3fv(gl.getUniformLocation(meshProg, "eye"), e);
+      gl.uniform1f(gl.getUniformLocation(meshProg, "height"), model.size[2]);
+      gl.uniform1f(gl.getUniformLocation(meshProg, "alpha"), 0.94);
+      for (const [name, buf] of [["pos", model.pos], ["nrm", model.nrm]]) {
+        const loc = gl.getAttribLocation(meshProg, name);
+        gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.enableVertexAttribArray(loc);
+        gl.vertexAttribPointer(loc, 3, gl.FLOAT, false, 0, 0);
+      }
+      gl.drawArrays(gl.TRIANGLES, 0, model.count);
+      gl.disableVertexAttribArray(gl.getAttribLocation(meshProg, "nrm"));
+      gl.disable(gl.POLYGON_OFFSET_FILL);
+      lines(model.edges, model.edgeCount, mvp, [0.45, 0.95, 1.0, 0.95]);
+    } else {
+      gl.depthMask(false);
+      lines(model.wire, model.wireCount, mvp, [0.3, 0.9, 1.0, 0.35]);
+      lines(model.edges, model.edgeCount, mvp, [0.6, 1.0, 1.0, 1.0]);
+      gl.depthMask(true);
+    }
+    if (show.box) {
+      gl.depthMask(false);
+      lines(model.box, model.boxCount, mvp, [1.0, 0.71, 0.28, 0.55]);
+      gl.depthMask(true);
+    }
+    placeLabels(mvp);
+  }
+  requestAnimationFrame(frame);
+}
+
+function project(mvp, p) {
+  const x = mvp[0]*p[0] + mvp[4]*p[1] + mvp[8]*p[2] + mvp[12];
+  const y = mvp[1]*p[0] + mvp[5]*p[1] + mvp[9]*p[2] + mvp[13];
+  const w = mvp[3]*p[0] + mvp[7]*p[1] + mvp[11]*p[2] + mvp[15];
+  if (w <= 0) return null;
+  return [(x / w * 0.5 + 0.5) * canvas.clientWidth, (0.5 - y / w * 0.5) * canvas.clientHeight];
+}
+
+const labelEls = [0, 1, 2].map(() => { const d = document.createElement("div"); d.className = "label"; $("labels").appendChild(d); return d; });
+function placeLabels(mvp) {
+  const [sx, sy, sz] = model.size, x = sx / 2, y = sy / 2;
+  // Put each label on the box edge nearest the viewer.
+  const e = eye(), fx = e[0] >= 0 ? 1 : -1, fy = e[1] >= 0 ? 1 : -1;
+  const spots = [[[0, fy * y, 0], sx, "X"], [[fx * x, 0, 0], sy, "Y"], [[fx * x, fy * y, sz / 2], sz, "Z"]];
+  spots.forEach(([p, len, axis], i) => {
+    const s = show.box && project(mvp, p), el = labelEls[i];
+    if (!s) { el.style.display = "none"; return; }
+    el.style.display = ""; el.style.left = s[0] + "px"; el.style.top = s[1] + "px";
+    el.textContent = `${axis} ${fmt(len)} mm`;
+  });
+}
+function fmt(v) { return v >= 100 ? v.toFixed(0) : v.toFixed(1); }
+
+// ---------- loading ----------
+let version = -1, partName = "";
+async function poll() {
+  try {
+    const info = await (await fetch("/info.json", {cache: "no-store"})).json();
+    if (info.version !== version) {
+      version = info.version; partName = info.name || "Part";
+      document.title = `${partName} · Jarvis 3D viewer`;
+      $("name").textContent = partName;
+      $("bScad").style.display = info.openscad ? "" : "none";
+      if (info.has_model) await load(info.version);
+    }
+  } catch (e) { /* Jarvis restarting: try again */ }
+  setTimeout(poll, 1000);
+}
+async function load(v) {
+  const buf = await (await fetch(`/model.stl?v=${v}`, {cache: "no-store"})).arrayBuffer();
+  const tris = parseSTL(buf);
+  if (!tris.length) { $("msg").textContent = "THE STL FILE IS EMPTY"; return; }
+  model = build(tris);
+  const span = Math.max(...model.size, 1);
+  buildGrid(span);
+  fit = {dist: span * 3.1, target: [0, 0, model.size[2] * 0.4]};
+  resetView();
+  $("empty").style.display = "none"; $("msg").textContent = "";
+  const [x, y, z] = model.size;
+  $("stats").innerHTML = `<div class="dim">${fmt(x)} × ${fmt(y)} × ${fmt(z)} mm</div>` +
+    `VOLUME <b>${(model.volume / 1000).toFixed(1)} cm³</b> &nbsp;·&nbsp; ` +
+    `≈ <b>${(model.volume / 1000 * 1.24).toFixed(0)} g</b> PLA SOLID &nbsp;·&nbsp; <b>${model.tris.toLocaleString()}</b> FACES`;
+}
+
+function clock() {
+  const d = new Date();
+  $("clock").innerHTML = d.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"}) +
+    "<br>" + d.toLocaleDateString([], {weekday: "short", day: "2-digit", month: "short"}).toUpperCase();
+}
+setInterval(clock, 1000); clock();
+
+async function post(path) {
+  try {
+    const r = await (await fetch(path, {method: "POST"})).json();
+    $("msg").textContent = r.message || "";
+    setTimeout(() => { $("msg").textContent = ""; }, 4000);
+  } catch (e) { $("msg").textContent = "JARVIS ISN'T ANSWERING"; }
+}
+$("bScad").onclick = () => post("/openscad");
+$("bFolder").onclick = () => post("/folder");
+$("bReset").onclick = resetView;
+$("bWire").onclick = e => { show.wire = !show.wire; e.target.classList.toggle("on", show.wire); };
+$("bBox").onclick = e => { show.box = !show.box; e.target.classList.toggle("on", show.box); };
+addEventListener("beforeunload", () => navigator.sendBeacon("/bye"));
+
+poll();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

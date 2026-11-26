@@ -198,9 +198,19 @@ def make_3d_model(a):
         made.append(("", stl))
         out.append(f"the STL for the slicer is {files._show(stl)}")
     files._log("make", made)
-    if _preview(exe, scad, stem):
+    stl = os.path.splitext(scad)[0] + ".stl"
+    if os.path.exists(stl):
+        from skills import viewer3d
+        try:
+            viewer3d.show(stl, stem, scad)   # Jarvis's own viewer: drag to turn it, scroll to zoom
+            out.append("it's in the 3D viewer (drag to turn it)")
+        except Exception as e:
+            print(f"[3d] viewer: {e}")
+            if _preview(exe, scad, stem):
+                out.append("a preview is on the whiteboard")
+    elif _preview(exe, scad, stem):
         out.append("a preview is on the whiteboard")
-    if a.get("open", True):
+    if a.get("open"):
         try:
             subprocess.Popen([_gui(exe), scad], stdout=subprocess.DEVNULL,
                              stderr=subprocess.DEVNULL)
@@ -216,7 +226,7 @@ SKILLS = [
         "name": "make_3d_model",
         "description": ("Design a 3D printable part ('make me a phone stand', 'a 30 mm box with a lid', 'a bracket "
                         "for my servo'): writes an OpenSCAD file in Documents/Jarvis 3D, exports the STL and shows "
-                        "a preview if OpenSCAD is installed. To change the last part ('make it 10 mm taller') "
+                        "it in Jarvis's 3D viewer if OpenSCAD is installed. To change the last part ('make it 10 mm taller') "
                         "pass change."),
         "parameters": {"type": "object", "properties": {
             "what": {"type": "string", "description": "the part, with any sizes he gave"},
@@ -224,7 +234,7 @@ SKILLS = [
             "change": {"type": "string", "description": "a change to the last part"},
             "name": {"type": "string", "description": "file name without extension"},
             "stl": {"type": "boolean", "description": "also export an STL (default true)"},
-            "open": {"type": "boolean", "description": "open in OpenSCAD (default true)"}}},
+            "open": {"type": "boolean", "description": "also open the code in OpenSCAD itself (default false)"}}},
         "run": make_3d_model,
     },
 ]
