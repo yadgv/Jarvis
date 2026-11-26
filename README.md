@@ -42,6 +42,12 @@ Wake word → Whisper → Claude → Piper voice. Runs on Windows now and on a R
    models are tried in the order in `OPENROUTER_MODELS` in `config.py`. Free models
    allow 20 requests a minute and 50 a day (1000 a day once you've bought $10 of
    OpenRouter credit, ever); a reply that uses a tool costs two requests.
+   Optional free local brain for easy questions ("how many ounces in a pound",
+   "tell me a joke"): install Ollama from ollama.com/download, run
+   `ollama pull llama3.2:3b` (about 2 GB; `qwen2.5:3b` also works), and set
+   `LOCAL_MODEL = "llama3.2:3b"` in config.py. Short questions that need no tool
+   go to it first. Anything harder, or anything it isn't sure of, goes to Claude,
+   and if Ollama isn't running Jarvis uses Claude for 5 minutes before trying it again.
    Looking at and using the screen still need Claude.
 5. Run:
    ```

@@ -7,7 +7,7 @@ from datetime import datetime
 import anthropic
 
 import config
-from brain import auto_memory, backup, memory, settings
+from brain import auto_memory, backup, local_llm, memory, settings
 import skills
 
 # The SDK's defaults (10 minute timeout, 2 retries) let one stuck request
@@ -167,6 +167,39 @@ def _backup_turn(user_text, system, said, tools_used, exclude=(), history=None):
     print(f"[brain] backup model {model or '?'} answered in {time.perf_counter() - t0:.1f}s")
 
 
+class _HandOff(Exception):
+    """The local model passed the question on to Claude."""
+
+
+def _local_turn(user_text, said):
+    """An easy question answered by the local Ollama model (brain/local_llm.py).
+    Raises _HandOff before saying anything if it should go to Claude instead."""
+    messages = ([{"role": "system", "content": local_llm.SYSTEM}] + _history[-4:]
+                + [{"role": "user", "content": user_text}])
+    t0 = time.perf_counter()
+
+    def pieces():
+        head, checked = "", False
+        for kind, value in backup.stream_round(messages, target=local_llm.target()):
+            if kind != "text":
+                continue
+            if checked:
+                yield value
+                continue
+            head += value
+            if len(head) >= len(local_llm.HANDOFF) + 4:
+                if local_llm.handed_off(head):
+                    raise _HandOff()
+                checked = True
+                yield head
+        if not checked:
+            if local_llm.handed_off(head):
+                raise _HandOff()
+            yield head
+    yield from _sentences(pieces(), said)
+    print(f"[brain] local model {config.LOCAL_MODEL} answered in {time.perf_counter() - t0:.1f}s")
+
+
 # Added to what was heard when Jarvis keeps listening after a reply (no wake
 # word), so he stays quiet when it's someone else talking in the room.
 FOLLOWUP_NOTE = (
@@ -237,6 +270,16 @@ def _think_stream(user_text: str, followup: bool = False, note: str = "", exclud
 
     def turn():
         global _claude_off_until
+        if local_llm.should_use(user_text, followup, note):
+            try:
+                yield from _local_turn(user_text, said)
+                return
+            except _HandOff:
+                print("[brain] local model passed it to Claude")
+            except Exception as e:
+                if said:
+                    raise
+                local_llm.failed(e)
         if not _use_claude():
             yield from _backup_turn(asked, system, said, tools_used, exclude)
             return

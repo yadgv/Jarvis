@@ -40,30 +40,33 @@ def available() -> bool:
     return bool(config.OPENROUTER_API_KEY)
 
 
-def _post(messages, exclude=()):
-    models = list(config.OPENROUTER_MODELS)
-    body = {
-        "model": models[0],
-        "messages": messages,
-        "tools": skills.openai_tools(exclude),
-        "max_tokens": 1500,
-        "stream": True,
-    }
-    if len(models) > 1:
-        # OpenRouter tries these in order if the first one is busy or gone.
-        body["models"] = models
-    r = requests.post(
-        URL,
-        headers={"Authorization": f"Bearer {config.OPENROUTER_API_KEY}",
-                 "X-Title": "Jarvis"},
-        json=body, stream=True, timeout=(10, 60),
-    )
+def _post(messages, exclude=(), target=None):
+    """target: {"url", "model", "headers"} for another OpenAI-style server
+    (the local Ollama model); tools are left out there."""
+    if target:
+        body = {"model": target["model"], "messages": messages, "max_tokens": 400, "stream": True}
+        url, headers, who = target["url"], target.get("headers") or {}, "Local model"
+    else:
+        models = list(config.OPENROUTER_MODELS)
+        body = {
+            "model": models[0],
+            "messages": messages,
+            "tools": skills.openai_tools(exclude),
+            "max_tokens": 1500,
+            "stream": True,
+        }
+        if len(models) > 1:
+            # OpenRouter tries these in order if the first one is busy or gone.
+            body["models"] = models
+        url, who = URL, "OpenRouter"
+        headers = {"Authorization": f"Bearer {config.OPENROUTER_API_KEY}", "X-Title": "Jarvis"}
+    r = requests.post(url, headers=headers, json=body, stream=True, timeout=(5 if target else 10, 60))
     if r.status_code != 200:
         try:
             detail = r.json().get("error", {}).get("message", r.text)
         except ValueError:
             detail = r.text
-        raise RuntimeError(f"OpenRouter error {r.status_code}: {str(detail)[:200]}")
+        raise RuntimeError(f"{who} error {r.status_code}: {str(detail)[:200]}")
     return r
 
 
@@ -81,10 +84,10 @@ def _events(response):
         yield chunk
 
 
-def stream_round(messages, exclude=()):
+def stream_round(messages, exclude=(), target=None):
     """One model call. Yields ("text", piece) while it streams, then
     ("done", (text, tool_calls, model_used)). tool_calls are OpenAI-format dicts."""
-    response = _post(messages, exclude)
+    response = _post(messages, exclude, target)
     text, calls, model = "", {}, None
     for chunk in _events(response):
         model = chunk.get("model") or model
