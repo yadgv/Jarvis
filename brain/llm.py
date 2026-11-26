@@ -91,18 +91,32 @@ def _first_break(buf, said):
     return None
 
 
+_ECHO = re.compile(r"\[(?:t(?:o(?:o(?:l(?:s(?: (?:u(?:s(?:e(?:d(?::)?)?)?)?)?)?)?)?)?)?)?$|\[tools used:", re.I)
+
+
 def _sentences(pieces, said):
     """Turns streamed text pieces into whole sentences as soon as each ends."""
-    buf = ""
+    buf, muted = "", False
     for delta in pieces:
+        if muted:
+            continue  # drain the stream quietly
         buf += delta
+        head = buf.lstrip()
+        if head.lower().startswith("[tools used:"):
+            # The model copied the "[tools used: ...]" note from the history.
+            # Never read that out (it was spoken as "Steps: 1. ...").
+            print("[brain] dropped a copied tool note from the reply")
+            muted, buf = True, ""
+            continue
+        if _ECHO.match(head):
+            continue  # might be the start of one: wait for more
         while (m := _first_break(buf, said)):
             sentence = buf[: m.end()].strip()
             buf = buf[m.end():]
             if sentence:
                 said.append(sentence)
                 yield sentence
-    if buf.strip():
+    if buf.strip() and not muted:
         said.append(buf.strip())
         yield buf.strip()
 
@@ -149,6 +163,8 @@ def _openai_turn(user_text, system, said, tools_used, exclude=(), history=None, 
         # "Yes" to a question about a draft or a click needs the tool from the last turn.
         last = past[-1]["content"] if past and past[-1]["role"] == "assistant" else ""
         keep |= set(re.findall(r"(?:\[tools used: |; )([a-z_]+) ->", last))
+        if skills.mentions_board(last):  # "yes, go ahead" after he offered to draw it
+            keep |= set(skills.BOARD_TOOLS)
         exclude = tuple(exclude) + tuple(s["name"] for s in skills.SKILLS if s["name"] not in keep)
     messages = [{"role": "system", "content": system}] + past + [{"role": "user", "content": user_text}]
     t0 = time.perf_counter()

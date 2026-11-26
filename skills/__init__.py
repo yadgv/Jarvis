@@ -118,6 +118,18 @@ def _words(text):
     return {w for w in re.findall(r"[a-z]+", text.lower()) if len(w) > 2 and w not in _STOP}
 
 
+import re as _re
+# Anything about drawing or the board goes to Jarvis's own whiteboard, never
+# Paint or Microsoft Whiteboard through use_computer.
+_BOARD = _re.compile(r"\b(white ?board|board|draw|drawing|drawn|diagram|sketch|visuali[sz]e|"
+                     r"schematic|wiring|wire (?:up|it|this|that|a|an|the)|show me how)\b", _re.I)
+BOARD_TOOLS = ("show_diagram", "whiteboard_step")
+
+
+def mentions_board(text) -> bool:
+    return bool(_BOARD.search(text or ""))
+
+
 def pick_tools(text, limit=12, exclude=()):
     """Names of the tools that look relevant to what he said (plus CORE_TOOLS),
     so a model with a small token budget isn't sent all of them. Scores each
@@ -133,6 +145,9 @@ def pick_tools(text, limit=12, exclude=()):
             scored.append((score, s["name"]))
     scored.sort(key=lambda x: -x[0])
     keep = {n for _, n in scored[:limit]}
+    if mentions_board(text):
+        keep |= set(BOARD_TOOLS)
+    keep -= set(exclude)
     return keep | {n for n in CORE_TOOLS if n in _BY_NAME and n not in exclude}
 
 

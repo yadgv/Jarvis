@@ -83,7 +83,7 @@ def test_changes_redraw_from_the_current_drawing(board):
 
 def test_empty_board(monkeypatch):
     monkeypatch.setattr(wb, "_board", {"version": 0, "title": "", "svg": "", "steps": [], "step": 0, "topic": ""})
-    assert "empty" in wb.whiteboard_step({"action": "next"})
+    assert "Nothing has been drawn" in wb.whiteboard_step({"action": "next"})
 
 
 def test_page_is_served_locally_with_a_strict_policy(board, monkeypatch):
@@ -119,7 +119,6 @@ def test_clear_and_close(board):
     assert "Cleared" in wb.whiteboard_step({"action": "clear"})
     assert wb._board["svg"] == "" and wb._board["steps"] == [] and wb._board["version"] == version + 1
     assert not wb._board["closed"]
-    assert "empty" in wb.whiteboard_step({"action": "next"})
     wb.show_diagram({"topic": "servo"})
     assert "Closed" in wb.whiteboard_step({"action": "close"})
     assert wb._board["closed"] and wb._board["svg"] == ""
@@ -170,6 +169,8 @@ def test_reopens_after_he_closes_the_window(monkeypatch):
     monkeypatch.setattr(wb.subprocess, "Popen", lambda cmd: launched.append(cmd))
     monkeypatch.setattr(wb, "url", lambda: "http://127.0.0.1:1/")
     monkeypatch.setattr(wb, "_opened", False)
+    for name in ("_last_seen", "_said_bye", "_launched"):
+        monkeypatch.setattr(wb, name, 0.0)
     clock = [1000.0]
     monkeypatch.setattr(wb.time, "monotonic", lambda: clock[0])
     wb.open_window()
@@ -177,16 +178,60 @@ def test_reopens_after_he_closes_the_window(monkeypatch):
     clock[0] += 1; wb._last_seen = clock[0]     # the page is polling
     wb.open_window()
     assert len(launched) == 1                   # still open: no second window
-    clock[0] += 30                              # he closed it with the X: polling stopped
+    clock[0] += 1; wb._said_bye = clock[0]      # he closed it with the X: the page says goodbye
     assert not wb.window_open()
     wb.open_window()
-    assert len(launched) == 2                   # so it opens again
+    assert len(launched) == 2                   # so it opens again at once
+    clock[0] += 2; wb._last_seen = clock[0]     # the new window is polling
+    assert wb.window_open()
+    clock[0] += 20                              # behind other windows, polls slow down: still open
+    assert wb.window_open()
+    clock[0] += 80                              # a missed goodbye: long silence counts as closed
+    wb.open_window()
+    assert len(launched) == 3
 
 
 def test_open_the_whiteboard(monkeypatch):
     opened = []
     monkeypatch.setattr(wb, "open_window", lambda: opened.append(1))
     from skills import pc_control
-    assert "whiteboard is open" in pc_control.open_app({"name": "whiteboard"})
-    assert "whiteboard is open" in wb.whiteboard_step({"action": "open"})
-    assert len(opened) == 2
+    assert "nothing has been drawn" in pc_control.open_app({"name": "whiteboard"})
+    assert "nothing has been drawn" in wb.whiteboard_step({"action": "open"})
+    assert "nothing has been drawn" in pc_control.open_app({"name": "Microsoft Whiteboard"})
+    assert len(opened) == 3
+
+
+def test_last_drawing_comes_back_after_a_restart_or_clear(board, monkeypatch):
+    wb.show_diagram({"topic": "servo"})
+    wb.whiteboard_step({"action": "clear"})
+    assert "Back on the whiteboard" in wb.whiteboard_step({"action": "draw"})  # what the model sent
+    assert wb._board["title"] == "Servo on an Arduino Uno"
+    # Jarvis restarted: the board in memory is empty, the saved one isn't.
+    monkeypatch.setattr(wb, "_board", {"version": 0, "title": "", "svg": "", "steps": [], "step": 0,
+                                       "topic": "", "spec": None, "closed": False})
+    assert "Back on the whiteboard" in wb.show_diagram({"action": "open"})
+    assert wb._board["svg"] and wb._board["step"] == 1
+
+
+def test_drawing_never_goes_to_paint_or_microsoft_whiteboard(board):
+    from skills import computer
+    out = computer.use_computer({"task": "Open Paint and draw a wiring diagram for an Arduino Uno: 1) ..."})
+    assert out.startswith("On the whiteboard")
+    out = computer.use_computer({"task": "Draw a wiring diagram on the whiteboard for an Arduino Uno"})
+    assert out.startswith("On the whiteboard")
+
+
+def test_board_talk_always_offers_the_whiteboard_tools():
+    import skills
+    for text in ("Can you draw it on the whiteboard?", "open the whiteboard", "show me how to wire a servo",
+                 "can you sketch that", "put it on the board"):
+        assert {"show_diagram", "whiteboard_step"} <= skills.pick_tools(text), text
+    assert "show_diagram" not in skills.pick_tools("what's the weather")
+
+
+def test_copied_tool_notes_are_not_spoken():
+    from brain import llm
+    said = []
+    pieces = ["Updating the whiteboard now. ", "[tools used: show_diagram -> On the ", "whiteboard: \"x\". Steps: 1. a"]
+    assert list(llm._sentences(iter(pieces), said)) == ["Updating the whiteboard now."]
+    assert list(llm._sentences(iter(["[1] is the first pin."]), [])) == ["[1] is the first pin."]
