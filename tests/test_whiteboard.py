@@ -235,3 +235,52 @@ def test_copied_tool_notes_are_not_spoken():
     pieces = ["Updating the whiteboard now. ", "[tools used: show_diagram -> On the ", "whiteboard: \"x\". Steps: 1. a"]
     assert list(llm._sentences(iter(pieces), said)) == ["Updating the whiteboard now."]
     assert list(llm._sentences(iter(["[1] is the first pin."]), [])) == ["[1] is the first pin."]
+
+
+def test_new_topic_starts_on_a_clean_board(board, monkeypatch):
+    asked, _ = board
+    wiped = []
+    real_clear = wb.clear
+    monkeypatch.setattr(wb, "clear", lambda close=False: wiped.append(1) or real_clear(close))
+    wb.show_diagram({"topic": "servo"})
+    assert not wiped                                 # nothing there yet
+    wb.show_diagram({"topic": "photosynthesis"})
+    assert wiped and "photosynthesis" in asked[-1]["user"] and "servo" not in asked[-1]["user"].lower()[:80]
+    wb.show_diagram({"change": "use pin 6"})          # a change keeps the drawing
+    assert len(wiped) == 1
+
+
+@pytest.mark.parametrize("topic", ["how to", "show me how to", "draw it", "that"])
+def test_cut_off_request_asks_instead_of_guessing(board, topic):
+    asked, _ = board
+    out = wb.show_diagram({"topic": topic})
+    assert "Ask him what" in out and not asked
+
+
+def test_change_on_an_empty_board_is_a_new_drawing(board):
+    asked, _ = board
+    out = wb.show_diagram({"topic": "servo to a breadboard", "change": "signal to pin 9"})
+    assert out.startswith("On the whiteboard") and "signal to pin 9" in asked[-1]["user"]
+
+
+def test_window_title_keeps_the_name_windows_looks_for():
+    assert ": '') + 'Jarvis whiteboard'" in wb.APP_JS
+
+
+def test_see_through_window(monkeypatch):
+    calls = []
+
+    class U:
+        def GetWindowLongW(self, h, i):
+            return 0x100
+
+        def SetWindowLongW(self, h, i, v):
+            calls.append(("style", v))
+
+        def SetLayeredWindowAttributes(self, h, key, alpha, flags):
+            calls.append(("alpha", alpha))
+    wb._see_through(U(), 1, 85)
+    assert ("style", 0x100 | 0x80000) in calls and ("alpha", 216) in calls
+    calls.clear()
+    wb._see_through(U(), 1, 100)                     # solid and never layered: left alone
+    assert calls == []

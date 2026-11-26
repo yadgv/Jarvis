@@ -278,7 +278,7 @@ async function poll() {
         const old = svg; old.classList.add('going'); svg = null;
         await new Promise(r => setTimeout(r, 280)); old.remove();
       }
-      document.title = b.title || 'Jarvis whiteboard';
+      document.title = (b.title ? b.title + ' \u00b7 ' : '') + 'Jarvis whiteboard';   // keeps the name Windows finds it by
       document.getElementById('title').textContent = b.title || 'Whiteboard';
       const doc = new DOMParser().parseFromString(b.svg || '<svg xmlns="http://www.w3.org/2000/svg"/>', 'image/svg+xml');
       const board = document.getElementById('board');
@@ -557,7 +557,9 @@ def _user32():
             ("SetWindowPos", [H, H, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, w.UINT], w.BOOL),
             ("GetForegroundWindow", [], H), ("GetWindowThreadProcessId", [H, ctypes.c_void_p], w.DWORD),
             ("AttachThreadInput", [w.DWORD, w.DWORD, w.BOOL], w.BOOL),
-            ("SetForegroundWindow", [H], w.BOOL), ("BringWindowToTop", [H], w.BOOL)):
+            ("SetForegroundWindow", [H], w.BOOL), ("BringWindowToTop", [H], w.BOOL),
+            ("GetWindowLongW", [H, ctypes.c_int], w.LONG), ("SetWindowLongW", [H, ctypes.c_int, w.LONG], w.LONG),
+            ("SetLayeredWindowAttributes", [H, w.DWORD, ctypes.c_ubyte, w.DWORD], w.BOOL)):
         f = getattr(u, name)
         f.argtypes, f.restype = args, res
     return u
@@ -610,6 +612,28 @@ def _raise(user32, hwnd, pin: bool):
     user32.BringWindowToTop(hwnd)
 
 
+def opacity() -> int:
+    """Settings > Whiteboard see-through: how solid the window is, 40-100 %."""
+    try:
+        from brain import settings
+        return max(40, min(100, int(settings.app().get("whiteboard_opacity", 85))))
+    except Exception:
+        return 85
+
+
+def _see_through(user32, hwnd, percent: int):
+    """Make the whole window see-through (Windows layered window), so what's
+    behind shows while he draws. 100 = solid."""
+    GWL_EXSTYLE, WS_EX_LAYERED, LWA_ALPHA = -20, 0x80000, 0x2
+    style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+    if percent >= 100:
+        if style & WS_EX_LAYERED:
+            user32.SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA)
+        return
+    user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style | WS_EX_LAYERED)
+    user32.SetLayeredWindowAttributes(hwnd, 0, int(255 * percent / 100), LWA_ALPHA)
+
+
 def _to_front(wait: float = 15.0):
     """Windows: once the board's window has opened, put it on top of
     everything (Settings > "Keep the whiteboard on top") and focus it."""
@@ -626,6 +650,10 @@ def _to_front(wait: float = 15.0):
                 hwnd = _find_window(user32)
                 if hwnd:
                     _raise(user32, hwnd, pin)
+                    try:
+                        _see_through(user32, hwnd, opacity())
+                    except Exception as e:
+                        print(f"[whiteboard] couldn't make the window see-through: {e}")
                     return
                 time.sleep(0.25)
             print("[whiteboard] couldn't find the window to bring it to the front")
@@ -683,9 +711,22 @@ def _wants(text: str):
     return None
 
 
+_FILLER = {"show", "me", "how", "to", "draw", "the", "a", "an", "of", "it", "this", "that", "can", "you", "please",
+           "whiteboard", "board", "diagram", "on", "about", "something", "thing", "stuff", "what", "do", "i", "make"}
+
+
+def vague(topic: str) -> bool:
+    """'show me how to', 'draw it', '': nothing to go on (a cut-off or misheard request)."""
+    words = re.findall(r"[a-z0-9]+", (topic or "").lower())
+    return not [w for w in words if w not in _FILLER]
+
+
 def show_diagram(a):
     topic = (a.get("topic") or "").strip()
     change = (a.get("change") or "").strip()
+    if change and not _board["svg"]:
+        # Nothing on the board to change: it's a new drawing.
+        topic, change = (f"{topic}. {change}" if topic else change), ""
     action = (a.get("action") or "").strip().lower()
     # Models sometimes ask this tool to clear or close the board.
     wants = action if action in ("clear", "close", "open") else (_wants(change) or (not change and _wants(topic)))
@@ -693,12 +734,17 @@ def show_diagram(a):
         return clear(close=wants == "close")
     if wants == "open" or (not topic and not change):
         return reopen()
+    if not change and not a.get("source") and vague(topic):
+        return ("It isn't clear what to draw (his words may have been cut off or misheard). Ask him what "
+                "he'd like on the whiteboard. Don't guess, and don't redraw an earlier topic.")
     source_text = ""
     if a.get("source") and not change:
         from skills import files
         source_text, err = files.file_text(a["source"], 6000)
         if err:
             return err
+    if not change and _board["svg"]:
+        clear()   # a new topic starts on a clean board
     try:
         board = draw(topic or _board["topic"], change, source_text)
     except ValueError as e:
@@ -766,9 +812,12 @@ SKILLS = [
             "something to his Arduino or breadboard, a circuit, a flowchart, how parts connect, a mind map of a "
             "topic or of his notes, a timeline of events or a plan, a graph of a maths function (y = x^2), a "
             "free-body diagram, a circuit schematic, or a maths/physics problem worked step by step. Use when he "
-            "says 'show me', 'draw', 'visualize' or 'how do I wire/connect'. To change the current drawing "
-            "('use pin 6 instead', 'add an LED'), pass change. To clear, close or reopen the board use whiteboard_step "
-            "(or action here)."
+            "says 'show me', 'draw', 'visualize' or 'how do I wire/connect'. A new topic is drawn on a clean board "
+            "(the old drawing is wiped first): put exactly what he asked for in topic, e.g. 'show me "
+            "photosynthesis' -> topic 'photosynthesis', never an earlier topic. If his words are cut off or "
+            "don't make sense ('show me how to', 'show me how photos'), ask him what to draw instead of calling "
+            "this. To change the current drawing ('use pin 6 instead', 'add an LED'), pass change. To clear, "
+            "close or reopen the board use whiteboard_step (or action here)."
         ),
         "parameters": {
             "type": "object",

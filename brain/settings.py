@@ -82,6 +82,7 @@ def app_defaults() -> dict:
         "position": None,              # [right edge, top] after dragging; None = the corner
         "panel_seconds": 7,            # how long the text stays after he's done
         "whiteboard_on_top": True,
+        "whiteboard_opacity": 85,      # % solid: lower lets what's behind the whiteboard show through
         "reduce_motion": False,        # fewer animations (slower PCs, or if they're distracting)
         "roam": True,                  # the orb glides around the screen edges while he's active
         "ask_paid": bool(_orig("ASK_BEFORE_PAID", True)),   # ask before using Claude (it costs money)
@@ -130,7 +131,7 @@ def _clean(key, value, default):
             v = int(float(value))
         except (TypeError, ValueError):
             return default
-        limits = {"wake_sensitivity": (1, 10), "followup_seconds": (0, 60), "panel_seconds": (2, 60)}
+        limits = {"wake_sensitivity": (1, 10), "followup_seconds": (0, 60), "whiteboard_opacity": (40, 100), "panel_seconds": (2, 60)}
         lo, hi = limits.get(key, (v, v))
         return max(lo, min(hi, v))
     return str(value or "").strip()[:120]
