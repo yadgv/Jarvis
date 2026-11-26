@@ -190,6 +190,8 @@ class SettingsWindow:
         self._row(card, "Morning", self._check("morning_briefing", "Briefing on the first hello"))
         self._row(card, "Temperature", self._combo("temperature_unit", ("celsius", "fahrenheit")))
         self._row(card, "Whiteboard", self._check("whiteboard_on_top", "Keep it on top of other windows"))
+        self._row(card, "See-through", self._slider("whiteboard_opacity", 40, 100),
+                  note="% solid: lower shows more of what's behind the whiteboard")
         if IS_WINDOWS:
             import autostart
             self.values["start_at_login"] = autostart.is_on()
