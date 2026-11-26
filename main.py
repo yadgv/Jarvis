@@ -125,7 +125,7 @@ def conversation_seconds() -> float:
     return secs + (8 if asked_question else 0)
 
 
-def followup_action(said: str, answering: bool) -> str:
+def followup_action(said: str, answering: bool, addressed: bool = False) -> str:
     """What to do with words heard mid-conversation (no wake word):
     'answer' (think and reply), 'name' (just "Jarvis": chime and listen),
     'close' (he's done: sign off) or 'quiet' ("ok", "cool": keep listening, say nothing)."""
@@ -133,7 +133,7 @@ def followup_action(said: str, answering: bool) -> str:
         return "name"
     if answering:
         return "answer"
-    if is_closer(said) or (is_exit(said) and "jarvis" not in said):
+    if is_closer(said) or (is_exit(said) and "jarvis" not in said and not addressed):
         return "close"
     if is_acknowledgement(said):
         return "quiet"
@@ -144,10 +144,40 @@ def followup_action(said: str, answering: bool) -> str:
 RESET_PHRASES = {"new conversation", "start over", "start a new conversation"}
 
 
+# His name as Whisper sometimes hears it ("Travis", "Jervis").
+NAME_WORDS = r"(?:jarvis|jervis|jarvas|javis|jarvi|jarves|jarvus|travis|charvis|garvis)"
+_LEAD = r"(?:(?:hey|hi|ok|okay|yo|oi|uh|um+|uhm|erm|so|oh|and|alright|right|well)\W+)*"
+# "Travis is coming over" is about someone else: a misheard name only counts
+# when it isn't followed by what you'd say about a person.
+_ABOUT = r"(?!\s+(?:is|was|said|says|and|has|had|will|told|wants|'s)\b)(?!'s)"
+_NAME_START = re.compile(r"^\W*" + _LEAD + r"(?:jarvis\b(?!'s)|" + NAME_WORDS + r"\b" + _ABOUT + r")[\s,.!?;:-]*", re.I)
+_NAME_END = re.compile(r"[\s,]+" + NAME_WORDS + r"(?=\W*$)", re.I)
+_NAME_ANY = re.compile(r"\bjarvis\b", re.I)
+
+
+def strip_name(text: str):
+    """(addressed, rest): his name taken off the front or end of what was said.
+    People say the name of whoever they're talking to all the time ("Jarvis,
+    and what about Friday?", "what do you think, Jarvis?"); it means "this is
+    for you", never "start over". rest is "" when it was only the name."""
+    text = (text or "").strip()
+    rest = _NAME_START.sub("", text, count=1)
+    addressed = rest != text
+    shorter = _NAME_END.sub("", rest)
+    if shorter != rest:
+        addressed, rest = True, shorter
+    addressed = addressed or bool(_NAME_ANY.search(rest))
+    if not re.search(r"[a-z0-9]", rest, re.I):
+        rest = ""
+    elif rest[:1].islower() and rest[:1] != text[:1]:
+        rest = rest[0].upper() + rest[1:]
+    return addressed, rest.strip()
+
+
 def is_just_name(said: str) -> bool:
-    """ "Jarvis" or "hey Jarvis" on its own: he's calling for attention."""
-    words = said.split()
-    return "jarvis" in words and set(words) <= {"hey", "jarvis", "sir", "yo", "ok", "okay"}
+    """ "Jarvis", "hey Jarvis" or "uh, Jarvis" on its own: he's calling for attention."""
+    addressed, rest = strip_name(said)
+    return addressed and (not rest or normalize(rest) in {"sir", "you there", "are you there"})
 
 
 def normalize(text: str) -> str:
@@ -365,6 +395,7 @@ def main():
         room = None
         conv_until = 0.0  # in a conversation until then: no wake word needed
         already_woken = False  # you said "Hey Jarvis" (or pressed Stop) to interrupt him
+        named_last = False     # he just said "Jarvis" and paused: the rest is coming
         while True:
             typed = None
             if need_wake:
@@ -443,19 +474,32 @@ def main():
             print(f"You: {text}  [{'typed' if typed is not None else f'stt {time.perf_counter() - t_heard:.1f}s'}]")
             ui_events.emit("you", text)
 
-            said = normalize(text)
-            followup = not need_wake and typed is None
-            # Right after he asked a question, whatever is said next is the answer:
-            # never dropped as chatter or as the end of the conversation.
-            answering = followup and asked_question
-            action = followup_action(said, answering) if followup else "answer"
-            if action == "name":
-                # Just his name: he wants to say something, so chime and listen.
-                print("[follow-up: just my name, listening]")
-                already_woken = True
-                need_wake = True
+            in_conversation = (not need_wake or named_last) and typed is None
+            # His name at the start or end ("Jarvis, and Friday?") just means
+            # "this is for you": same conversation, same context, never a restart.
+            addressed, rest = strip_name(text) if typed is None else (False, text)
+            if addressed and not rest:
+                # Only his name (or he paused right after it): keep listening for
+                # the rest, quietly. No chime, nothing reset.
+                print("[heard my name: still listening, same conversation]")
+                named_last = True
+                conv_until = max(conv_until, time.time() + conversation_seconds())
+                need_wake = False
                 stream.start()
                 continue
+            addressed = addressed or named_last
+            named_last = False
+            if addressed:
+                text = rest
+            said = normalize(text)
+            # Right after he asked a question, whatever is said next is the answer:
+            # never dropped as chatter or as the end of the conversation.
+            answering = in_conversation and asked_question
+            action = followup_action(said, answering, addressed) if in_conversation else "answer"
+            # Said to him by name, it's never overheard chatter.
+            followup = in_conversation and not addressed
+            if action == "name":
+                action = "quiet"
             if action == "close":
                 # "Thanks", "that's all", "bye": the conversation is over.
                 print("[conversation over: he said he's done]")
@@ -479,7 +523,7 @@ def main():
                 stream.start()
                 continue
 
-            extra = followup_options(followup)
+            extra = followup_options(followup) if not answering else {"note": ANSWER_NOTE}
             if not followup and briefing.is_first_hello(said):
                 extra["note"] = briefing.NOTE  # first hello of the day: give the morning briefing
                 briefing.mark_briefed()
