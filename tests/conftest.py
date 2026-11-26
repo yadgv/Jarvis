@@ -78,3 +78,13 @@ def private_files(monkeypatch, tmp_path):
     monkeypatch.setattr(files, "_undo_path", lambda: str(tmp_path / "file_undo.json"))
     monkeypatch.setattr(files, "_plan", None)
     return home
+
+
+@pytest.fixture(autouse=True)
+def no_windows(monkeypatch):
+    """Nothing a test does opens a real browser window."""
+    from skills import whiteboard
+    monkeypatch.setattr(whiteboard, "_app_browser", lambda: None)
+    monkeypatch.setattr(whiteboard.webbrowser, "open", lambda *a, **k: True)
+    monkeypatch.setattr(whiteboard, "_board", {"version": 0, "title": "", "svg": "", "steps": [], "step": 0,
+                                               "topic": "", "spec": None, "closed": False})

@@ -378,6 +378,72 @@ def _wrap(text, n):
     return lines + ([cur] if cur else [])
 
 
+# ---------- a folder before and after sorting ----------
+
+FOLDER_FILL, FOLDER_EDGE = "#fff4e6", "#e8590c"
+SHOW_FILES = 4  # file names shown under each folder; the rest is "+N more"
+
+
+def _folder_icon(x, y):
+    return (f'<path d="M {x} {y + 4} h 12 l 4 5 h 18 v 21 h -34 z" fill="{FOLDER_FILL}" '
+            f'stroke="{FOLDER_EDGE}" stroke-width="2.5" stroke-linejoin="round"/>')
+
+
+def render_tree(title: str, folder: str, before: list, after: dict, trash: list = ()):
+    """Two columns: the loose files now, and the subfolders they'll go into.
+    Each new subfolder is its own step, so the whiteboard draws them one by one."""
+    base, steps = [], {}
+    base.append(_t(60, 44, title, 36, weight="700"))
+    # Before
+    x, y = 60, 110
+    base.append(_t(x, y, "Now", 26, weight="700", fill=MUTED))
+    y += 44
+    base.append(_folder_icon(x, y - 17) + _t(x + 46, y, folder, 24, weight="700"))
+    shown = list(before)[:14]
+    for name in shown:
+        y += 34
+        base.append(f'<circle cx="{x + 52}" cy="{y}" r="4" fill="{MUTED}"/>' + _t(x + 66, y, _clip(name, 34), 20))
+    if len(before) > len(shown):
+        y += 34
+        base.append(_t(x + 66, y, f"+ {len(before) - len(shown)} more", 20, fill=MUTED))
+    bottom = y
+    # After
+    x, y = 640, 110
+    base.append(_t(x, y, "After", 26, weight="700", fill=MUTED))
+    y += 44
+    base.append(_folder_icon(x, y - 17) + _t(x + 46, y, folder, 24, weight="700"))
+    top = y
+    n = 0
+    for sub, names in after.items():
+        n += 1
+        g = steps.setdefault(n, [])
+        y += 48
+        g.append(f'<path d="M {x + 17} {top + 16} V {y} H {x + 56}" fill="none" stroke="{FOLDER_EDGE}" '
+                 f'stroke-width="3" class="wire"/>')
+        g.append(_folder_icon(x + 60, y - 17) + _t(x + 106, y, f"{sub}  ({len(names)})", 23, weight="700"))
+        top = y - 16
+        for name in list(names)[:SHOW_FILES]:
+            y += 30
+            g.append(_t(x + 126, y, _clip(name, 30), 18, fill=MUTED))
+        if len(names) > SHOW_FILES:
+            y += 30
+            g.append(_t(x + 126, y, f"+ {len(names) - SHOW_FILES} more", 18, fill=MUTED))
+    if trash:
+        n += 1
+        y += 56
+        steps.setdefault(n, []).append(
+            _t(x, y, f"To the Recycle Bin (duplicates): {len(trash)}", 22, weight="700", fill=POWER)
+            + "".join(_t(x + 20, y + 30 * (i + 1), _clip(name, 36), 18, fill=MUTED) for i, name in enumerate(trash[:4])))
+        y += 30 * min(len(trash), 4)
+    height = max(bottom, y) + 70
+    return _svg(1160, height, base, steps), []
+
+
+def _clip(text, n):
+    text = str(text)
+    return text if len(text) <= n else text[: n - 1] + "…"
+
+
 # ---------- both ----------
 
 def _svg(width, height, base, steps):

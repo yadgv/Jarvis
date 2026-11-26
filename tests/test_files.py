@@ -139,3 +139,22 @@ def test_file_requests_get_file_tools_not_the_screen():
         assert not offline.needs_internet(text), text
     from skills import computer
     assert "file tools" in computer.use_computer({"task": "Open File Explorer and organize the Downloads folder"})
+
+
+def test_sort_plan_is_drawn_and_can_be_saved(private_files):
+    from skills import whiteboard as wb
+    dl = private_files / "Downloads"
+    for name in ("a.pdf", "b.pdf", "c.jpg", "setup.exe"):
+        touch(dl / name)
+    next_turn()
+    out = files.organize_folder({"folder": "downloads", "save_plan": True})
+    assert "before-and-after is on the whiteboard" in out
+    assert wb._board["title"] == "Plan: sort Downloads"
+    assert wb._board["steps"][0] == "PDFs: 2 files"
+    assert sorted(wb._board["steps"][1:]) == ["Images: 1 file", "Installers: 1 file"]
+    svg = wb._board["svg"]
+    assert 'id="step-1"' in svg and "a.pdf" in svg and "PDFs  (2)" in svg
+    assert "Documents/Jarvis plans/Sort Downloads" in out
+    plan = next((private_files / "Documents" / "Jarvis plans").iterdir()).read_text()
+    assert "## PDFs (2)" in plan and "- [ ] a.pdf" in plan
+    assert sorted(p.name for p in dl.iterdir()) == ["a.pdf", "b.pdf", "c.jpg", "setup.exe"]  # nothing moved yet
