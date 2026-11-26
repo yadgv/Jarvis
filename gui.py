@@ -18,6 +18,7 @@ Uses tkinter, which comes with Python on Windows and is one apt package on a
 Pi (sudo apt install python3-tk). If it can't open, the reason is printed in
 the terminal.
 """
+import startup  # noqa: F401  (first, so its clock starts at launch)
 import math
 import os
 import queue

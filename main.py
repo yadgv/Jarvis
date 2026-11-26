@@ -6,6 +6,7 @@ import threading
 import time
 from datetime import datetime
 
+import startup  # noqa: F401  (first, so its clock starts at launch)
 import config
 import ui_events
 
@@ -261,20 +262,33 @@ def wait_for_trigger(stream):
         stream.start()
 
 
+def _start_extras():
+    """The parts that don't need to be ready for the first "Hey Jarvis": started
+    in the background once he's online, each timed in the log."""
+    for name, start in (("phone bot (Telegram)", telegram_bot.start), ("dictation key", dictation.start),
+                        ("MCP tools", mcp_tools.start), ("end-of-sentence model", smart_turn.load)):
+        t = time.perf_counter()
+        try:
+            start()
+        except Exception as e:
+            print(f"[startup] {name} failed: {type(e).__name__}: {e}")
+        startup.mark(f"{name} started", t)
+
+
 def main():
+    startup.mark("modules loaded")
     timers.announce = say
     reminders.start()  # also reads out any that came due while he was off
     jobs.start()  # standing jobs and watches from memory/jobs.json
-    telegram_bot.start()  # phone chat, if TELEGRAM_BOT_TOKEN is set
-    dictation.start()  # hold DICTATION_KEY to type by voice
-    mcp_tools.start()  # tools from MCP servers in mcp_servers.json, if any
+    threading.Thread(target=_start_extras, daemon=True, name="startup-extras").start()
     print("JARVIS online.")
+    startup.mark("online")
     say("Jarvis online. At your service, sir.")
 
     with open_stream() as stream:
         if config.AUTO_CALIBRATE:
             calibrate(stream)
-        smart_turn.load()  # downloads the end-of-sentence model the first time
+        startup.mark("ready to listen")
 
         need_wake = True
         room = None
