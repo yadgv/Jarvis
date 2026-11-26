@@ -281,6 +281,11 @@ cards, colour-coded wires that never share a line, a legend), so it's always
 tidy. Scroll to zoom, drag to move, **Fit** to see it all. Claude only if the
 free models fail. It needs the internet. The page only runs on your PC (127.0.0.1).
 
+It also does **mind maps** ("make a mind map of photosynthesis", or "mind map my
+bio notes" to draw one from a file) and **timelines** ("draw a timeline of World
+War One", "put my project plan on a timeline"). Each branch or event is its own
+step, so he draws and explains them one at a time.
+
 ## Your files
 
 Jarvis can work with the files in your own folders (Desktop, Documents,
