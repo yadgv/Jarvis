@@ -379,6 +379,23 @@ functions ("graph y = x^2 - 4 and y = 2x + 1", with roots and crossings marked),
 **circuit schematics** with proper symbols ("a 9 V battery, a switch and two
 lamps in parallel"). The side panel lists the working, one line per step.
 
+## Seeing your screen (free, no screenshots)
+
+Ask "what's on my screen?", "read me this error", "what does this page say?" or
+"check the code of this page". Jarvis reads it as text, all on your PC:
+
+- **Web pages**, through the small **Jarvis eyes** browser extension: the page's
+  address, its text, what you've selected, and its HTML code when you ask (saved in
+  Documents/Jarvis Docs). It also lets "brief this article" read pages you're signed in to.
+  Install once in Chrome or Edge: open `chrome://extensions` (or `edge://extensions`),
+  turn on **Developer mode**, click **Load unpacked**, pick the `browser_extension` folder.
+- **Other apps** (Word, VS Code, error boxes, Settings): the text the app itself shows,
+  through Windows UI Automation (`pip install uiautomation`).
+- **Pictures and video**: Windows' built-in OCR (`pip install -r requirements.txt` adds it).
+
+The text goes to the free models. Only for understanding an image itself does he use
+`look_at_screen`, which needs Claude, so he asks first.
+
 ## Brief an article (split screen)
 
 Say "brief this article" (or "summarise this PDF") while it's on screen. Jarvis

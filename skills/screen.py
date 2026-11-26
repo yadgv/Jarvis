@@ -103,9 +103,9 @@ SKILLS = [
     {
         "name": "look_at_screen",
         "description": (
-            "Look at the user's computer screen and answer a question about it: what's open, "
-            "read out an error or message, summarise a page, find something on screen. "
-            "Use whenever he asks about his screen, 'this', or 'what am I looking at'. Read-only."
+            "Take a screenshot and ask Claude (paid) about it: for pictures, videos, diagrams, layout or "
+            "anything visual that read_screen (free, text only) can't answer. Try read_screen first for text, "
+            "pages, errors and documents. Read-only."
         ),
         "parameters": {
             "type": "object",

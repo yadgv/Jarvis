@@ -365,7 +365,8 @@ def _start_extras():
     in the background once he's online, each timed in the log."""
     for name, start in (("phone bot (Telegram)", telegram_bot.start), ("dictation key", dictation.start),
                         ("MCP tools", mcp_tools.start), ("end-of-sentence model", smart_turn.load),
-                        ("notes for when you're back", skills.sticky.start)):
+                        ("notes for when you're back", skills.sticky.start),
+                        ("browser extension link", skills.browser_bridge.start)):
         t = time.perf_counter()
         try:
             start()
