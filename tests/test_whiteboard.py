@@ -111,3 +111,35 @@ def test_needs_internet_to_draw(monkeypatch):
 def test_picked_for_wiring_questions():
     import skills
     assert "show_diagram" in skills.pick_tools("show me how to wire a servo to my arduino")
+
+
+def test_clear_and_close(board):
+    wb.show_diagram({"topic": "servo"})
+    version = wb._board["version"]
+    assert "Cleared" in wb.whiteboard_step({"action": "clear"})
+    assert wb._board["svg"] == "" and wb._board["steps"] == [] and wb._board["version"] == version + 1
+    assert not wb._board["closed"]
+    assert "empty" in wb.whiteboard_step({"action": "next"})
+    wb.show_diagram({"topic": "servo"})
+    assert "Closed" in wb.whiteboard_step({"action": "close"})
+    assert wb._board["closed"] and wb._board["svg"] == ""
+    assert not wb._opened  # the next drawing opens a new window
+
+
+def test_clearing_goes_to_the_tool_not_the_chat_model():
+    import skills
+    from brain import local_llm, offline
+    for text in ("clear the whiteboard", "erase the board", "close the whiteboard", "next step"):
+        assert not local_llm.is_easy(text), text
+        assert not offline.needs_internet(text), text
+    assert "whiteboard_step" in skills.pick_tools("clear the whiteboard")
+    assert offline._command("clear the whiteboard") == ("whiteboard_step", {"action": "clear"})
+    assert offline._command("wipe the board clean") == ("whiteboard_step", {"action": "clear"})
+    assert offline._command("close the whiteboard") == ("whiteboard_step", {"action": "close"})
+
+
+def test_page_draws_smoothly():
+    js = wb.APP_JS
+    assert "strokeDashoffset" in js and "sweepIn" in js and "drawStep" in js
+    assert "prefers-reduced-motion" in js
+    assert "window.close()" in js and "The whiteboard is clear" in wb.PAGE
