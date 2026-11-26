@@ -28,26 +28,48 @@ SYSTEM = (
     "for parts that fit together.\n"
     "- Use only built-in OpenSCAD: cube, cylinder, sphere, polygon, linear_extrude, rotate_extrude, "
     "translate, rotate, scale, mirror, hull, minkowski, union, difference, intersection, modules, for. "
-    "No include, use, import or surface."
+    "No include, use, import or surface. There are no libraries: rounded_cube, cuboid and the like don't "
+    "exist, so write any helper module yourself before using it. End every statement with ;."
 )
 _BANNED = re.compile(r"^\s*(?:include|use)\s*<|\b(?:import|surface)\s*\(", re.M)
 
 _last = {"path": None, "code": None, "what": None}
 
 
+def _console(path):
+    """On Windows openscad.exe is the window app: it prints no errors where
+    Jarvis can read them. openscad.com, next to it, is the same program for
+    the command line, so use that when it's there."""
+    if path and path.lower().endswith(".exe"):
+        for name in ("openscad.com", "openscad.console.exe"):
+            other = os.path.join(os.path.dirname(path), name)
+            if os.path.isfile(other):
+                return other
+    return path
+
+
 def _exe():
-    """The OpenSCAD program, or None."""
-    found = shutil.which("openscad") or shutil.which("openscad.com")
+    """The OpenSCAD program for the command line, or None."""
+    found = shutil.which("openscad.com") or shutil.which("openscad")
     if found:
-        return found
+        return _console(found)
     for base in (os.environ.get("ProgramFiles", r"C:\Program Files"), os.environ.get("ProgramFiles(x86)", ""),
-                 os.environ.get("LOCALAPPDATA", "")):
-        for sub in ("OpenSCAD", os.path.join("Programs", "OpenSCAD"), "OpenSCAD (Nightly)"):
-            for exe in ("openscad.com", "openscad.exe"):
+                 os.environ.get("LOCALAPPDATA", ""), os.environ.get("ProgramW6432", "")):
+        for sub in ("OpenSCAD", os.path.join("Programs", "OpenSCAD"), "OpenSCAD (Nightly)", "OpenSCAD (Nightly) "):
+            for exe in ("openscad.com", "openscad.console.exe", "openscad.exe"):
                 path = os.path.join(base or "", sub, exe)
                 if base and os.path.isfile(path):
                     return path
     return None
+
+
+def _gui(exe):
+    """The window app, for opening the file for him."""
+    for name in ("openscad.exe",):
+        other = os.path.join(os.path.dirname(exe), name)
+        if os.path.isfile(other):
+            return other
+    return exe
 
 
 def clean(text: str) -> str:
@@ -75,16 +97,36 @@ def design(what: str, details: str = "", change: str = "") -> str:
 
 
 def _render(exe, scad, out, extra=()):
-    """Run OpenSCAD; '' if it worked, else why not."""
+    """Run OpenSCAD; '' if it worked, else why not. Everything goes in the log."""
+    cmd = [exe, "-o", out, *extra, scad]
     try:
-        r = subprocess.run([exe, "-o", out, *extra, scad], capture_output=True, text=True, timeout=180,
+        if os.path.exists(out):
+            os.remove(out)
+        r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180,
                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     except (OSError, subprocess.TimeoutExpired) as e:
-        return str(e)
-    errors = [l for l in (r.stderr or "").splitlines() if "ERROR" in l]
-    if r.returncode != 0 or errors or not os.path.exists(out):
-        return (errors[0] if errors else (r.stderr or "").strip()[-200:]) or "it didn't make a file"
-    return ""
+        print(f"[3d] {subprocess.list2cmdline(cmd)} -> couldn't run: {e}")
+        return f"couldn't run OpenSCAD ({e})"
+    text = ((r.stderr or "") + "\n" + (r.stdout or "")).strip()
+    made = os.path.exists(out) and os.path.getsize(out) > 0
+    print(f"[3d] {subprocess.list2cmdline(cmd)} -> exit {r.returncode}, "
+          f"{'made the file' if made else 'NO FILE'}" + (f"\n[3d] OpenSCAD said:\n{text[-1500:]}" if text else ", no output"))
+    lines = text.splitlines()
+    # Mistakes OpenSCAD only warns about leave parts out of the model (a made-up
+    # module like rounded_cube() draws nothing), so they count as errors too.
+    errors = [l.strip() for l in lines if "ERROR" in l or ("WARNING" in l and any(
+        w in l.lower() for w in ("unknown", "undefined", "child modules", "wrong number", "too many")))]
+    if made and r.returncode == 0 and not errors:
+        return ""
+    if errors:
+        return "; ".join(errors[:2])[:400]
+    empty = [l.strip() for l in lines if "top level" in l.lower() or "empty" in l.lower() or "not a 3d" in l.lower()]
+    if empty:
+        return empty[0][:300]
+    if not text and exe.lower().endswith(".exe"):
+        return ("OpenSCAD ran but printed nothing (this is its window app; openscad.com next to it shows errors). "
+                f"Exit code {r.returncode}")
+    return (lines[-1].strip()[:300] if lines else f"no file was made (exit code {r.returncode})")
 
 
 def _preview(exe, scad, title):
@@ -136,10 +178,21 @@ def make_3d_model(a):
     if a.get("stl", True):
         stl = os.path.splitext(scad)[0] + ".stl"
         err = _render(exe, scad, stl)
+        if err and "couldn't run" not in err and "printed nothing" not in err:
+            # Usually a mistake in the code: let the model fix it once.
+            print(f"[3d] build failed ({err}); asking the model to fix it")
+            try:
+                code = design(_last["what"], "", f"OpenSCAD gave this error, fix it: {err}")
+                with open(scad, "w", encoding="utf-8") as f:
+                    f.write(code)
+                _last.update(code=code)
+                err = _render(exe, scad, stl)
+            except Exception as e:
+                print(f"[3d] the fix didn't work: {e}")
         if err:
             files._log("make", made)
-            return (f"Saved {files._show(scad)}, but OpenSCAD couldn't build it: {err}. "
-                    "Offer to fix it (make_3d_model with change: 'fix this error: ...').")
+            return (f"Saved {files._show(scad)}, but OpenSCAD couldn't build it: {err}. The full error is in "
+                    "the log. Tell him briefly and offer to try again (make_3d_model with change: 'fix: ...').")
         made.append(("", stl))
         out.append(f"the STL for the slicer is {files._show(stl)}")
     files._log("make", made)
@@ -147,7 +200,7 @@ def make_3d_model(a):
         out.append("a preview is on the whiteboard")
     if a.get("open", True):
         try:
-            subprocess.Popen([exe.replace("openscad.com", "openscad.exe"), scad], stdout=subprocess.DEVNULL,
+            subprocess.Popen([_gui(exe), scad], stdout=subprocess.DEVNULL,
                              stderr=subprocess.DEVNULL)
             out.append("it's open in OpenSCAD")
         except OSError:

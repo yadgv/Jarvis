@@ -81,11 +81,58 @@ def test_with_openscad_exports_stl_and_previews(model, monkeypatch):
     assert opened and opened[0][1].endswith("phone stand.scad")
 
 
-def test_build_errors_are_reported(model, monkeypatch):
+def test_build_errors_are_fixed_once_then_reported(model, monkeypatch):
     monkeypatch.setattr(cad, "_exe", lambda: "openscad")
-    monkeypatch.setattr(cad, "_render", lambda *a, **k: "ERROR: Parser error in line 3")
+    tries = []
+    monkeypatch.setattr(cad, "_render", lambda *a, **k: tries.append(a) or "ERROR: Parser error in line 3")
     out = cad.make_3d_model({"what": "phone stand"})
-    assert "couldn't build it" in out and "Parser error" in out and "change" in out
+    assert len(tries) == 2                                   # built, fixed by the model, built again
+    assert "fix it: ERROR: Parser error in line 3" in model[1][1]
+    assert "couldn't build it" in out and "Parser error" in out and "in the log" in out
+
+
+def test_a_fixed_part_builds(model, monkeypatch, tmp_path):
+    monkeypatch.setattr(cad, "_exe", lambda: "openscad")
+    results = iter(["ERROR: Parser error in line 3", "", ""])
+
+    def render(exe, scad, out, extra=()):
+        r = next(results)
+        if not r:
+            open(out, "wb").write(b"x")
+        return r
+    monkeypatch.setattr(cad, "_render", render)
+    monkeypatch.setattr(cad, "_preview", lambda *a: False)
+    monkeypatch.setattr(cad.subprocess, "Popen", lambda cmd, **k: None)
+    assert "STL for the slicer" in cad.make_3d_model({"what": "phone stand"})
+
+
+def test_windows_uses_the_console_openscad(tmp_path, monkeypatch):
+    folder = tmp_path / "OpenSCAD"
+    folder.mkdir()
+    for name in ("openscad.exe", "openscad.com"):
+        (folder / name).write_text("")
+    assert cad._console(str(folder / "openscad.exe")) == str(folder / "openscad.com")
+    assert cad._gui(str(folder / "openscad.com")) == str(folder / "openscad.exe")
+    monkeypatch.setattr(cad.shutil, "which", lambda n: None)
+    monkeypatch.setenv("ProgramFiles", str(tmp_path))
+    assert cad._exe() == str(folder / "openscad.com")
+
+
+def test_render_logs_everything(tmp_path, monkeypatch, capsys):
+    import subprocess
+    monkeypatch.setattr(cad.subprocess, "run", lambda cmd, **k: subprocess.CompletedProcess(
+        cmd, 1, "", "Parsing design...\nERROR: Parser error: syntax error in file part (2).scad, line 7\n"))
+    err = cad._render("C:/OpenSCAD/openscad.com", str(tmp_path / "part (2).scad"), str(tmp_path / "part (2).stl"))
+    assert err.startswith("ERROR: Parser error") and "line 7" in err
+    log = capsys.readouterr().out
+    assert "exit 1" in log and "NO FILE" in log and '"' in log and "line 7" in log   # quoted path, full error
+    monkeypatch.setattr(cad.subprocess, "run", lambda cmd, **k: subprocess.CompletedProcess(cmd, 1, "", ""))
+    assert "window app" in cad._render("C:/OpenSCAD/openscad.exe", "a.scad", str(tmp_path / "a.stl"))
+    # A made-up module draws nothing: OpenSCAD only warns, then makes no file.
+    monkeypatch.setattr(cad.subprocess, "run", lambda cmd, **k: subprocess.CompletedProcess(
+        cmd, 1, "", "WARNING: Ignoring unknown module 'rounded_cube' in file a.scad, line 2\n"
+                    "Current top level object is empty.\n"))
+    assert "unknown module 'rounded_cube'" in cad._render("openscad", "a.scad", str(tmp_path / "a.stl"))
 
 
 def test_3d_printing_asks_get_the_tool():
