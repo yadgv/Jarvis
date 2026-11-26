@@ -67,8 +67,31 @@ def _say_time(dt):
     return f"{hour}:{dt.strftime('%M %p')}" if dt.minute else f"{hour} {dt.strftime('%p')}"
 
 
+def _icloud_signed_in():
+    return bool(getattr(config, "ICLOUD_USERNAME", None) and getattr(config, "ICLOUD_APP_PASSWORD", None))
+
+
+def _sources(start, end):
+    """(calendar name, Calendar) pairs. With an iCloud sign-in: every iCloud
+    calendar (one per class etc.). Otherwise, or if iCloud fails: the iCal links."""
+    if _icloud_signed_in():
+        key = ("icloud", start, end)
+        hit = _cache.get(key)
+        if hit and time.time() - hit[0] < CACHE_SECONDS:
+            return hit[1]
+        try:
+            from skills import icloud_calendar
+            found = [(name, icalendar.Calendar.from_ical(text))
+                     for name, text in icloud_calendar.read_events(start, end)]
+            _cache[key] = (time.time(), found)
+            return found
+        except Exception as e:
+            print(f"[calendar] couldn't read iCloud ({e}); using the iCal link")
+    return [("", cal) for cal in _calendars()]
+
+
 def get_events(a):
-    if not config.CALENDAR_ICS_URLS:
+    if not config.CALENDAR_ICS_URLS and not _icloud_signed_in():
         return ("No calendar is connected. Tell the user to add CALENDAR_ICS_URLS (their calendar's "
                 "secret iCal address) to the .env file.")
     if icalendar is None:
@@ -80,13 +103,21 @@ def get_events(a):
     days = max(1, min(14, int(a.get("days", 1))))
     end = start + timedelta(days=days)
 
-    events = []
-    for cal in _calendars():
+    events, seen = [], set()
+    sources = _sources(start, end)
+    several = len({name for name, _ in sources}) > 1
+    for cal_name, cal in sources:
         for ev in recurring_ical_events.of(cal).between(start, end):
             begin = ev.get("DTSTART").dt
             finish = ev.get("DTEND").dt if ev.get("DTEND") else begin
             all_day = not isinstance(begin, datetime)
-            events.append((_local(begin), all_day, _local(finish), str(ev.get("SUMMARY", "(no title)")),
+            title = str(ev.get("SUMMARY", "(no title)"))
+            if (title, str(begin)) in seen:  # same event from two sources
+                continue
+            seen.add((title, str(begin)))
+            if several and cal_name and cal_name.lower() not in title.lower():
+                title = f"{title} ({cal_name})"
+            events.append((_local(begin), all_day, _local(finish), title,
                            str(ev.get("LOCATION", "") or "")))
     if not events:
         return f"No events from {start.isoformat()} for {days} day(s)."
@@ -107,8 +138,8 @@ SKILLS = [
     {
         "name": "get_calendar_events",
         "description": (
-            "Read the user's calendar: what's on today, tomorrow, a given date, or the coming days. "
-            "Read-only."
+            "Read the user's calendar (all his calendars, e.g. one per class, with the calendar name "
+            "in brackets): what's on today, tomorrow, a given date, or the coming days. Read-only."
         ),
         "parameters": {
             "type": "object",

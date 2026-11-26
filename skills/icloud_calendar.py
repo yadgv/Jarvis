@@ -7,7 +7,9 @@ app-specific password:
 and put these in .env:
   ICLOUD_USERNAME=you@icloud.com          (your Apple ID email)
   ICLOUD_APP_PASSWORD=abcd-efgh-ijkl-mnop
-  ICLOUD_CALENDAR=Home                    (optional: which calendar; default is the first one)
+  ICLOUD_CALENDAR=Home                    (optional: default calendar for new events)
+With these set, reading the calendar also uses iCloud, so every calendar
+(one per class, work, ...) is seen, not just the one in the iCal link.
 """
 import uuid
 import xml.etree.ElementTree as ET
@@ -44,11 +46,15 @@ def _href(tree, prop):
     return el.text.strip()
 
 
-def find_calendar():
-    """URL of the calendar to add events to (cached)."""
-    global _calendar_url
-    if _calendar_url:
-        return _calendar_url
+_calendars = None  # [(name, url)] of event calendars, found once per run
+PREFERRED = ("home", "calendar", "personal")
+
+
+def list_calendars():
+    """Every iCloud calendar that holds events, as (name, url). Cached."""
+    global _calendars
+    if _calendars:
+        return _calendars
     tree = _propfind(ROOT, '<d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>')
     principal = urljoin(ROOT, _href(tree, "d:current-user-principal"))
     tree = _propfind(principal, '<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">'
@@ -68,15 +74,69 @@ def find_calendar():
         calendars.append((name, urljoin(home, resp.findtext("d:href", "", NS).strip())))
     if not calendars:
         raise RuntimeError("no calendars found on iCloud")
-    global _calendar_name
-    wanted = (config.ICLOUD_CALENDAR or "").strip().lower()
-    match = [(n, u) for n, u in calendars if n.lower() == wanted]
-    if not match:  # no name set: a general calendar beats "the first one" (was a class calendar)
-        match = [(n, u) for n, u in calendars if n.lower() in ("home", "calendar", "personal")]
-    _calendar_name, _calendar_url = match[0] if match else calendars[0]
-    print(f"[calendar] adding events to {_calendar_name or 'calendar'} "
-          f"(calendars: {', '.join(n or '?' for n, _ in calendars)}; set ICLOUD_CALENDAR in .env to pick)")
-    return _calendar_url
+    print(f"[calendar] iCloud calendars: {', '.join(n or '?' for n, _ in calendars)}")
+    _calendars = calendars
+    return calendars
+
+
+def _match(calendars, wanted):
+    wanted = (wanted or "").strip().lower()
+    if not wanted:
+        return None
+    for exact in (True, False):
+        for name, url in calendars:
+            if (name.lower() == wanted) if exact else (wanted in name.lower()):
+                return name, url
+    return None
+
+
+def find_calendar(name=None):
+    """(name, url) of the calendar to add to: the one he named, else
+    ICLOUD_CALENDAR, else Home/Calendar/Personal, else the first.
+    Raises LookupError if he named one that doesn't exist."""
+    global _calendar_url, _calendar_name
+    calendars = list_calendars()
+    if name:
+        hit = _match(calendars, name)
+        if not hit:
+            raise LookupError(f"No calendar called '{name}'. His calendars: "
+                              + ", ".join(n for n, _ in calendars))
+        return hit
+    if not _calendar_url:
+        hit = (_match(calendars, config.ICLOUD_CALENDAR)
+               or next(((n, u) for n, u in calendars if n.lower() in PREFERRED), None)
+               or calendars[0])
+        _calendar_name, _calendar_url = hit
+        print(f"[calendar] adding events to {_calendar_name or 'calendar'} "
+              "(set ICLOUD_CALENDAR in .env to pick)")
+    return _calendar_name, _calendar_url
+
+
+def _report(url, start, end):
+    body = ('<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">'
+            '<d:prop><c:calendar-data/></d:prop><c:filter><c:comp-filter name="VCALENDAR">'
+            '<c:comp-filter name="VEVENT">'
+            f'<c:time-range start="{start:%Y%m%dT%H%M%SZ}" end="{end:%Y%m%dT%H%M%SZ}"/>'
+            '</c:comp-filter></c:comp-filter></c:filter></c:calendar-query>')
+    r = requests.request("REPORT", url, data=body.encode(), auth=_auth(), timeout=15,
+                         headers={"Depth": "1", "Content-Type": "application/xml; charset=utf-8"})
+    if r.status_code == 401:
+        raise PermissionError("iCloud refused the sign-in")
+    r.raise_for_status()
+    return [el.text for el in ET.fromstring(r.content).iter("{urn:ietf:params:xml:ns:caldav}calendar-data")
+            if el.text and el.text.strip()]
+
+
+def read_events(start, end):
+    """Raw iCalendar texts of events between two dates, from every calendar,
+    as (calendar name, ics text). Used by get_calendar_events."""
+    t0 = datetime.combine(start, datetime.min.time()).astimezone(timezone.utc) - timedelta(days=1)
+    t1 = datetime.combine(end, datetime.min.time()).astimezone(timezone.utc) + timedelta(days=1)
+    out = []
+    for name, url in list_calendars():
+        for text in _report(url, t0, t1):
+            out.append((name, text))
+    return out
 
 
 def _escape(text):
@@ -135,12 +195,15 @@ def add_event(a):
 
     ics, uid = build_ics(title, start, end, all_day, a.get("location") or "")
     try:
-        url = urljoin(find_calendar(), uid.split("@")[0] + ".ics")
+        cal_name, cal_url = find_calendar(a.get("calendar"))
+        url = urljoin(cal_url, uid.split("@")[0] + ".ics")
         r = requests.put(url, data=ics.encode(), auth=_auth(), timeout=15,
                          headers={"Content-Type": "text/calendar; charset=utf-8", "If-None-Match": "*"})
         if r.status_code == 401:
             raise PermissionError("iCloud refused the sign-in")
         r.raise_for_status()
+    except LookupError as e:
+        return str(e)
     except PermissionError:
         return ("iCloud refused the sign-in. The Apple ID email or app-specific password in .env "
                 "is wrong (it must be an app-specific password, not the normal one).")
@@ -151,7 +214,7 @@ def add_event(a):
         calendar_events._cache.clear()
     except Exception:
         pass
-    where = f" to the '{_calendar_name}' calendar" if _calendar_name else ""
+    where = f" to the '{cal_name}' calendar" if cal_name else ""
     return f"Added '{title}'{where} on {_say(start, all_day)}."
 
 
@@ -172,6 +235,8 @@ SKILLS = [
                 "duration_minutes": {"type": "integer", "description": "Length in minutes (default 60)"},
                 "days": {"type": "integer", "description": "All-day events: how many days (default 1)"},
                 "location": {"type": "string"},
+                "calendar": {"type": "string",
+                             "description": "Which of his calendars, if he names one (e.g. a class); default his main one"},
             },
             "required": ["title", "start"],
         },
