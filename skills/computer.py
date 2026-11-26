@@ -47,6 +47,12 @@ SYSTEM = (
     "ctrl+v). Before each batch, write one short line saying what you're doing next (it is shown to him "
     "as progress)."
 )
+# Removing old screenshots edits earlier messages, and the model's thinking
+# blocks are tied to the exact conversation they came from, so step 5 of a
+# task failed with "Invalid signature in thinking block" (jarvis.log, 25 Nov).
+# drop_block tells the API to drop those stale thinking blocks instead.
+THINKING = {"type": "adaptive", "block_binding": {"prefix_mismatch_behavior": "drop_block"}}
+THINKING_BETA = "thinking-binding-controls-2026-08-01"
 KEEP_SCREENSHOTS = 3  # older screenshots are dropped from the conversation to keep long tasks fast and cheap
 HALT = "Not executed: an earlier computer action in this turn failed."
 KEYS = {"return": "enter", "escape": "esc", "super": "win", "cmd": "win", "meta": "win",
@@ -285,7 +291,8 @@ def _loop(gui, scr, messages):
         _trim_screenshots(messages)
         t0 = time.perf_counter()
         response = screen.create(model=config.SCREEN_MODEL, max_tokens=16000, system=SYSTEM, tools=[TOOLSET],
-                                 output_config={"effort": config.COMPUTER_EFFORT}, messages=messages)
+                                 output_config={"effort": config.COMPUTER_EFFORT}, messages=messages,
+                                 thinking=THINKING, extra_betas=[THINKING_BETA])
         print(f"[computer] step {step + 1}: model took {time.perf_counter() - t0:.1f}s")
         _count(response)
         messages.append({"role": "assistant", "content": response.content})
