@@ -73,3 +73,52 @@ def test_bench_waits_for_a_resting_model(monkeypatch):
     providers._resting["groq"] = time.monotonic() + 9999
     assert run_tests.rest_wait(5) == 120
     providers._resting.clear()
+
+
+def test_empty_ok_reply_names_the_model_and_rests_longer_each_time():
+    import time
+    import pytest
+
+    class OK:
+        encoding = None
+        headers = {"content-type": "text/plain"}
+
+        def iter_lines(self, decode_unicode=True):
+            return iter(["OK"])
+    with pytest.raises(backup.ProviderError) as e:
+        list(backup._events(OK(), "GitHub gpt-4.1-mini"))
+    assert "GitHub gpt-4.1-mini" in str(e.value) and "OK" in str(e.value)
+    providers._resting.clear()
+    providers._empty.clear()
+    providers.rest("github:m", e.value)
+    first = providers._resting["github:m"] - time.monotonic()
+    providers.rest("github:m", e.value)
+    second = providers._resting["github:m"] - time.monotonic()
+    assert 100 < first < 130 and second > 3 * first
+    providers._resting.clear()
+    providers._empty.clear()
+
+
+def test_tool_notes_about_him_are_not_read_out():
+    assert llm._tool_result_line(["test_phone_alerts -> Sent a test message to his phone. Ask him if it arrived."]) \
+        == "Done, sir."
+    assert llm._tool_result_line(["set_timer -> Timer set for 10 minutes."]) == "Timer set for 10 minutes."
+
+
+def test_bench_report_names_the_failing_models(monkeypatch):
+    import run_tests
+    from testbench.cases import CASES
+
+    def failing(text, followup=False, **k):
+        providers.rest("github:m", backup.ProviderError("GitHub m sent no answer in the reply (OK, text/plain)",
+                                                         "empty"))
+        raise backup.ProviderError("GitHub m sent no answer in the reply (OK, text/plain)", "empty")
+        yield
+    real_rest = providers.rest
+    monkeypatch.setattr(llm, "think_stream", failing)
+    monkeypatch.setattr(run_tests.time, "sleep", lambda s: None)
+    [r] = run_tests.run([c for c in CASES if c["id"] == "timer"], live=True, delay=0)
+    assert any("models that failed: github:m" in p for p in r["problems"])
+    assert providers.rest is real_rest     # put back afterwards
+    providers._resting.clear()
+    providers._empty.clear()

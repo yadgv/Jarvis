@@ -90,7 +90,7 @@ def _post(messages, exclude=(), target=None):
     return r
 
 
-def _events(response):
+def _events(response, who="model"):
     """The JSON chunks of a server-sent-events stream."""
     # These streams are UTF-8, but say "text/event-stream" with no charset, so
     # requests would decode them as Latin-1 and "servo's" becomes "servoâs".
@@ -126,7 +126,8 @@ def _events(response):
                 return
         except ValueError:
             pass
-        raise ProviderError(f"no answer in the reply ({raw or 'empty'})")
+        kind = (getattr(response, "headers", None) or {}).get("content-type", "?")
+        raise ProviderError(f"{who} sent no answer in the reply ({raw or 'empty'}, {kind})", "empty")
 
 
 def error_text(r) -> str:
@@ -148,7 +149,7 @@ def stream_round(messages, exclude=(), target=None):
     ("done", (text, tool_calls, model_used)). tool_calls are OpenAI-format dicts."""
     response = _post(messages, exclude, target)
     text, calls, model = "", {}, None
-    for chunk in _events(response):
+    for chunk in _events(response, (target or {}).get("who") or "OpenRouter"):
         model = chunk.get("model") or model
         for choice in chunk.get("choices", []):
             delta = choice.get("delta") or {}

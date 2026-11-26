@@ -331,6 +331,7 @@ def _openai_turn(user_text, system, said, tools_used, exclude=(), history=None, 
         said.append(line)
         yield line
     who = (target or {}).get("who") or "backup model"
+    providers._empty.pop((target or {}).get("rest_key") or "openrouter", None)
     print(f"[brain] {who} ({model or '?'}) answered in {time.perf_counter() - t0:.1f}s")
 
 
@@ -338,8 +339,10 @@ def _tool_result_line(tools_used) -> str:
     out = tools_used[-1].split(" -> ", 1)[-1].strip()
     if out.startswith("Started in the background"):
         return "On it, sir. I'll tell you when it's done."
+    # Tool results are notes about him ("Sent a test message to his phone. Ask him..."): not for speaking.
+    about_him = re.search(r"\b(?:he|him|his)\b", out, re.I)
     return out if out and len(out) < 90 and not out.startswith("[") and not _TOOL_ECHO.search(out) \
-        and "Tell him" not in out else "Done, sir."
+        and not about_him else "Done, sir."
 
 
 def _backup_turn(user_text, system, said, tools_used, exclude=(), history=None):
