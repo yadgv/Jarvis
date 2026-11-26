@@ -1,6 +1,9 @@
 """With no internet Jarvis still does the basics (brain/offline.py)."""
 from datetime import datetime
 
+import socket
+import time
+
 import pytest
 import requests
 
@@ -107,7 +110,7 @@ def test_no_local_model_says_what_still_works(llm, no_wifi, monkeypatch):
         raise requests.ConnectionError("Ollama isn't running")
         yield
     monkeypatch.setattr(llm.backup, "stream_round", refused)
-    assert list(llm.think_stream("what's the weather like")) == [offline.BASICS]
+    assert list(llm.think_stream("tell me a joke")) == [offline.BASICS]
     # Not retried every turn.
     assert not offline.model_ready()
 
@@ -146,3 +149,50 @@ def test_check_is_remembered(monkeypatch):
     monkeypatch.setattr(network, "_check", lambda: checks.append(1) or True)
     assert network.online() and network.online()
     assert len(checks) == 1
+
+
+def test_internet_questions_are_spotted():
+    for text in ("what's the weather like", "Jarvis, is it going to rain tomorrow?",
+                 "what's in the news", "search for arduino nano pinout", "check my email",
+                 "what's on my calendar today", "how much is bitcoin", "who won the leafs game",
+                 "look at my screen", "draw me how to wire an LED to my arduino"):
+        assert offline.needs_internet(text), text
+    for text in ("what time is it", "remind me to check the weather", "set a timer",
+                 "tell me a joke", "open spotify", "cancel the pasta timer", ""):
+        assert not offline.needs_internet(text), text
+
+
+def test_internet_question_offline_is_answered_at_once(llm, no_wifi, monkeypatch):
+    def slow_model(*a, **k):
+        time.sleep(5)
+        pytest.fail("the local model was asked")
+        yield
+    monkeypatch.setattr(llm.backup, "stream_round", slow_model)
+    use_plan(llm, monkeypatch, lambda m: pytest.fail("Claude was asked while offline"))
+    t0 = time.perf_counter()
+    assert list(llm.think_stream("what's the weather like today?")) == [offline.NEEDS_INTERNET]
+    assert time.perf_counter() - t0 < 0.5
+
+
+def test_offline_check_is_quick_with_no_internet(monkeypatch):
+    def hangs(host, timeout):
+        time.sleep(0.5)
+        raise socket.timeout("timed out")
+    monkeypatch.setattr(socket, "create_connection", hangs)
+    monkeypatch.setattr(network, "TIMEOUT", 0.6)
+    t0 = time.perf_counter()
+    assert network._reach_any() is False
+    assert time.perf_counter() - t0 < 1.0  # all hosts at once, not one after another
+
+
+def test_local_model_is_not_waited_on_for_a_minute(monkeypatch):
+    seen = {}
+
+    def post(url, **k):
+        seen.update(k)
+        raise requests.ConnectionError("refused")
+    monkeypatch.setattr(requests, "post", post)
+    from brain import backup
+    with pytest.raises(requests.ConnectionError):
+        list(backup.stream_round([{"role": "user", "content": "hi"}], target=offline.target()))
+    assert seen["timeout"][0] <= 2 and seen["timeout"][1] <= 30

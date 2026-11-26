@@ -282,6 +282,11 @@ def _offline_turn(user_text, asked, said, tools_used, exclude=(), followup=False
             said.append(reply)
             yield reply
             return
+        if offline.needs_internet(user_text):
+            print(f"[offline] needs the internet, answered at once: {user_text}")
+            said.append(offline.NEEDS_INTERNET)
+            yield offline.NEEDS_INTERNET
+            return
     if offline.model_ready():
         try:
             yield from _openai_turn(asked, offline.system_prompt(), said, tools_used,

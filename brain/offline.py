@@ -216,6 +216,29 @@ def quick(text: str):
     return skills.run(name, args), name
 
 
+# Questions that can only be answered online. Offline these get an instant
+# "needs the internet" instead of a slow trip through the local model.
+_ONLINE_ONLY = re.compile(
+    r"\b(weather|forecast|temperature outside|rain(ing)?|snow(ing)?|news|headlines?|"
+    r"search|google|look (it |that )?up|look up|browse|website|"
+    r"e-?mails?|inbox|gmail|calendar|schedule|meetings?|appointments?|"
+    r"stocks?|share price|bitcoin|crypto|price of|exchange rate|"
+    r"scores?|who won|did .+ win|game (last night|tonight|today)|standings|"
+    r"buzz|trending|briefing|latest|"
+    r"my screen|on (the|my) screen|look at (the|my|this)|claude code|"
+    r"traffic|flights?|deliver(y|ies)|tracking|"
+    r"draw|diagram|whiteboard|wiring|wire up)\b")
+_OFFLINE_ASKS = re.compile(r"^(remind|set|start|cancel|stop|remember|forget|open|launch|"
+                           r"turn|volume|play|pause|skip|lock|mute)\b")
+
+
+def needs_internet(text: str) -> bool:
+    """True when the request clearly needs the internet (weather, news,
+    search, email, calendar, prices, scores, the screen, drawing)."""
+    t = _clean(text)
+    return bool(t) and not _OFFLINE_ASKS.match(t) and bool(_ONLINE_ONLY.search(t))
+
+
 # ---------- 2. the local model ----------
 
 def model_name() -> str:
@@ -225,7 +248,10 @@ def model_name() -> str:
 def target() -> dict:
     from brain import local_llm
     return {"url": local_llm.URL, "model": model_name(), "who": f"local model {model_name()} (offline)",
-            "tools": True, "short_tools": True, "max_tokens": 400}
+            "tools": True, "short_tools": True, "max_tokens": 400,
+            # It's on this PC: connecting is instant or not at all. Don't sit
+            # waiting on it for a minute if it stalls.
+            "timeout": (2, 30)}
 
 
 def exclude(extra=()) -> tuple:

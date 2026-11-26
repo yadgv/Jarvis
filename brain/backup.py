@@ -14,6 +14,9 @@ import config
 import skills
 
 URL = "https://openrouter.ai/api/v1/chat/completions"
+# Seconds to wait for a server to answer the phone. A working connection takes
+# well under a second; long waits only happen when the wifi is down.
+CONNECT_TIMEOUT = 4
 
 
 # Errors that mean "Claude can't answer right now, but another model could".
@@ -68,7 +71,7 @@ def _post(messages, exclude=(), target=None):
     body.update(target.get("extra") or {})
     who = target.get("who", "Local model")
     r = requests.post(target["url"], headers=target.get("headers") or {}, json=body, stream=True,
-                      timeout=(10 if target.get("tools") else 5, 60))
+                      timeout=target.get("timeout") or (CONNECT_TIMEOUT, 60))
     if r.status_code != 200:
         try:
             detail = r.json().get("error", {}).get("message", r.text)
