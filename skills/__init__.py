@@ -33,6 +33,7 @@ from skills import timers  # noqa: E402
 from skills import ui_automation  # noqa: E402
 from skills import weather  # noqa: E402
 from skills import whiteboard  # noqa: E402
+from skills import files  # noqa: E402
 from skills import web_search  # noqa: E402
 
 MODULES = [
@@ -61,6 +62,7 @@ MODULES = [
     system,
     arduino,
     whiteboard,
+    files,
     personality,
 ]
 # Counts conversation turns, so a tool can tell "he said yes" (a later turn)
@@ -126,6 +128,18 @@ _BOARD = _re.compile(r"\b(white ?board|board|draw|drawing|drawn|diagram|sketch|v
 BOARD_TOOLS = ("show_diagram", "whiteboard_step")
 
 
+_FILES = _re.compile(r"\b(files?|folders?|downloads|desktop|documents|pictures|organi[sz]e|tidy|sort (?:out )?my|"
+                     r"clean (?:up )?my|rename|undo (?:that|it)|spreadsheet|\.(?:txt|csv|pdf|docx?|py|ino)\b|"
+                     r"\b(?:make|create|write|save|start) (?:me |up )?(?:a |an |my )?[\w' -]{0,30}?\b(?:note|notes|list|document|doc|"
+                     r"script|file|letter|essay|spreadsheet|table|program|sketch)\b|"
+                     r"\b(?:find|where(?:'s| is| are)|locate|open) my\b|\bresume\b|\bcv\b)", _re.I)
+FILE_TOOLS = ("make_file", "find_files", "read_file", "open_file", "organize_folder", "file_action", "undo_files")
+
+
+def mentions_files(text) -> bool:
+    return bool(_FILES.search(text or ""))
+
+
 def mentions_board(text) -> bool:
     return bool(_BOARD.search(text or ""))
 
@@ -147,6 +161,8 @@ def pick_tools(text, limit=12, exclude=()):
     keep = {n for _, n in scored[:limit]}
     if mentions_board(text):
         keep |= set(BOARD_TOOLS)
+    if mentions_files(text):
+        keep |= set(FILE_TOOLS)
     keep -= set(exclude)
     return keep | {n for n in CORE_TOOLS if n in _BY_NAME and n not in exclude}
 
@@ -163,6 +179,8 @@ FILLERS = {
     "look_at_screen": "Having a look, sir.",
     "whats_the_buzz": "Seeing what people are saying, sir.",
     "web_search": "Searching now, sir.",
+    "find_files": "Looking through your files, sir.",
+    "organize_folder": "Going through the folder, sir.",
     "check_email": "Checking your email, sir.",
     "daily_briefing": "Pulling that together, sir.",
     "show_diagram": "Drawing that up for you, sir.",

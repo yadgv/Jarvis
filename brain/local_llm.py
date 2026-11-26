@@ -40,7 +40,9 @@ _NEEDS_TOOL = re.compile(
     r"open|close|click|type|screen|window|app|computer|pc|shut|restart|lights?|light|"
     r"remember|forget|note|news|latest|current|price|score|game|stock|search|look\s+up|"
     r"google|find|buzz|claude|code|job|watch|check|turn|set|start|stop|cancel|my|mine|"
-    r"whiteboard|board|diagram|drawing|draw|show|clear|erase|wipe|hide|step|next|back|wire|wiring)\b",
+    r"whiteboard|board|diagram|drawing|draw|show|clear|erase|wipe|hide|step|next|back|wire|wiring|"
+    r"files?|folders?|downloads|desktop|documents|organi[sz]e|sort|tidy|rename|delete|undo|make|create|save|"
+    r"spreadsheet|summari[sz]e|read)\b",
     re.IGNORECASE)
 
 SYSTEM = (

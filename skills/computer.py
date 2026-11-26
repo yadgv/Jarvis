@@ -319,6 +319,11 @@ _DRAWING = re.compile(r"\bwhite ?board\b|\b(?:draw|sketch)\b.*\b(?:diagram|wirin
                       r"\bpaint\b.*\b(?:diagram|wiring|circuit)\b", re.I | re.S)
 
 
+_FILE_JOB = re.compile(r"\b(?:organi[sz]e|sort|tidy|clean up|rename|move|delete|create|make|save|find|search)\b"
+                       r".*\b(?:files?|folders?|downloads|desktop|documents|pictures)\b|"
+                       r"\bfile explorer\b|\bnotepad\b.*\bsave\b", re.I | re.S)
+
+
 def use_computer(a):
     global _pending
     task = (a.get("task") or "").strip()
@@ -327,6 +332,10 @@ def use_computer(a):
         from skills import whiteboard
         print("[computer] drawing request -> Jarvis's whiteboard")
         return whiteboard.show_diagram({"topic": task})
+    if _FILE_JOB.search(task):
+        print("[computer] file job -> file tools")
+        return ("Don't use the screen for files: use the file tools instead (make_file, find_files, read_file, "
+                "open_file, organize_folder, file_action, undo_files).")
     if ImageGrab is None:
         return "Controlling the computer needs Pillow and pyautogui: pip install pillow pyautogui"
     try:

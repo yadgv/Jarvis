@@ -71,6 +71,10 @@ OFFLINE_MODEL = "llama3.2:3b"
 OFFLINE_MODE = False                     # True = act as if the internet is down (for testing)
 BACKUP_MINUTES = 15                      # after Claude fails, use the backup this long before retrying Claude
 MAX_HISTORY_TURNS = 10                   # conversation memory (pairs)
+# Folders (in your user folder) Jarvis may read, make files in and tidy up
+# (skills/files.py). OneDrive copies count too. Add more names or full paths.
+FILE_FOLDERS = ["Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos"]
+
 MEMORY_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "memory")
 HISTORY_MAX_AGE_HOURS = 6                # pick up the last conversation if it's newer than this
 MAX_FACTS = 100                          # long-term facts kept in memory/facts.json
