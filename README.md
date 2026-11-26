@@ -286,6 +286,12 @@ bio notes" to draw one from a file) and **timelines** ("draw a timeline of World
 War One", "put my project plan on a timeline"). Each branch or event is its own
 step, so he draws and explains them one at a time.
 
+For **maths and physics** he draws and works it through step by step: graphs of
+functions ("graph y = x^2 - 4 and y = 2x + 1", with roots and crossings marked),
+**free-body diagrams** ("draw the forces on a 5 kg box on a 30 degree ramp"), and
+**circuit schematics** with proper symbols ("a 9 V battery, a switch and two
+lamps in parallel"). The side panel lists the working, one line per step.
+
 ## Your files
 
 Jarvis can work with the files in your own folders (Desktop, Documents,

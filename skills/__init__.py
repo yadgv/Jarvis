@@ -126,7 +126,7 @@ import re as _re
 # Anything about drawing or the board goes to Jarvis's own whiteboard, never
 # Paint or Microsoft Whiteboard through use_computer.
 _BOARD = _re.compile(r"\b(white ?board|board|draw|drawing|drawn|diagram|sketch|visuali[sz]e|"
-                     r"schematic|wiring|mind ?map|timeline|wire (?:up|it|this|that|a|an|the)|show me how)\b", _re.I)
+                     r"schematic|wiring|mind ?map|timeline|free[- ]body|forces? diagram|circuit|y ?=|plot|graph (?:of )?(?:y|f|sin|cos|tan|x)|step by step|wire (?:up|it|this|that|a|an|the)|show me how)\b", _re.I)
 BOARD_TOOLS = ("show_diagram", "whiteboard_step")
 
 
