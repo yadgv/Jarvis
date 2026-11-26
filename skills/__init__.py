@@ -46,6 +46,7 @@ from skills import clipboard_tools  # noqa: E402
 from skills import sticky  # noqa: E402
 from skills import calculator  # noqa: E402
 from skills import canvas  # noqa: E402
+from skills import recap  # noqa: E402
 
 MODULES = [
     briefing,
@@ -83,6 +84,7 @@ MODULES = [
     sticky,
     calculator,
     canvas,
+    recap,
 ]
 # Counts conversation turns, so a tool can tell "he said yes" (a later turn)
 # from the model confirming its own draft in the same turn.
@@ -184,6 +186,7 @@ _STUDY = re.compile(r"\b(quiz|flash ?cards?|pomodoro|study|studying|revise|revis
 _CANVAS = re.compile(r"\b(canvas|class files|course files|lecture (?:notes|slides|files)|my (?:classes|courses)|"
                      r"due|assignments?|homework|deadlines?)\b", re.I)
 CANVAS_TOOLS = ("canvas_setup", "canvas_sign_in", "canvas_courses", "canvas_download", "canvas_due")
+_RECAP = re.compile(r"\b(what did (?:i|we) do|recap|my day|today so far|what have i (?:done|been doing))\b", re.I)
 _TASKS = re.compile(r"\b(working on|doing|busy|done yet|finished|progress|status|cancel|stop|abort|tasks?|jobs?)\b", re.I)
 
 
@@ -220,6 +223,8 @@ def pick_tools(text, limit=12, exclude=()):
         keep |= {"quiz_me", "quiz_next", "pomodoro", "find_files"}
     if _CANVAS.search(text or ""):
         keep |= set(CANVAS_TOOLS)
+    if _RECAP.search(text or ""):
+        keep.add("daily_recap")
     if _TASKS.search(text or "") and background.active():
         keep |= {"list_tasks", "cancel_task"}
     keep -= set(exclude)
