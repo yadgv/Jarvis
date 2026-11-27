@@ -222,3 +222,12 @@ def test_background_job_is_not_started_again_by_the_next_brain(brain, monkeypatc
     assert out == ["Designing it now, sir."] and len(runs) == 1
     names = {t["function"]["name"] for t in brain.sent[-1][1].get("tools", [])}
     assert "make_3d_model" not in names
+
+
+def test_promise_without_a_tool_is_not_spoken(brain, monkeypatch):
+    """'Certainly, sir. I am on it right away.' with no tool call made nothing (log, 27 Nov)."""
+    monkeypatch.setitem(skills._BY_NAME, "set_timer", {"run": lambda a: "Timer set."})
+    brain.replies += [says("Certainly, sir. ", "I am on it right away."),
+                      calls_tool("set_timer", {"seconds": 60}), says("Timer set, sir.")]
+    out = list(brain.llm.think_stream("set a one minute timer"))
+    assert "I am on it right away." not in out and out[-1] == "Timer set, sir."

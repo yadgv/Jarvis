@@ -46,12 +46,15 @@ def rest(key, e: Exception):
         m = re.search(r"try again in (?:(\d+)m)?([\d.]+)s", text)
         if m:
             wait = int(m.group(1) or 0) * 60 + float(m.group(2))
-    if status == 402 or "subscription" in text or "billing" in text:
+    if status == 402 or (status != 429 and ("subscription" in text or "billing" in text)):
+        # (Gemini's free-tier 429 says "check your plan and billing details": that's a rate limit.)
         seconds = 24 * 3600                  # needs a (free) plan turned on: skip it for the day
         if key.split(":")[0] not in _told:
             _told.add(key.split(":")[0])
-            print(f"[brain] {key.split(':')[0]} says the account has no plan for its API. For Mistral: "
-                  "console.mistral.ai > Billing > choose the free 'Experiment' plan. Skipping it for today.")
+            how = (" For Mistral: console.mistral.ai > Billing > choose the free 'Experiment' plan."
+                   if key.startswith("mistral") else "")
+            print(f"[brain] {key.split(':')[0]} says the account has no plan for its API.{how} "
+                  "Skipping it for today.")
     elif status in (401, 403):
         seconds = 3600                       # bad key: don't keep hammering it
     elif status == 404 or "does not exist" in text or "decommissioned" in text:

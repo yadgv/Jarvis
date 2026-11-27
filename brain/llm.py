@@ -149,7 +149,14 @@ _CLAIM = re.compile(
     r"^(?:(?:I've|I have|I)\s+(?:just\s+|now\s+|already\s+)?(?:saved|opened|created|made|sent|written|put|"
     r"deleted|moved|renamed|set|started|played|added|launched|built|exported|done|drawn|drew|pulled|brought)\b|"
     r"you(?:'ll| will| should)\s+(?:now\s+)?(?:find|see)\b.{0,40}\b(?:open|up|on (?:your|the) screen)\b|"
-    r"(?:saved|opened|created|sent|done|all done|it's done|it's saved|it's open)\b)", re.I)
+    r"(?:saved|opened|created|sent|done|all done|it's done|it's saved|it's open)\b|"
+    # Promises of an action this very moment, with no tool call: "I am on it right away",
+    # "Opening your presentation now", "Let me bring that diagram up immediately".
+    r"I(?:'m| am)\s+on it\b|"
+    r"(?:opening|drawing|making|creating|bringing|starting|launching|playing|pulling)\b[^?]{0,60}"
+    r"\b(?:now|right away|immediately)\b(?!.*\?)|"
+    r"(?:let me|I'll|I will)\s+(?:\w+\s+){0,2}?(?:open|bring|draw|make|create|start|launch|play|put|pull)\b"
+    r"[^?]{0,60}\b(?:now|right away|immediately)\b(?!.*\?))", re.I)
 CLAIM_NOTE = ("[Note from Jarvis's system: you said you did that, but no tool ran, so nothing happened. "
               "Call the tool now. If no tool can do it, tell him plainly that you haven't done it.]")
 
