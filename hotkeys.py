@@ -15,6 +15,39 @@ NAMED = {"space", "tab", "enter", "esc", "home", "end", "insert", "delete", "pag
          "up", "down", "left", "right", "backspace"}
 
 _listener = None
+# Windows virtual-key codes for the modifiers, to check they're really down.
+VK = {"ctrl": 0x11, "alt": 0x12, "shift": 0x10, "win": (0x5B, 0x5C)}
+
+
+def _down(vk) -> bool:
+    import ctypes
+    return bool(ctypes.windll.user32.GetAsyncKeyState(vk) & 0x8000)
+
+
+def really_held(combo: str) -> bool:
+    """pynput can miss a key-up (focus jumps to the orb mid-shortcut, or keys
+    injected by another app), then thinks Ctrl+Alt are still down: every "h"
+    or "j" typed anywhere fired a shortcut, hiding the text panel and closing
+    the text box while he typed in it. Ask Windows whether the modifiers are
+    actually down right now. Other systems: trust pynput."""
+    import sys
+    if sys.platform != "win32":
+        return True
+    try:
+        for m in combo.split("+")[:-1]:
+            codes = VK[m] if isinstance(VK[m], tuple) else (VK[m],)
+            if not any(_down(c) for c in codes):
+                return False
+    except Exception:
+        return True
+    return True
+
+
+def _fire(combo, action, on_action):
+    if not really_held(combo):
+        print(f"[hotkeys] ignored {combo.upper()}: the keys weren't really held (a stuck key)")
+        return
+    on_action(action)
 
 
 def normal(combo: str) -> str:
@@ -65,7 +98,8 @@ def start(prefs: dict, on_action, dictation_key: str = "") -> dict:
         print("[hotkeys] keyboard shortcuts need: pip install pynput")
         return {}
     try:
-        _listener = keyboard.GlobalHotKeys({to_pynput(c): (lambda a=a: on_action(a)) for c, a in combos.items()})
+        _listener = keyboard.GlobalHotKeys({to_pynput(c): (lambda c=c, a=a: _fire(c, a, on_action))
+                                            for c, a in combos.items()})
         _listener.daemon = True
         _listener.start()
     except Exception as e:

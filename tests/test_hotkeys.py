@@ -67,3 +67,29 @@ def test_widget_shortcuts(monkeypatch):  # pragma: no cover - only where Tk has 
         assert w.prefs["show_panel"] and w.expanded and saved[-1] == {"show_panel": True}
     finally:
         root.destroy()
+
+
+def test_stuck_modifier_does_not_fire(monkeypatch, capsys):
+    """pynput thought Ctrl+Alt were held after a missed key-up: typing "h" hid the panel."""
+    fired = []
+    import sys
+    monkeypatch.setattr(sys, "platform", "win32")
+    down = set()
+    monkeypatch.setattr(hotkeys, "_down", lambda vk: vk in down)
+    hotkeys._fire("ctrl+alt+h", "panel_key", fired.append)
+    assert fired == [] and "weren't really held" in capsys.readouterr().out
+    down |= {0x11, 0x12}
+    hotkeys._fire("ctrl+alt+h", "panel_key", fired.append)
+    assert fired == ["panel_key"]
+    down.clear()
+    down |= {0x11, 0x12, 0x5C}            # right Windows key counts too
+    hotkeys._fire("ctrl+alt+win+k", "type_key", fired.append)
+    assert fired == ["panel_key", "type_key"]
+
+
+def test_other_systems_trust_pynput(monkeypatch):
+    import sys
+    monkeypatch.setattr(sys, "platform", "linux")
+    fired = []
+    hotkeys._fire("ctrl+alt+j", "type_key", fired.append)
+    assert fired == ["type_key"]
