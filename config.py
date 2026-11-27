@@ -321,3 +321,7 @@ OFFLINE_VOICES = {
     "alan": "en_GB-alan-medium",
     "northern": "en_GB-northern_english_male-medium",
 }
+
+# Jarvis's own pointer (pointer_overlay.py): a glowing arrow that shows you where things are on
+# screen ("where's the export button?", "show me how to add page numbers"). Never moves your mouse.
+POINTER = True

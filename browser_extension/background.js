@@ -43,8 +43,16 @@ async function sendHtml() {
   }
 }
 
+async function sendFind(query) {
+  const tab = await activeTab();
+  let res = {found: false};
+  try { if (tab) res = await chrome.tabs.sendMessage(tab.id, {kind: "find", query}) || res; } catch (e) { /* no content script */ }
+  await post("/found", res);
+}
+
 async function handle(want) {
   if (want === "html") await sendHtml();
+  if (want && want.startsWith("find:")) await sendFind(want.slice(5));
 }
 
 chrome.runtime.onMessage.addListener((msg, sender) => {
