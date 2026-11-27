@@ -53,6 +53,7 @@ from skills import workspace  # noqa: E402
 from skills import sight  # noqa: E402
 from skills import browser_bridge  # noqa: E402,F401
 from skills import phone  # noqa: E402
+from skills import pointer  # noqa: E402
 
 MODULES = [
     briefing,
@@ -96,6 +97,7 @@ MODULES = [
     canvas,
     recap,
     phone,
+    pointer,
 ]
 # Counts conversation turns, so a tool can tell "he said yes" (a later turn)
 # from the model confirming its own draft in the same turn.
@@ -278,6 +280,13 @@ def email_intent(text: str) -> bool:
     return bool(EMAIL_INTENT.search(t)) and not re.search(r"\b(?:send|write|reply|draft|forward|compose)\b", t, re.I)
 
 
+GUIDE_NEXT = re.compile(r"^\W*(?:(?:ok(?:ay)?|alright|right|cool|done|got it|yep|yes)\W*)*(?:next(?: step| one)?|"
+                        r"(?:i(?:'ve| have)? )?done(?: that| it)?|what(?:'s| is)? next|what now|then what|go back|"
+                        r"(?:show me )?(?:that )?again|repeat that)\W*$", re.I)
+POINT_WORDS = re.compile(r"\b(?:where(?:'s| is| are| do i find)|point (?:at|to|out)|show me (?:where|the|which)|"
+                         r"which (?:one|button|icon|option)|can't find|how do i|show me how to|walk me through)\b", re.I)
+
+
 def route(text: str) -> dict:
     """What's decided before the model sees a request (the model can't get these wrong):
     direct: [(tool, args)] to run straight away; exclude: tools the model mustn't use this turn;
@@ -292,6 +301,10 @@ def route(text: str) -> dict:
     elif script_intent(text):
         plan["direct"].append(("write_script", {"details": text or ""}))
         plan["exclude"] |= {"write_script", "make_document", "make_file"}
+    if pointer.guide_active() and GUIDE_NEXT.match(text or ""):
+        plan["direct"].append(("guide_back" if re.search(r"\b(?:back|again|repeat)\b", text or "", re.I)
+                               else "guide_next", {}))
+        plan["exclude"] |= {"guide_next", "guide_back", "whiteboard_step"}
     if email_intent(text):
         plan["direct"].append(("check_email", {}))
         plan["exclude"].add("check_email")
@@ -361,6 +374,10 @@ def pick_tools(text, limit=12, exclude=()):
         keep |= set(CANVAS_TOOLS)
     if re.search(r"\b(?:test|try)\b.*\b(?:phone|call|telegram|alerts?)\b", text or "", re.I):
         keep.add("test_phone_alerts")
+    if POINT_WORDS.search(text or ""):
+        keep |= {"point_at", "show_me_how"}
+    if pointer.guide_active():
+        keep |= {"guide_next", "guide_back", "hide_pointer"}
     if restyle_intent(text):
         keep.add("restyle_document")
         keep.discard("make_document")

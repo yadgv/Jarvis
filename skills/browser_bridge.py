@@ -65,6 +65,33 @@ def page_code(timeout: float = 8.0):
         return dict(_html)
 
 
+_found = {}
+_found_ready = threading.Event()
+
+
+def find(query: str, timeout: float = 4.0):
+    """Ask the page in front where an element is ("the sign in button"). The extension's answer
+    (viewport rect plus the window's position), or None if it didn't answer or found nothing."""
+    if not connected():
+        return None
+    _found_ready.clear()
+    _wants.put("find:" + (query or "")[:200])
+    if not _found_ready.wait(timeout):
+        return None
+    with _lock:
+        return dict(_found) if _found.get("found") else None
+
+
+def to_screen(r: dict):
+    """(x, y, w, h) in screen pixels from the extension's page rect (CSS pixels in the tab)."""
+    dpr = float(r.get("dpr") or 1)
+    border = max(0.0, (float(r.get("outerWidth", 0)) - float(r.get("innerWidth", 0))) / 2)
+    top = max(0.0, float(r.get("outerHeight", 0)) - float(r.get("innerHeight", 0)) - border)
+    x = (float(r.get("screenX", 0)) + border + float(r["x"])) * dpr
+    y = (float(r.get("screenY", 0)) + top + float(r["y"])) * dpr
+    return x, y, float(r["w"]) * dpr, float(r["h"]) * dpr
+
+
 def _touch(agent: str):
     global _last_contact
     if not _last_contact:
@@ -150,6 +177,14 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             except queue.Empty:
                 pass
             return self._send({"ok": True, "want": want})
+        if path == "/found":
+            with _lock:
+                _found.clear()
+                _found.update({k: data.get(k) for k in ("found", "x", "y", "w", "h", "label", "dpr", "screenX",
+                                                        "screenY", "outerWidth", "outerHeight", "innerWidth",
+                                                        "innerHeight")})
+            _found_ready.set()
+            return self._send({"ok": True})
         if path == "/html":
             with _lock:
                 _html.update(url=str(data.get("url", "")), html=str(data.get("html", "")), at=time.time())

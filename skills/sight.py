@@ -151,6 +151,48 @@ def ocr_image(img) -> str:
         return ""
 
 
+def ocr_words(img, offset=(0, 0)):
+    """[(line number, word, x, y, w, h)] in screen pixels, from Windows OCR; [] if unavailable.
+    For pointing at things drawn as pixels (skills/pointer.py)."""
+    try:
+        import asyncio
+        from winrt.windows.graphics.imaging import BitmapAlphaMode, BitmapPixelFormat, SoftwareBitmap
+        from winrt.windows.media.ocr import OcrEngine
+        from winrt.windows.storage.streams import DataWriter
+    except ImportError:
+        return []
+    img = img.convert("RGBA")
+    w, h = img.size
+    scale = 1.0
+    if max(w, h) > 9000:
+        scale = 9000 / max(w, h)
+        img = img.resize((int(w * scale), int(h * scale)))
+        w, h = img.size
+
+    async def run():
+        engine = OcrEngine.try_create_from_user_profile_languages()
+        if engine is None:
+            return []
+        writer = DataWriter()
+        writer.write_bytes(img.tobytes())
+        bitmap = SoftwareBitmap.create_copy_from_buffer(writer.detach_buffer(), BitmapPixelFormat.RGBA8, w, h,
+                                                        BitmapAlphaMode.PREMULTIPLIED)
+        result = await engine.recognize_async(bitmap)
+        out = []
+        for n, line in enumerate(result.lines):
+            for word in line.words:
+                r = word.bounding_rect
+                out.append((n, word.text, offset[0] + r.x / scale, offset[1] + r.y / scale,
+                            r.width / scale, r.height / scale))
+        return out
+
+    try:
+        return asyncio.run(run())
+    except Exception as e:
+        print(f"[sight] Windows OCR failed: {type(e).__name__}: {e}")
+        return []
+
+
 # ---------- putting it together ----------
 
 def read(want_code: bool = False) -> dict:
