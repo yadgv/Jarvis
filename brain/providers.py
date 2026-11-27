@@ -100,8 +100,16 @@ def free_targets(name, small=False, models=None):
             extra = {"reasoning_effort": "low"}   # quick answers for voice
         out.append({"url": url, "model": m, "who": f"{name.title()} {m}", "rest_key": key, "tools": True,
                     "short_tools": True, "max_tokens": 1024, "extra": extra, "drop_empty_params": name == "gemini",
-                    "timeout": (4, 15), "headers": {"Authorization": f"Bearer {getattr(config, key_name)}"}})
+                    "timeout": (4, 15), "headers": _headers(name, getattr(config, key_name))})
     return out
+
+
+def _headers(name, key):
+    headers = {"Authorization": f"Bearer {key}"}
+    if name == "github":
+        # GitHub Models' documented headers; without them it has answered a bare "OK".
+        headers.update({"X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json"})
+    return headers
 
 
 def groq_targets(small=False, models=None):
