@@ -211,12 +211,21 @@ def _windows(user32):
     return found
 
 
+def is_jarvis_window(title: str) -> bool:
+    """Jarvis's own windows ("J.A.R.V.I.S.", "Jarvis brief", "Servo · Jarvis 3D viewer"), but not his
+    apps that just mention the Jarvis folder ("jarvis.log - Jarvis Main - Visual Studio Code")."""
+    first = title.split(" - ")[0]                                # "Jarvis brief - Microsoft Edge" too
+    letters = re.sub(r"[^a-z]", "", first.lower())              # "J.A.R.V.I.S." is Jarvis too
+    if " - " in title:
+        return bool(re.search(r"jarvis(?:brief|whiteboard|dviewer|settings|pointer)$", letters))
+    return "jarvis" in letters
+
+
 def his_window(windows):
     """The window he's looking at: the front-most one that isn't Jarvis's own."""
     for hwnd, title in windows:
         t = title.strip()
-        letters = re.sub(r"[^a-z]", "", t.lower())                  # "J.A.R.V.I.S." is Jarvis too
-        if not t or "jarvis" in letters or t in ("Program Manager", "Windows Input Experience", "Settings"):
+        if not t or is_jarvis_window(t) or t in ("Program Manager", "Windows Input Experience", "Settings"):
             continue
         return hwnd, t
     return None, ""

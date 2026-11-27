@@ -147,7 +147,8 @@ _META = re.compile(
 # tool has actually run this turn.
 _CLAIM = re.compile(
     r"^(?:(?:I've|I have|I)\s+(?:just\s+|now\s+|already\s+)?(?:saved|opened|created|made|sent|written|put|"
-    r"deleted|moved|renamed|set|started|played|added|launched|built|exported|done)\b|"
+    r"deleted|moved|renamed|set|started|played|added|launched|built|exported|done|drawn|drew|pulled|brought)\b|"
+    r"you(?:'ll| will| should)\s+(?:now\s+)?(?:find|see)\b.{0,40}\b(?:open|up|on (?:your|the) screen)\b|"
     r"(?:saved|opened|created|sent|done|all done|it's done|it's saved|it's open)\b)", re.I)
 CLAIM_NOTE = ("[Note from Jarvis's system: you said you did that, but no tool ran, so nothing happened. "
               "Call the tool now. If no tool can do it, tell him plainly that you haven't done it.]")
@@ -159,11 +160,22 @@ _TOOL_ECHO = re.compile(r"Started in the background:|what's on his screen|never 
                         r"\bin one short sentence\b|\bhe can say \"", re.I)
 
 
+_STAGE = re.compile(r"\((?=[^()]*\b(?:silence|wait(?:s|ing)?|pause[sd]?|beat|sighs?|user|confirmation|smiles?|"
+                    r"chuckles?|laughs?)\b)[^()]*\)", re.I)
+
+
 def _strip_ignore(sentence: str) -> str:
-    """ "Please say what to point at.[ignore]": the [ignore] marker stuck on a real reply isn't said."""
+    """What's left to say once marks meant for the screen are gone: an [ignore] stuck on a real reply,
+    **bold** / # heading marks, and stage directions like "(Silence/Wait for him to confirm)"."""
     if sentence.lower().startswith("[ignore"):
         return sentence
-    return re.sub(r"\s*\[ignore\]\s*", " ", sentence, flags=re.I).strip()
+    out = re.sub(r"\s*\[ignore\]\s*", " ", sentence, flags=re.I)
+    out = _STAGE.sub(" ", out)
+    out = re.sub(r"\*\*|__|^\s*#+\s+", "", out)
+    out = re.sub(r"[ \t]{2,}", " ", out).strip()
+    if out != sentence.strip() and _STAGE.search(sentence):
+        print(f"[brain] not spoken (a stage direction): {sentence[:120]}")
+    return out
 
 
 def _speakable(sentence: str) -> bool:

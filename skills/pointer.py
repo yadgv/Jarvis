@@ -29,6 +29,8 @@ GUIDE_MINUTES = 10         # "next" means the guide this long after the last ste
 _lock = threading.Lock()
 _proc = None
 guide = {"task": "", "steps": [], "i": 0, "at": 0.0}
+last_target = {"what": "", "at": 0.0}
+colour = {"now": ""}                      # Jarvis's orb colour, which the pointer takes on     # "point to it" means the last thing he asked about
 _STOP = {"the", "a", "an", "button", "icon", "option", "menu", "tab", "link", "box", "field", "on", "in", "my",
          "this", "that", "thing", "where", "is", "s", "to", "of"}
 
@@ -198,9 +200,13 @@ def locate(what):
     """Where the thing he means is on screen: {x, y, w, h, name, how} or None."""
     _dpi_aware()
     from skills import sight
-    hwnd, _ = sight.front_window()
-    for finder in (lambda: find_in_browser(what), lambda: find_with_uia(what, hwnd),
-                   lambda: find_with_ocr(what, hwnd)):
+    hwnd, title = sight.front_window()
+    print(f"[pointer] searching the window \"{title[:60]}\"")
+    finders = [lambda: find_in_browser(what), lambda: find_with_uia(what, hwnd), lambda: find_with_ocr(what, hwnd)]
+    for other, other_title in _other_windows(hwnd):      # then the windows behind it (Brave behind VS Code)
+        finders.append(lambda o=other, t=other_title: (print(f"[pointer] trying \"{t[:60]}\"")
+                                                        or find_with_uia(what, o)))
+    for finder in finders:
         try:
             hit = finder()
         except Exception as e:
@@ -211,6 +217,30 @@ def locate(what):
                   f"{int(hit['x'])},{int(hit['y'])} {int(hit['w'])}x{int(hit['h'])}")
             return hit
     return None
+
+
+def _other_windows(front, most=3):
+    """The next few windows he can see, front to back (not Jarvis's own, not the front one)."""
+    if not IS_WINDOWS:
+        return []
+    try:
+        from skills import whiteboard, workspace
+        user32 = whiteboard._user32()
+        out = []
+        for hwnd, title in workspace._windows(user32):
+            t = (title or "").strip()
+            if hwnd == front or not t or workspace.is_jarvis_window(t) or t in ("Program Manager", "Settings",
+                                                                                "Windows Input Experience"):
+                continue
+            if user32.IsIconic(hwnd):
+                continue
+            out.append((hwnd, t))
+            if len(out) >= most:
+                break
+        return out
+    except Exception as e:
+        print(f"[pointer] couldn't list the other windows: {e}")
+        return []
 
 
 _aware = False
@@ -290,8 +320,19 @@ def alive(wait=6.0) -> bool:
 
 
 def show(hit, label="", hold=HOLD):
-    return send({"cmd": "point", "x": hit["x"], "y": hit["y"], "w": hit["w"], "h": hit["h"],
-                 "label": label or hit.get("name", ""), "hold": hold})
+    cmd = {"cmd": "point", "x": hit["x"], "y": hit["y"], "w": hit["w"], "h": hit["h"],
+           "label": label or hit.get("name", ""), "hold": hold}
+    if colour["now"]:
+        cmd["colour"] = colour["now"]
+    return send(cmd)
+
+
+def tint(hexcolour: str):
+    """The orb changed colour (listening, thinking, speaking...): the pointer follows it.
+    Never starts the pointer window just for this."""
+    colour["now"] = hexcolour
+    if _proc is not None and _proc.poll() is None:
+        send({"cmd": "colour", "hex": hexcolour})
 
 
 def _screen_size():
@@ -314,6 +355,12 @@ def point_at(a):
         return "The pointer is showing in the middle of his screen. Ask what he'd like you to point at."
     if not getattr(config, "POINTER", True):
         return "The pointer is turned off (POINTER in config.py)."
+    if re.fullmatch(r"(?:it|that|this|that one|this one|there)", what.lower()):
+        if not last_target["what"] or time.time() - last_target["at"] > 600:
+            test_pointer()
+            return "The pointer is showing in the middle of his screen. Ask what he'd like you to point at."
+        what = last_target["what"]
+    last_target.update(what=what, at=time.time())
     print(f"[pointer] looking for \"{what}\"")
     hit = locate(what)
     if not hit:

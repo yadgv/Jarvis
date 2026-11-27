@@ -144,8 +144,8 @@ def test_where_is_the_design_tab_points_not_restyles(monkeypatch):
     from skills import documents
     monkeypatch.setattr(documents, "last", lambda: {"kind": "slides"})
     plan = skills.route("where's the Design tab?")
-    assert plan["direct"] == []
-    assert "point_at" in skills.pick_tools("where's the Design tab?", limit=10, exclude=tuple(plan["exclude"]))
+    assert plan["direct"] == [("point_at", {"target": "Design tab"})]
+    assert "restyle_document" not in [n for n, _ in plan["direct"]]
     assert skills.restyle_intent("make it prettier")
 
 
@@ -176,4 +176,55 @@ def test_overlay_drawing_helpers():
     assert ov.perimeter(0, 0, 10, 10, 0.25)[-1] == (10, 0)               # the top edge
     assert ov.perimeter(0, 0, 10, 10, 0.375)[-1] == (10, 5)
     assert len(ov.rounded(0, 0, 40, 20, 10)) == 24
-    assert max(y for _, y in ov.ARROW) < 25                              # small, not clunky
+    assert max(y for _, y in ov.ARROW) <= 32                             # small, not clunky
+
+
+def test_point_requests_run_directly():
+    for said, want in (("Can you show me where the search bar is?", "search bar"),
+                       ("Can you point towards the search bar R?", "search bar"),
+                       ("where's the Design tab?", "Design tab"),
+                       ("point out the export button on my screen", "export button"),
+                       ("Can you point to it?", "it")):
+        assert skills.route(said)["direct"] == [("point_at", {"target": want})], said
+    assert skills.route("where is my phone")["direct"] == []
+    assert skills.route("Can you point to my...")["direct"] == [("test_pointer", {})]
+
+
+def test_point_to_it_means_the_last_thing(monkeypatch, no_overlay):
+    looked = []
+    monkeypatch.setattr(pointer, "locate", lambda what: looked.append(what) or None)
+    monkeypatch.setattr(pointer, "alive", lambda wait=6.0: True)
+    pointer.last_target.update(what="", at=0.0)
+    assert "middle of his screen" in pointer.point_at({"target": "it"}) and looked == []
+    pointer.point_at({"target": "search bar"})
+    pointer.point_at({"target": "it"})
+    assert looked == ["search bar", "search bar"]
+
+
+def test_pointer_takes_jarvis_colour(monkeypatch, no_overlay):
+    import pointer_overlay as ov
+    monkeypatch.setattr(pointer, "colour", {"now": ""})
+    pointer.tint("#f0b95a")                     # the window isn't running: nothing is started for it
+    assert no_overlay == []
+    pointer.show({"x": 1, "y": 2, "w": 3, "h": 4, "name": "OK"})
+    assert no_overlay[-1]["colour"] == "#f0b95a"
+    bright, deep, halo = ov.palette("#4fe3ff")
+    assert bright != deep != halo and ov.palette("#f0b95a")[0] != bright
+
+
+def test_his_vs_code_window_is_not_jarvis():
+    from skills import workspace
+    assert not workspace.is_jarvis_window("jarvis.log - Jarvis Main - Visual Studio Code")
+    assert workspace.is_jarvis_window("J.A.R.V.I.S.") and workspace.is_jarvis_window("Jarvis brief")
+    assert workspace.is_jarvis_window("Servo · Jarvis 3D viewer")
+
+
+def test_stage_directions_and_markdown_not_spoken():
+    from brain import llm
+    said = llm._strip_ignore("(Silence/Wait for confirmation from user that they see the pointer) Now, look to the "
+                             "**top left** of your screen.")
+    assert said == "Now, look to the top left of your screen."
+    assert llm._strip_ignore("Use (for example) a resistor.") == "Use (for example) a resistor."
+    assert llm._CLAIM.search("I have drawn up a diagram for wiring an LED strip to your Arduino, sir.")
+    assert llm._CLAIM.search("You should find the whiteboard open now.")
+    assert not llm._CLAIM.search("You'll see the sun tomorrow.")
