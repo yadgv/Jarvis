@@ -86,7 +86,7 @@ OPENROUTER_MODELS = [
 # cost nothing and work offline. Off when empty. To turn on: install Ollama
 # (ollama.com/download), run `ollama pull llama3.2:3b`, then set it here.
 # Anything harder, or anything it isn't sure of, still goes to Claude.
-LOCAL_MODEL = ""                         # e.g. "llama3.2:3b" (or "qwen2.5:3b")
+LOCAL_MODEL = "llama3.2:3b"              # "" to turn off; or "qwen2.5:3b". Not installed = skipped (rests 5 min)
 # With no internet, simple commands (time, timers, alarms, reminders, volume,
 # media keys, opening apps) work with no model at all; anything else goes to
 # this Ollama model with only the offline tools. Uses LOCAL_MODEL if that's set.
@@ -95,6 +95,12 @@ OFFLINE_MODEL = "llama3.2:3b"
 OFFLINE_MODE = False                     # True = act as if the internet is down (for testing)
 BACKUP_MINUTES = 15                      # after Claude fails, use the backup this long before retrying Claude
 MAX_HISTORY_TURNS = 10                   # conversation memory (pairs)
+# Saving tokens (brain/cache.py, brain/usage.py): simple commands with no model, repeat questions and
+# repeat diagrams / 3D parts from memory/answer_cache.json, and a token count in jarvis.log.
+QUICK_COMMANDS = True                    # timers, the time, volume, media keys, opening apps: no model at all
+ANSWER_CACHE = True                      # reuse answers to the same standalone question / drawing / part
+CLAUDE_TOOL_LIMIT = 16                   # Claude (paid) gets only the tools that fit the request, not all ~100
+CLAUDE_ALL_TOOLS = False                 # True = send Claude every tool again
 # Folders (in your user folder) Jarvis may read, make files in and tidy up
 # (skills/files.py). OneDrive copies count too. Add more names or full paths.
 FILE_FOLDERS = ["Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos"]

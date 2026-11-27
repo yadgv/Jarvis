@@ -39,6 +39,9 @@ config.ASK_BEFORE_PAID = False  # tests that want the "use Claude?" question tur
 config.BACKGROUND_TASKS = False  # tests that want background jobs turn them on
 config.OFFLINE_VOICE = "alan"  # Piper: no Kokoro during tests
 config.VOICE_DOWNLOADS = False  # and no voice downloads
+config.QUICK_COMMANDS = False  # tests that want simple commands done with no model turn it on
+config.LOCAL_MODEL = ""  # no Ollama in tests (tests that want it set it)
+config.ANSWER_CACHE = False  # and the same for reusing saved answers
 
 
 import pytest  # noqa: E402
@@ -90,3 +93,12 @@ def no_windows(monkeypatch):
     monkeypatch.setattr(whiteboard.webbrowser, "open", lambda *a, **k: True)
     monkeypatch.setattr(whiteboard, "_board", {"version": 0, "title": "", "svg": "", "steps": [], "step": 0,
                                                "topic": "", "spec": None, "closed": False})
+
+
+@pytest.fixture(autouse=True)
+def private_caches(monkeypatch, tmp_path):
+    """The token count and saved answers live in memory/; keep tests' ones out of it."""
+    from brain import cache, usage
+    monkeypatch.setattr(usage, "_path", lambda: str(tmp_path / "token_use.json"))
+    monkeypatch.setattr(cache, "_path", lambda: str(tmp_path / "answer_cache.json"))
+    monkeypatch.setattr(cache, "_data", None)

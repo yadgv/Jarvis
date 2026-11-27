@@ -368,6 +368,13 @@ def wait_for_trigger(stream):
         stream.start()
 
 
+def _token_summary():
+    from brain import usage
+    line = usage.summary()
+    if line:
+        print(f"[tokens] {line}")
+
+
 def _start_extras():
     """The parts that don't need to be ready for the first "Hey Jarvis": started
     in the background once he's online, each timed in the log."""
@@ -375,7 +382,8 @@ def _start_extras():
                         ("MCP tools", mcp_tools.start), ("end-of-sentence model", smart_turn.load),
                         ("notes for when you're back", skills.sticky.start),
                         ("browser extension link", skills.browser_bridge.start),
-                        ("phone alerts check", lambda: print(skills.phone.status()))):
+                        ("phone alerts check", lambda: print(skills.phone.status())),
+                        ("token count", _token_summary)):
         t = time.perf_counter()
         try:
             start()
