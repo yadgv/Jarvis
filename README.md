@@ -15,7 +15,10 @@ Wake word → Whisper → Claude → Piper voice. Runs on Windows now and on a R
    mkdir voices
    python -m piper.download_voices en_GB-alan-medium --data-dir voices
    ```
-4. Set your API keys. Create a file named `.env` in the `jarvis` folder. Jarvis uses the
+4. Set your API keys. Copy `.env.example` to `.env` in the `jarvis` folder
+   (`copy .env.example .env` on Windows) and fill in the keys you have. It lists every setting
+   Jarvis reads from `.env`, grouped, with where to get each one; blank lines are skipped.
+   At least one brain key is needed (Groq is the easiest free one). Jarvis uses the
    cheapest brain that works, in the order in `BRAIN_ORDER` (config.py): Groq's free models
    first, then OpenRouter's free models, and Claude (paid) only as the last resort.
    Screen control always uses Claude; looking at pictures on the screen uses Gemini for free if

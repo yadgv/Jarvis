@@ -3,11 +3,11 @@ import os
 import platform
 
 
-def _load_env_file():
+def _load_env_file(path=None):
     """Read KEY=value lines from a .env file next to this one, so API keys
     work no matter which terminal or editor starts Jarvis. Real environment
     variables win. The .env file is git-ignored."""
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    path = path or os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
     if not os.path.exists(path):
         return
     with open(path, encoding="utf-8") as f:
@@ -16,7 +16,9 @@ def _load_env_file():
             if not line or line.startswith("#") or "=" not in line:
                 continue
             key, value = line.split("=", 1)
-            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+            value = value.strip().strip('"').strip("'")
+            if value:   # blank lines from .env.example keep the built-in default
+                os.environ.setdefault(key.strip(), value)
 
 
 _load_env_file()
