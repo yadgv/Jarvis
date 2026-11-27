@@ -231,3 +231,26 @@ def test_promise_without_a_tool_is_not_spoken(brain, monkeypatch):
                       calls_tool("set_timer", {"seconds": 60}), says("Timer set, sir.")]
     out = list(brain.llm.think_stream("set a one minute timer"))
     assert "I am on it right away." not in out and out[-1] == "Timer set, sir."
+
+
+def test_done_claim_after_only_a_background_start_is_held(brain, monkeypatch):
+    """use_computer only *started* (and then failed): 'I've opened the Canvas sign-in window' wasn't true."""
+    monkeypatch.setitem(skills._BY_NAME, "use_computer", {
+        "run": lambda a: "Started in the background: Working on the screen. Tell him..."})
+    brain.replies += [calls_tool("use_computer", {"task": "open canvas sign in"}),
+                      says("I've opened the Canvas sign-in window."),
+                      says("On it, sir; I'll tell you when the sign-in window is up.")]
+    out = list(brain.llm.think_stream("open the canvas sign in"))
+    assert out == ["On it, sir; I'll tell you when the sign-in window is up."]
+    assert "only started in the background" in json.dumps(brain.sent[-1][1]["messages"])
+
+
+def test_yes_after_canvas_offer_gets_canvas_sign_in(brain):
+    """'Shall I open the Canvas sign-in window?' then 'yes': canvas_sign_in must be on offer."""
+    brain.llm._history[:] = [{"role": "user", "content": "download the lecture"},
+                             {"role": "assistant", "content": "You're not signed in to Canvas; "
+                              "would you like me to open the sign-in window now?"}]
+    brain.replies.append(says("Opening it."))
+    list(brain.llm.think_stream("yes"))
+    names = {t["function"]["name"] for t in brain.sent[0][1]["tools"]}
+    assert "canvas_sign_in" in names

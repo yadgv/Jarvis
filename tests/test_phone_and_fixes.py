@@ -251,6 +251,8 @@ def test_no_made_up_briefs_rule():
     ("Use the article up on my screen right now.", True),
     ("Can you read it off of my screen?", True),
     ("make a quiz from what I have up", True),
+    ("can you write me notes for this lecture", True),       # the lecture PDF he has open (27 Nov)
+    ("make flashcards from these slides", True),
     ("Can you make a presentation?", False),
     ("what's the weather tomorrow", False),
 ])
