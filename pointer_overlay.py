@@ -18,6 +18,7 @@ Automation and the OCR boxes). Run it alone to see a demo: python pointer_overla
 import json
 import math
 import queue
+import re
 import sys
 import threading
 import time
@@ -33,8 +34,9 @@ CYAN, DEEP, HALO = "#4fe3ff", "#118fbf", "#0a3d57"     # bright edge, glow, oute
 INK, PANEL = "#eafcff", "#07131d"                       # label text and its pill
 GLOW, DARK, WHITE = DEEP, PANEL, INK                    # older names
 FPS = 60
-# A slim arrow, about 21 px tall at 100% scaling (tip at 0, 0).
-ARROW = [(0, 0), (0, 17.5), (4.6, 13.6), (7.8, 20.6), (10.6, 19.4), (7.5, 12.6), (13.5, 12.4)]
+# An outlined navigation arrow pointing up-left (a triangle with a notch in its tail), drawn as a thick
+# glowing line with nothing inside, about 30 px at 100% scaling (tip at 0, 0).
+ARROW = [(0, 0), (29, 12), (16, 16), (12, 29)]
 TRAIL_SECS = 0.22
 
 
@@ -141,6 +143,16 @@ def rounded(x1, y1, x2, y2, r):
             x1 + r, y2, x1, y2, x1, y2 - r, x1, y1 + r, x1, y1]
 
 
+def palette(base):
+    """The pointer's colours from one colour (Jarvis's orb colour): bright edge, glow, outer haze."""
+    return mix(base, "#ffffff", 0.18), mix(base, "#000000", 0.42), mix(base, "#000000", 0.72)
+
+
+def toward(now, goal, k):
+    """A colour moved k of the way to another (for smooth colour changes)."""
+    return mix(now, goal, k)
+
+
 def _scale():
     """1.0 at 100% Windows scaling, 1.5 at 150%..."""
     if IS_WINDOWS:
@@ -171,6 +183,8 @@ class Pointer:
         self.s = _scale()
         self.pos = (sw - 80.0, 60.0)       # starts near the orb's corner
         self.trail = []                    # [(x, y, time)] behind it while it glides
+        self.colour = self.colour_to = CYAN    # follows Jarvis's orb colour ({"cmd": "colour"})
+        self.cyan, self.deep, self.halo = palette(CYAN)
         self.arrived_at = 0.0
         self.move = None                   # (start, end, t0, secs)
         self.target = None                 # (x, y, w, h, label) in canvas coords
@@ -189,6 +203,9 @@ class Pointer:
         if kind == "ping":
             say("pong")
             return
+        if kind == "colour":
+            self._set_colour(cmd.get("hex"))
+            return
         if kind == "hide":
             self.hide_at = time.time()
             return
@@ -197,6 +214,8 @@ class Pointer:
         x, y = float(cmd["x"]) - self.ox, float(cmd["y"]) - self.oy
         w, h = max(4.0, float(cmd.get("w") or 4)), max(4.0, float(cmd.get("h") or 4))
         self.target = (x, y, w, h, str(cmd.get("label") or "")[:60])
+        if cmd.get("colour"):
+            self._set_colour(cmd["colour"], now=not self.visible)
         end = tip_for(x, y, w, h)
         if not self.visible:
             self.root.attributes("-alpha", 0.0)
@@ -214,6 +233,14 @@ class Pointer:
         self.move = (self.pos, end, time.time(), max(0.45, min(0.9, dist / 1400)))
         self.trail = []
         self.hide_at = time.time() + float(cmd.get("hold") or 10)
+
+    def _set_colour(self, hexcolour, now=False):
+        if not (isinstance(hexcolour, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", hexcolour)):
+            return
+        self.colour_to = hexcolour.lower()
+        if now:
+            self.colour = self.colour_to
+            self.cyan, self.deep, self.halo = palette(self.colour)
 
     # ----- drawing -----
     def tick(self):
@@ -236,8 +263,15 @@ class Pointer:
         except queue.Empty:
             pass
         if not self.visible:
+            self.colour = self.colour_to
+            self.cyan, self.deep, self.halo = palette(self.colour)
             return
         now = time.time()
+        if self.colour != self.colour_to:                      # glide to Jarvis's new colour
+            self.colour = toward(self.colour, self.colour_to, 0.12)
+            if self.colour == toward(self.colour, self.colour_to, 0.12):
+                self.colour = self.colour_to
+            self.cyan, self.deep, self.halo = palette(self.colour)
         if self.move:
             start, end, t0, secs = self.move
             t = (now - t0) / secs
@@ -275,23 +309,21 @@ class Pointer:
             ripple = since / 0.5
             if 0 <= ripple < 1:                                 # a soft "tap" where it lands
                 r = (4 + 20 * ease(ripple)) * S
-                c.create_oval(px - r, py - r, px + r, py + r, outline=mix(CYAN, DEEP, ripple), width=max(1, 2 * S))
+                c.create_oval(px - r, py - r, px + r, py + r, outline=mix(self.cyan, self.deep, ripple), width=max(1, 2 * S))
         self._arrow(px, py)
 
     def _arrow(self, px, py):
+        """A hollow arrow: thick glowing outline, nothing inside (like a map's navigation arrow)."""
         c, S = self.c, self.s
-        pts = [(px + ax * S, py + ay * S) for ax, ay in ARROW]
-        c.create_polygon(pts, fill=HALO, outline=HALO, width=6 * S, joinstyle="round")    # outer haze
-        c.create_polygon(pts, fill=DEEP, outline=DEEP, width=3 * S, joinstyle="round")    # glow
-        c.create_polygon(pts, fill=CYAN, outline=INK, width=max(1, S), joinstyle="round")  # body
-        c.create_line(pts[0][0] + 1.5 * S, pts[0][1] + 3.5 * S, pts[1][0] + 1.5 * S, pts[1][1] - 3 * S,
-                      fill=INK, width=max(1, S))                                          # a highlight
+        pts = [v for ax, ay in ARROW for v in (px + ax * S, py + ay * S)]
+        for colour, width in ((self.halo, 6.0), (self.deep, 4.2), (self.cyan, 2.4)):
+            c.create_polygon(pts, fill="", outline=colour, width=width * S, joinstyle="miter")
 
     def _trail(self, now):
         c, S, pts = self.c, self.s, self.trail
         for (x0, y0, t0), (x1, y1, t1) in zip(pts, pts[1:]):
             k = 1 - (now - t1) / TRAIL_SECS                     # 1 = fresh, 0 = gone
-            c.create_line(x0, y0, x1, y1, fill=mix(HALO, CYAN, k * 0.9), width=max(1, (1 + 3 * k) * S),
+            c.create_line(x0, y0, x1, y1, fill=mix(self.halo, self.cyan, k * 0.9), width=max(1, (1 + 3 * k) * S),
                           capstyle="round")
 
     def _ring(self, now, since):
@@ -303,11 +335,11 @@ class Pointer:
         # a thin outline that draws itself around the thing, clockwise
         edge = perimeter(x1, y1, x2, y2, ease((since - 0.08) / 0.45))
         if len(edge) > 1:
-            c.create_line(*[v for pt in edge for v in pt], fill=mix(HALO, DEEP, p), width=max(1, S))
+            c.create_line(*[v for pt in edge for v in pt], fill=mix(self.halo, self.deep, p), width=max(1, S))
         # corner brackets that close in on it, then breathe
         breathe = math.sin(now * 3.2) * 1.4 * S * p
         L = min(14 * S, (x2 - x1) / 3, (y2 - y1) / 2.2)
-        colour, wid = mix(HALO, CYAN, p), max(2, 2 * S)
+        colour, wid = mix(self.halo, self.cyan, p), max(2, 2 * S)
         for cx, cy, sx, sy in ((x1, y1, 1, 1), (x2, y1, -1, 1), (x2, y2, -1, -1), (x1, y2, 1, -1)):
             cx, cy = cx - sx * breathe, cy - sy * breathe
             c.create_line(cx, cy + sy * L, cx, cy, cx + sx * L, cy, fill=colour, width=wid, capstyle="round",
@@ -316,8 +348,8 @@ class Pointer:
         if since > 0.5:
             run = perimeter(x1, y1, x2, y2, (since * 0.45) % 1.0)[-1]
             r = 2.2 * S
-            c.create_oval(run[0] - r - S, run[1] - r - S, run[0] + r + S, run[1] + r + S, fill=HALO, outline="")
-            c.create_oval(run[0] - r, run[1] - r, run[0] + r, run[1] + r, fill=CYAN, outline="")
+            c.create_oval(run[0] - r - S, run[1] - r - S, run[0] + r + S, run[1] + r + S, fill=self.halo, outline="")
+            c.create_oval(run[0] - r, run[1] - r, run[0] + r, run[1] + r, fill=self.cyan, outline="")
         if label:
             self._label(label, x1, y1, x2, y2, since)
 
@@ -337,10 +369,10 @@ class Pointer:
         bx1 = (x2 + gap + slide) if right else (x1 - gap - tw - 2 * padx - slide)
         bx2, by1, by2 = bx1 + tw + 2 * padx, cy - th / 2 - pady, cy + th / 2 + pady
         edge_x = x2 if right else x1
-        c.create_line(edge_x, cy, bx1 if right else bx2, cy, fill=mix(PANEL, DEEP, k), width=max(1, S))
+        c.create_line(edge_x, cy, bx1 if right else bx2, cy, fill=mix(PANEL, self.deep, k), width=max(1, S))
         pill = c.create_polygon(rounded(bx1, by1, bx2, by2, (by2 - by1) / 2), smooth=True,
-                                fill=PANEL, outline=mix(PANEL, DEEP, k), width=max(1, S))
-        dot = c.create_oval(bx1 + 4 * S, cy - 2 * S, bx1 + 8 * S, cy + 2 * S, fill=mix(PANEL, CYAN, k), outline="")
+                                fill=PANEL, outline=mix(PANEL, self.deep, k), width=max(1, S))
+        dot = c.create_oval(bx1 + 4 * S, cy - 2 * S, bx1 + 8 * S, cy + 2 * S, fill=mix(PANEL, self.cyan, k), outline="")
         c.coords(text, bx1 + padx + 2 * S, cy)
         c.tag_raise(pill)
         c.tag_raise(dot)

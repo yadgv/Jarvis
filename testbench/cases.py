@@ -181,4 +181,7 @@ CASES = [
         {"say": "Where's the Design tab?", "tool": "point_at", "not": ["restyle_document", "make_document"]}]},
     {"id": "pointer-no-guide-go-back", "turns": [
         {"say": "Go back to your own.", "tool": "none", "hide": ["guide_back", "guide_next"]}]},
+    {"id": "pointer-where-search-bar", "turns": [
+        {"say": "Can you show me where the search bar is?", "tool": "point_at"},
+        {"say": "Can you point to it?", "tool": "point_at", "not": ["test_pointer"]}]},
 ]

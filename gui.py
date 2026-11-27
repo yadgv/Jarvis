@@ -792,6 +792,12 @@ class JarvisWidget:
             self.jarvis_turn_open = False  # the next reply replaces the old one
         label, colour, *_ = STATES.get(status, (status, SILVER, 0, 0, 0))
         colour = self.colours.get(status, colour)
+        if status in ("listening", "thinking", "speaking"):   # resting silver would wash it out
+            try:
+                from skills import pointer
+                pointer.tint(_hex(colour))       # his pointer takes on the orb's colour
+            except Exception:
+                pass
         if self.task:   # the task chip has the status line; keep its words, take the colour
             self.set_text(self.status_item, fill=_hex(colour))
         else:

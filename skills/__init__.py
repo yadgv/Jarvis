@@ -294,8 +294,25 @@ POINTER_TEST = re.compile(
     r"test (?:out )?(?:your|the) (?:pointer|mouse|cursor|arrow)|"
     r"where(?:'s| is) (?:your|the jarvis) (?:pointer|mouse|cursor|arrow)|"
     r"(?:i )?(?:don'?t|do not|can'?t|cannot) (?:even )?see (?:a|your|the) (?:pointer|mouse|cursor|arrow))\b|"
-    r"^\W*(?:can|could) you (?:point|show me)(?: (?:to|at|toward|towards))?(?: (?:my|the|this|that|it))?\W*$",
+    r"^\W*(?:can|could) you (?:point|show me)(?: (?:to|at|toward|towards))?(?: (?:my|the))?\W*$",
     re.I)
+_UI_THING = (r"(?:bar|button|tab|icon|menu|option|box|field|link|settings?|panel|toolbar|ribbon|slider|switch|"
+             r"toggle|tool|key|checkbox|dropdown)")
+POINT_AT = re.compile(
+    r"\b(?:point(?: me)?(?: out)? (?:to|at|towards?|out)|show me where)\s+(?:(?:the|my|your)\s+)?"
+    r"(?P<t>[a-z0-9][\w' .&+-]{0,40}?)(?:\s+(?:is|are|on (?:the|my) screen))?\W*$|"
+    r"\bwhere(?:'s| is| are| do i find| can i find)\s+(?:the|my)\s+(?P<u>[\w' &+-]{1,40}?\b" + _UI_THING +
+    r")(?:\s+(?:is|on (?:the|my) screen))?\W*$", re.I)
+
+
+def point_target(text: str) -> str:
+    """ "Point to the search bar" -> "search bar"; "where's the Design tab?" -> "Design tab"; "" if neither."""
+    m = POINT_AT.search(text or "")
+    if not m:
+        return ""
+    t = (m.group("t") or m.group("u") or "").strip(" .'")
+    t = re.sub(r"(?:\s+[a-z])+$", "", t, flags=re.I)          # "search bar R": a stray letter from speech
+    return "" if t.lower() in ("my", "the", "your", "a", "") else t
 
 
 def pointer_test_intent(text: str) -> bool:
@@ -317,7 +334,11 @@ def route(text: str) -> dict:
     elif script_intent(text):
         plan["direct"].append(("write_script", {"details": text or ""}))
         plan["exclude"] |= {"write_script", "make_document", "make_file"}
-    if pointer_test_intent(text):
+    target = point_target(text)
+    if target:
+        plan["direct"].append(("point_at", {"target": target}))
+        plan["exclude"] |= {"test_pointer", "point_at", "show_me_how"}
+    elif pointer_test_intent(text):
         plan["direct"].append(("test_pointer", {}))
         plan["exclude"] |= {"test_pointer", "point_at"}
     if not pointer.guide_active():
