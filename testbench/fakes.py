@@ -67,6 +67,8 @@ RESULTS = {
     "test_phone_alerts": "Sent a test message to his phone on Telegram. Ask him if it arrived.",
     "calculate": "36",
     "web_search": "Results: (1) CBC: data breach exposes 4.2M records. (2) Global News: what to do after a breach.",
+    "test_pointer": "The pointer is showing in the middle of his screen for 6 seconds. Ask if he can see it.",
+    "point_at": "Pointing at \"Design\" (ui automation). Tell him what it is in a few words.",
     "get_news": "Top stories: data breach at a loyalty company; Bank of Canada rate hold.",
 }
 DEFAULT = "Done."

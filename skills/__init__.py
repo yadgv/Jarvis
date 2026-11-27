@@ -246,6 +246,8 @@ def restyle_intent(text: str) -> bool:
     t = text or ""
     if not _RESTYLE.search(t) or re.search(r"\b(?:new|another)\s+(?:deck|presentation|slides|document)\b", t, re.I):
         return False
+    if POINT_WORDS.search(t) or re.search(r"\b(?:design|themes?|styles?)\s+(?:tab|menu|button|option|pane)\b", t, re.I):
+        return False   # "where's the Design tab?" is a place on screen, not a new look
     if re.search(r"\b(?:about|on)\s+(?!it\b|this\b|that\b|them\b|the\s+(?:deck|slides|slideshow))\w", t, re.I):
         return False   # "a corporate deck about cyber security" is a new one
     if not re.search(r"\b(?:it|this|that|them|the\s+(?:deck|slides?|slideshow|presentation|document|doc|powerpoint))\b",
@@ -287,6 +289,20 @@ POINT_WORDS = re.compile(r"\b(?:where(?:'s| is| are| do i find)|point (?:at|to|o
                          r"which (?:one|button|icon|option)|can't find|how do i|show me how to|walk me through)\b", re.I)
 
 
+POINTER_TEST = re.compile(
+    r"\b(?:(?:show|let) me (?:your|the|jarvis'?s?) (?:own )?(?:pointer|mouse|cursor|arrow)|"
+    r"test (?:out )?(?:your|the) (?:pointer|mouse|cursor|arrow)|"
+    r"where(?:'s| is) (?:your|the jarvis) (?:pointer|mouse|cursor|arrow)|"
+    r"(?:i )?(?:don'?t|do not|can'?t|cannot) (?:even )?see (?:a|your|the) (?:pointer|mouse|cursor|arrow))\b|"
+    r"^\W*(?:can|could) you (?:point|show me)(?: (?:to|at|toward|towards))?(?: (?:my|the|this|that|it))?\W*$",
+    re.I)
+
+
+def pointer_test_intent(text: str) -> bool:
+    """ "Show me your pointer", "I don't see a mouse", or a bare "can you point to...?" """
+    return bool(POINTER_TEST.search(text or ""))
+
+
 def route(text: str) -> dict:
     """What's decided before the model sees a request (the model can't get these wrong):
     direct: [(tool, args)] to run straight away; exclude: tools the model mustn't use this turn;
@@ -301,7 +317,12 @@ def route(text: str) -> dict:
     elif script_intent(text):
         plan["direct"].append(("write_script", {"details": text or ""}))
         plan["exclude"] |= {"write_script", "make_document", "make_file"}
-    if pointer.guide_active() and GUIDE_NEXT.match(text or ""):
+    if pointer_test_intent(text):
+        plan["direct"].append(("test_pointer", {}))
+        plan["exclude"] |= {"test_pointer", "point_at"}
+    if not pointer.guide_active():
+        plan["exclude"] |= {"guide_next", "guide_back"}       # "go back to your own" isn't a guide step
+    elif GUIDE_NEXT.match(text or ""):
         plan["direct"].append(("guide_back" if re.search(r"\b(?:back|again|repeat)\b", text or "", re.I)
                                else "guide_next", {}))
         plan["exclude"] |= {"guide_next", "guide_back", "whiteboard_step"}
@@ -376,6 +397,8 @@ def pick_tools(text, limit=12, exclude=()):
         keep.add("test_phone_alerts")
     if POINT_WORDS.search(text or ""):
         keep |= {"point_at", "show_me_how"}
+    if re.search(r"\b(?:pointer|mouse|cursor|arrow|point)\b", text or "", re.I):
+        keep |= {"point_at", "test_pointer", "hide_pointer"}
     if pointer.guide_active():
         keep |= {"guide_next", "guide_back", "hide_pointer"}
     if restyle_intent(text):

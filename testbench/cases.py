@@ -172,4 +172,13 @@ CASES = [
         {"say": "Travis, set a timer for five minutes", "tool": "set_timer", "addressed": True}]},
     {"id": "name-other-person", "turns": [
         {"say": "Travis is coming over later", "addressed": False}]},
+    # ---------- his pointer ----------
+    {"id": "pointer-test", "turns": [
+        {"say": "Show me your pointer", "tool": "test_pointer"}]},
+    {"id": "pointer-cant-see", "turns": [
+        {"say": "I don't even see a mouse", "tool": "test_pointer"}]},
+    {"id": "pointer-design-tab", "last_doc": True, "turns": [
+        {"say": "Where's the Design tab?", "tool": "point_at", "not": ["restyle_document", "make_document"]}]},
+    {"id": "pointer-no-guide-go-back", "turns": [
+        {"say": "Go back to your own.", "tool": "none", "hide": ["guide_back", "guide_next"]}]},
 ]

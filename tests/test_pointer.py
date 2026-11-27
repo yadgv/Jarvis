@@ -121,3 +121,48 @@ def test_overlay_maths():
     assert 400 < mid[0] < 600 and abs(mid[1]) > 50            # a gentle arc, not a straight line
     tx, ty = ov.tip_for(100, 100, 200, 40)
     assert 100 < tx < 300 and 100 < ty < 140
+
+
+def test_show_me_your_pointer(monkeypatch, no_overlay):
+    monkeypatch.setattr(pointer, "alive", lambda wait=6.0: True)
+    for said in ("show me your pointer", "i dont even see a mouse", "Can you point toward?", "Can you point to my...",
+                 "test the pointer"):
+        assert skills.route(said)["direct"] == [("test_pointer", {})], said
+    out = pointer.test_pointer()
+    assert "middle of his screen" in out and no_overlay[-1]["label"] == "Jarvis pointer"
+    assert "middle of his screen" in pointer.point_at({})       # nothing named: show it anyway, then ask
+
+
+def test_pointer_window_that_wont_start_is_reported(monkeypatch, no_overlay):
+    monkeypatch.setattr(pointer, "alive", lambda wait=6.0: False)
+    pointer._heard[:] = ["error: tkinter isn't installed"]
+    assert "didn't start" in pointer.test_pointer() and "tkinter" in pointer.test_pointer()
+    assert not any(c["cmd"] == "point" for c in no_overlay)
+
+
+def test_where_is_the_design_tab_points_not_restyles(monkeypatch):
+    from skills import documents
+    monkeypatch.setattr(documents, "last", lambda: {"kind": "slides"})
+    plan = skills.route("where's the Design tab?")
+    assert plan["direct"] == []
+    assert "point_at" in skills.pick_tools("where's the Design tab?", limit=10, exclude=tuple(plan["exclude"]))
+    assert skills.restyle_intent("make it prettier")
+
+
+def test_guide_tools_hidden_without_a_guide():
+    assert {"guide_next", "guide_back"} <= skills.route("Go back to your own.")["exclude"]
+
+
+def test_overlay_talks_back(tmp_path):
+    import shutil
+    import subprocess
+    import sys
+    py = next((p for p in (sys.executable, shutil.which("python3.12")) if p and subprocess.run(
+        [p, "-c", "import tkinter; tkinter.Tk().destroy()"], capture_output=True).returncode == 0), None)
+    if not py:
+        pytest.skip("no python with tkinter and a display here")
+    import os
+    script = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pointer_overlay.py")
+    cmds = '{"cmd": "ping"}\n{"cmd": "point", "x": "bad"}\n{"cmd": "quit"}\n'
+    out = subprocess.run([py, "-u", script], input=cmds, capture_output=True, text=True, timeout=20).stdout
+    assert out.startswith("ready:") and "pong" in out and "error:" in out
