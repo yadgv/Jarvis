@@ -235,7 +235,7 @@ def mentions_screen_followup(text: str) -> bool:
 
 _RESTYLE = re.compile(r"\b(?:pretty|prettier|nicer|better[- ]looking|look(?:s)? (?:better|nicer|good)|corporate|"
                       r"professional|theme|style|design|colou?rs?|colou?rful|darker|lighter|sleek|modern|minimal|"
-                      r"purple|green|blue|orange)\b", re.I)
+                      r"purple|green|blue|orange|repetitive|boring|plain|bland|same every)\b", re.I)
 
 
 def restyle_intent(text: str) -> bool:
@@ -249,7 +249,33 @@ def restyle_intent(text: str) -> bool:
     if not re.search(r"\b(?:it|this|that|them|the\s+(?:deck|slides?|slideshow|presentation|document|doc|powerpoint))\b",
                      t, re.I) and len(t.split()) > 4:
         return False
-    return documents.last() is not None
+    return documents.last() is not None or bool(documents.open_office_files())
+
+
+SCRIPT_INTENT = re.compile(
+    r"\b(?:script|speech|speaker\s+notes|presenter\s+notes|talking\s+points|what\s+(?:to|should\s+i|do\s+i)\s+say)\b"
+    r".{0,40}\b(?:slides?|slideshow|slide\s*deck|deck|presentation|powerpoint|it|this|that)\b"
+    r"|\b(?:slides?|slideshow|deck|presentation|powerpoint)\b.{0,30}\b(?:script|speech|speaker\s+notes)\b", re.I)
+
+
+def script_intent(text: str) -> bool:
+    """ "Make a script for the slideshow", "write me speaker notes for this presentation"."""
+    from skills import documents
+    if not SCRIPT_INTENT.search(text or "") or re.search(r"\b(?:python|code|bash|powershell|autohotkey)\b", text or "", re.I):
+        return False
+    return documents.last() is not None or bool(documents.open_office_files()) or \
+        bool(re.search(r"\.pptx\b|\b(?:called|named)\b", text or "", re.I))
+
+
+EMAIL_INTENT = re.compile(
+    r"\b(?:any|unread|new|check|read|got|have\s+i\s+got|what(?:'s| is)\s+in)\b.{0,25}\b(?:e-?mails?|inbox|gmail|mail)\b"
+    r"|\b(?:e-?mails?|inbox)\b.{0,15}\b(?:today|unread|new)\b", re.I)
+
+
+def email_intent(text: str) -> bool:
+    """ "Any unread emails?", "check my inbox" (not "write an email to...")."""
+    t = text or ""
+    return bool(EMAIL_INTENT.search(t)) and not re.search(r"\b(?:send|write|reply|draft|forward|compose)\b", t, re.I)
 
 
 def route(text: str) -> dict:
@@ -261,7 +287,14 @@ def route(text: str) -> dict:
         plan["direct"].append(("test_phone_alerts", {}))
         plan["exclude"].add("test_phone_alerts")
     if restyle_intent(text):
-        plan["exclude"].add("make_document")      # a new look, never a new deck
+        plan["exclude"] |= {"make_document", "restyle_document"}   # a new look, never a new deck
+        plan["direct"].append(("restyle_document", {"style": text or ""}))
+    elif script_intent(text):
+        plan["direct"].append(("write_script", {"details": text or ""}))
+        plan["exclude"] |= {"write_script", "make_document", "make_file"}
+    if email_intent(text):
+        plan["direct"].append(("check_email", {}))
+        plan["exclude"].add("check_email")
     searching = re.search(r"\b(?:search|look (?:\w+ )?up|google|online|on the web|internet)\b", text or "", re.I)
     if brief_intent(text):
         plan["direct"].append(("brief_document", {"source": ""}))

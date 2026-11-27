@@ -33,6 +33,10 @@ RESULTS = {
     "read_screen": "Read \"{title}\" via the browser extension. Text:\n{text}",
     "look_at_screen": "The screen shows a news article with a photo of a laptop showing a padlock.",
     "make_document": "Made the slides and opened them: Documents/Jarvis Docs/{topic}.pptx (7 slides).",
+    "write_script": "Wrote the presenter script (7 slides, about 5 min) and opened it: Documents/Jarvis Docs/"
+                    "Data Breach - script.docx.",
+    "check_email": "2 matching emails; newest first: Prof. Lee - Lab 4 marks posted (Tue 14:02); "
+                   "Canvas - Assignment due Friday (Tue 09:15).",
     "restyle_document": "Restyled the deck with the {style} theme and opened it.",
     "make_file": "Wrote {name} and opened it.",
     "split_screen": "Put the two windows side by side.",

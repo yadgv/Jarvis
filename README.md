@@ -432,6 +432,10 @@ slide). "Make it prettier", "make it corporate", "purple", "more colourful" rest
 made in place, same content and same file. Looks: modern, corporate, minimal, vibrant, nature, grape,
 sunset, ocean. If PowerPoint has the file open, the new look is saved beside it.
 
+
+Decks use three layouts in turn (list, numbered cards, side panel), so slides don't all look the same. "Make this presentation prettier" also works on a deck you made yourself that's open in PowerPoint: Jarvis saves a restyled copy beside it and never touches your original.
+
+**Presenter script:** "make me a script for the slideshow" (or "speaker notes for this presentation", "about 5 minutes") writes what to say on each slide as a Word document next to the deck, and puts it in the deck's speaker notes when it's one Jarvis made.
 ## Brief an article (split screen)
 
 Say "brief this article" (or "summarise this PDF") while it's on screen. Jarvis
