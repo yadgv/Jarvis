@@ -87,7 +87,7 @@ def test_show_me_how_steps(monkeypatch, no_overlay):
                         if found.get(t) else None)
     out = pointer.show_me_how({"task": "add slide numbers"})
     assert "Step 1 of 3: Click Insert" in out and "Header & Footer" in seen["user"]
-    assert no_overlay[-1]["label"] == "Insert"
+    assert no_overlay[-1]["label"] == "1/3  Insert"
     # "next" goes to the guide while it's on, not to the whiteboard
     plan_next = skills.route("next")
     assert plan_next["direct"] == [("guide_next", {})] and "whiteboard_step" in plan_next["exclude"]
@@ -228,3 +228,62 @@ def test_stage_directions_and_markdown_not_spoken():
     assert llm._CLAIM.search("I have drawn up a diagram for wiring an LED strip to your Arduino, sir.")
     assert llm._CLAIM.search("You should find the whiteboard open now.")
     assert not llm._CLAIM.search("You'll see the sun tomorrow.")
+
+
+def test_how_to_requests_start_a_pointer_guide():
+    from skills import _last_howto
+    _last_howto.update(task="", at=0.0)
+    for said, want in (("ok so show me how to make a new file in this project", "make a new file in this project"),
+                       ("Can you show me how to change the numbers on these slides?",
+                        "change the numbers on these slides"),
+                       ("how do I make a new file in VS Code", "make a new file in VS Code"),
+                       ("walk me through turning on dark mode", "turning on dark mode")):
+        plan = skills.route(said)
+        assert plan["direct"] == [("show_me_how", {"task": want})], said
+        assert {"make_file", "use_computer", "point_at", "show_diagram"} <= plan["exclude"]
+    for said in ("Can you show me how to wire an LED to an Arduino?", "Can you show me how photosynthesis works?",
+                 "how do I get to Toronto", "how do I pronounce this"):
+        assert skills.route(said)["direct"] == [], said
+
+
+def test_use_your_pointer_after_text_steps():
+    from skills import _last_howto
+    _last_howto.update(task="", at=0.0)
+    skills.guide_intent("how do I add slide numbers to this deck")
+    assert skills.route("Can you use your pointer?")["direct"] == [("show_me_how", {"task": "add slide numbers to this deck"})]
+    assert skills.route("show me how to do it with your pointer")["direct"][0][0] == "show_me_how"
+    _last_howto.update(task="", at=0.0)
+    assert skills.route("Can you use your pointer?")["direct"] == []
+
+
+def test_steps_carry_how_he_finishes_them():
+    steps = pointer._parse_steps('{"steps": [{"target": "File", "say": "Open File.", "do": "click"},'
+                                 '{"target": "Name", "say": "Type a name.", "do": "type"},'
+                                 '{"target": "X", "do": "dance"}]}')
+    assert [s["do"] for s in steps] == ["click", "type", "click"]
+
+
+def test_a_click_on_the_target_finishes_the_step(monkeypatch):
+    pointer.guide.update(task="t", steps=[{"target": "File", "say": "", "do": "click"}], i=0, at=time.time(), gen=7)
+    hit = {"x": 100, "y": 100, "w": 40, "h": 20}
+    clicks = iter([(False, False, 0, 0), (True, False, 500, 500), (False, False, 500, 500),   # elsewhere: ignored
+                   (True, False, 110, 105), (False, False, 110, 105)])                          # on File: done
+    monkeypatch.setattr(pointer, "_mouse", lambda: next(clicks))
+    assert pointer.wait_for_step(7, pointer.guide["steps"][0], hit, poll=0)
+    keys = iter([False, True, False])
+    monkeypatch.setattr(pointer, "_enter_down", lambda: next(keys))
+    assert pointer.wait_for_step(7, {"target": "Name", "do": "type"}, hit, poll=0)
+    assert not pointer.wait_for_step(8, pointer.guide["steps"][0], hit, poll=0)      # the guide moved on
+
+
+def test_doing_a_step_moves_the_pointer_and_speaks_the_next(monkeypatch, no_overlay):
+    said = []
+    monkeypatch.setattr(pointer, "announce", said.append)
+    monkeypatch.setattr(pointer, "locate", lambda t: {"x": 1, "y": 2, "w": 3, "h": 4, "name": t, "how": "x"})
+    pointer.guide.update(task="t", steps=[{"target": "File", "say": "Click File.", "do": "click"},
+                                          {"target": "New File...", "say": "Now click New File.", "do": "click"}],
+                         i=0, at=time.time(), gen=1)
+    pointer._auto_next()
+    assert said == ["Now click New File."] and no_overlay[-1]["label"] == "2/2  New File..."
+    pointer._auto_next()
+    assert said[-1] == "That's it, sir. All done." and no_overlay[-1] == {"cmd": "hide"} and not pointer.guide_active()
