@@ -29,9 +29,13 @@ except ImportError:   # only the drawing needs it (tests import the maths)
 
 IS_WINDOWS = sys.platform == "win32"
 KEY = "#010203"            # see-through colour
-CYAN, GLOW, DARK, WHITE = "#38d6ff", "#1478a8", "#0b1622", "#eaf8ff"
+CYAN, DEEP, HALO = "#4fe3ff", "#118fbf", "#0a3d57"     # bright edge, glow, outer haze
+INK, PANEL = "#eafcff", "#07131d"                       # label text and its pill
+GLOW, DARK, WHITE = DEEP, PANEL, INK                    # older names
 FPS = 60
-ARROW = [(0, 0), (0, 36), (10, 28), (17, 43), (24, 40), (17, 25), (29, 25)]   # tip at (0, 0)
+# A slim arrow, about 21 px tall at 100% scaling (tip at 0, 0).
+ARROW = [(0, 0), (0, 17.5), (4.6, 13.6), (7.8, 20.6), (10.6, 19.4), (7.5, 12.6), (13.5, 12.4)]
+TRAIL_SECS = 0.22
 
 
 def say(text):
@@ -102,8 +106,50 @@ def glide_path(start, end, t):
 
 
 def tip_for(x, y, w, h):
-    """The arrow's tip lands just inside the target, a little below and right of its centre-left."""
-    return x + min(w * 0.5, max(12, w * 0.3)), y + h * 0.62
+    """The arrow's tip lands inside the target, towards its lower right, so the arrow hangs off the corner."""
+    return x + w * 0.72, y + h * 0.7
+
+
+def mix(a, b, k):
+    """A colour k (0..1) of the way from a to b: Tk can't do see-through items, so fading is done by colour."""
+    k = max(0.0, min(1.0, k))
+    pa, pb = [int(a[i:i + 2], 16) for i in (1, 3, 5)], [int(b[i:i + 2], 16) for i in (1, 3, 5)]
+    return "#" + "".join(f"{round(x + (y - x) * k):02x}" for x, y in zip(pa, pb))
+
+
+def perimeter(x1, y1, x2, y2, frac):
+    """The points along a box's edge from its top-left corner, clockwise, as far as frac (0..1) of the way."""
+    corners = [(x1, y1), (x2, y1), (x2, y2), (x1, y2), (x1, y1)]
+    total = 2 * ((x2 - x1) + (y2 - y1)) or 1.0
+    left, pts = max(0.0, min(1.0, frac)) * total, [corners[0]]
+    for (ax, ay), (bx, by) in zip(corners, corners[1:]):
+        seg = math.hypot(bx - ax, by - ay)
+        if left >= seg:
+            pts.append((bx, by))
+            left -= seg
+            continue
+        if seg:
+            k = left / seg
+            pts.append((ax + (bx - ax) * k, ay + (by - ay) * k))
+        break
+    return pts
+
+
+def rounded(x1, y1, x2, y2, r):
+    """Points for a rounded box (a Tk polygon with smooth=True)."""
+    return [x1 + r, y1, x2 - r, y1, x2, y1, x2, y1 + r, x2, y2 - r, x2, y2, x2 - r, y2,
+            x1 + r, y2, x1, y2, x1, y2 - r, x1, y1 + r, x1, y1]
+
+
+def _scale():
+    """1.0 at 100% Windows scaling, 1.5 at 150%..."""
+    if IS_WINDOWS:
+        try:
+            import ctypes
+            return max(1.0, ctypes.windll.user32.GetDpiForSystem() / 96)
+        except Exception:
+            pass
+    return 1.0
 
 
 class Pointer:
@@ -122,7 +168,10 @@ class Pointer:
         root.update_idletasks()
         self.hwnd = _click_through(root)
         self.drawn = False
+        self.s = _scale()
         self.pos = (sw - 80.0, 60.0)       # starts near the orb's corner
+        self.trail = []                    # [(x, y, time)] behind it while it glides
+        self.arrived_at = 0.0
         self.move = None                   # (start, end, t0, secs)
         self.target = None                 # (x, y, w, h, label) in canvas coords
         self.shown_at = 0.0
@@ -150,23 +199,25 @@ class Pointer:
         self.target = (x, y, w, h, str(cmd.get("label") or "")[:60])
         end = tip_for(x, y, w, h)
         if not self.visible:
+            self.root.attributes("-alpha", 0.0)
             self.root.deiconify()
             self.root.attributes("-topmost", True)
-            self.root.attributes("-alpha", 1.0)
             self.root.update_idletasks()
             self.hwnd = _click_through(self.root) or self.hwnd   # showing again can drop the click-through style
             self.visible = True
+            self.shown_at = time.time()
         _to_front(self.hwnd)
         self.drawn = False
         say(f"pointing at {int(x)},{int(y)} {int(w)}x{int(h)} (on a {self.size[0]}x{self.size[1]} window) "
             f"label {self.target[4]!r}")
         dist = math.hypot(end[0] - self.pos[0], end[1] - self.pos[1])
-        self.move = (self.pos, end, time.time(), max(0.5, min(1.1, dist / 1000)))
-        self.shown_at = time.time()
+        self.move = (self.pos, end, time.time(), max(0.45, min(0.9, dist / 1400)))
+        self.trail = []
         self.hide_at = time.time() + float(cmd.get("hold") or 10)
 
     # ----- drawing -----
     def tick(self):
+        start = time.perf_counter()
         try:
             self._tick()
         except SystemExit:
@@ -174,7 +225,9 @@ class Pointer:
         except Exception:
             import traceback
             say("error: " + traceback.format_exc().strip().replace("\n", " | "))
-        self.root.after(1000 // FPS, self.tick)
+        spent = (time.perf_counter() - start) * 1000
+        frame = 1000 / FPS if self.visible else 50      # resting: just listen for commands
+        self.root.after(max(1, int(frame - spent)), self.tick)
 
     def _tick(self):
         try:
@@ -182,57 +235,116 @@ class Pointer:
                 self.handle(self.commands.get_nowait())
         except queue.Empty:
             pass
+        if not self.visible:
+            return
         now = time.time()
-        if self.visible:
-            arrived = True
-            if self.move:
-                start, end, t0, secs = self.move
-                t = (now - t0) / secs
-                self.pos = glide_path(start, end, t)
-                arrived = t >= 1
-                if arrived:
-                    self.pos, self.move = end, None
-            fade = 1.0
-            if now >= self.hide_at:
-                fade = max(0.0, 1 - (now - self.hide_at) / 0.4)
-                if fade <= 0:
-                    self.root.withdraw()
-                    self.visible, self.target = False, None
-                    say("hidden")
-            if self.visible:
-                self.root.attributes("-alpha", fade)
-                self.draw(now, arrived)
-                if arrived and not self.drawn:
-                    self.drawn = True
-                    say(f"arrived and drawn at {int(self.pos[0])},{int(self.pos[1])}")
+        if self.move:
+            start, end, t0, secs = self.move
+            t = (now - t0) / secs
+            self.pos = glide_path(start, end, t)
+            self.trail.append((self.pos[0], self.pos[1], now))
+            if t >= 1:
+                self.pos, self.move, self.arrived_at = end, None, now
+        self.trail = [p for p in self.trail if now - p[2] < TRAIL_SECS]
+        alpha = ease((now - self.shown_at) / 0.18)                      # fades in...
+        if now >= self.hide_at:
+            alpha = min(alpha, 1 - ease((now - self.hide_at) / 0.35))   # ...and softly out
+            if alpha <= 0:
+                self.c.delete("all")
+                self.root.withdraw()
+                self.visible, self.target, self.trail = False, None, []
+                say("hidden")
+                return
+        self.root.attributes("-alpha", max(0.0, min(1.0, alpha)))
+        arrived = self.move is None
+        self.draw(now, arrived)
+        if arrived and not self.drawn:
+            self.drawn = True
+            say(f"arrived and drawn at {int(self.pos[0])},{int(self.pos[1])}")
 
     def draw(self, now, arrived):
-        c = self.c
+        c, S = self.c, self.s
         c.delete("all")
+        since = now - self.arrived_at if arrived else -1.0
         if self.target and arrived:
-            x, y, w, h, label = self.target
-            pad = 8
-            since = now - (self.move[2] + self.move[3] if self.move else self.shown_at)
-            pulse = 0.5 + 0.5 * math.sin(now * 5)
-            grow = 6 * max(0.0, 1 - since * 2) if since >= 0 else 6
-            x1, y1, x2, y2 = x - pad - grow, y - pad - grow, x + w + pad + grow, y + h + pad + grow
-            c.create_rectangle(x1 - 3, y1 - 3, x2 + 3, y2 + 3, outline=GLOW, width=2)
-            c.create_rectangle(x1, y1, x2, y2, outline=CYAN, width=3 + 2 * pulse)
-            if label:
-                lx, ly = x2 + 14, y1
-                if lx + 12 + 8 * len(label) > c.winfo_width():
-                    lx = max(4, x1 - 24 - 8 * len(label))
-                text = c.create_text(lx + 12, ly + 13, text=label, fill=WHITE, anchor="w",
-                                     font=("Segoe UI", 12, "bold"))
-                bx1, by1, bx2, by2 = c.bbox(text)
-                box = c.create_rectangle(bx1 - 10, by1 - 6, bx2 + 10, by2 + 6, fill=DARK, outline=CYAN, width=2)
-                c.tag_lower(box, text)
+            self._ring(now, since)
+        self._trail(now)
         px, py = self.pos
-        # The arrow: a dark shadow, a cyan glow outline, then the bright body.
-        pts = [(px + ax, py + ay) for ax, ay in ARROW]
-        c.create_polygon([(x + 2, y + 3) for x, y in pts], fill=DARK, outline=DARK)
-        c.create_polygon(pts, fill=CYAN, outline=GLOW, width=3)
-        c.create_polygon(pts, fill=CYAN, outline=WHITE, width=1)
+        if arrived:
+            py += math.sin(now * 2.6) * 1.2 * S                 # a gentle hover once it's there
+            ripple = since / 0.5
+            if 0 <= ripple < 1:                                 # a soft "tap" where it lands
+                r = (4 + 20 * ease(ripple)) * S
+                c.create_oval(px - r, py - r, px + r, py + r, outline=mix(CYAN, DEEP, ripple), width=max(1, 2 * S))
+        self._arrow(px, py)
+
+    def _arrow(self, px, py):
+        c, S = self.c, self.s
+        pts = [(px + ax * S, py + ay * S) for ax, ay in ARROW]
+        c.create_polygon(pts, fill=HALO, outline=HALO, width=6 * S, joinstyle="round")    # outer haze
+        c.create_polygon(pts, fill=DEEP, outline=DEEP, width=3 * S, joinstyle="round")    # glow
+        c.create_polygon(pts, fill=CYAN, outline=INK, width=max(1, S), joinstyle="round")  # body
+        c.create_line(pts[0][0] + 1.5 * S, pts[0][1] + 3.5 * S, pts[1][0] + 1.5 * S, pts[1][1] - 3 * S,
+                      fill=INK, width=max(1, S))                                          # a highlight
+
+    def _trail(self, now):
+        c, S, pts = self.c, self.s, self.trail
+        for (x0, y0, t0), (x1, y1, t1) in zip(pts, pts[1:]):
+            k = 1 - (now - t1) / TRAIL_SECS                     # 1 = fresh, 0 = gone
+            c.create_line(x0, y0, x1, y1, fill=mix(HALO, CYAN, k * 0.9), width=max(1, (1 + 3 * k) * S),
+                          capstyle="round")
+
+    def _ring(self, now, since):
+        c, S = self.c, self.s
+        x, y, w, h, label = self.target
+        p = ease(since / 0.35)                                  # 0..1 as it settles in
+        pad = 6 * S + (1 - p) * 16 * S
+        x1, y1, x2, y2 = x - pad, y - pad, x + w + pad, y + h + pad
+        # a thin outline that draws itself around the thing, clockwise
+        edge = perimeter(x1, y1, x2, y2, ease((since - 0.08) / 0.45))
+        if len(edge) > 1:
+            c.create_line(*[v for pt in edge for v in pt], fill=mix(HALO, DEEP, p), width=max(1, S))
+        # corner brackets that close in on it, then breathe
+        breathe = math.sin(now * 3.2) * 1.4 * S * p
+        L = min(14 * S, (x2 - x1) / 3, (y2 - y1) / 2.2)
+        colour, wid = mix(HALO, CYAN, p), max(2, 2 * S)
+        for cx, cy, sx, sy in ((x1, y1, 1, 1), (x2, y1, -1, 1), (x2, y2, -1, -1), (x1, y2, 1, -1)):
+            cx, cy = cx - sx * breathe, cy - sy * breathe
+            c.create_line(cx, cy + sy * L, cx, cy, cx + sx * L, cy, fill=colour, width=wid, capstyle="round",
+                          joinstyle="round")
+        # a little light running round the edge
+        if since > 0.5:
+            run = perimeter(x1, y1, x2, y2, (since * 0.45) % 1.0)[-1]
+            r = 2.2 * S
+            c.create_oval(run[0] - r - S, run[1] - r - S, run[0] + r + S, run[1] + r + S, fill=HALO, outline="")
+            c.create_oval(run[0] - r, run[1] - r, run[0] + r, run[1] + r, fill=CYAN, outline="")
+        if label:
+            self._label(label, x1, y1, x2, y2, since)
+
+    def _label(self, label, x1, y1, x2, y2, since):
+        c, S = self.c, self.s
+        k = ease((since - 0.18) / 0.3)
+        if k <= 0:
+            return
+        font = ("Segoe UI Semibold", 10)
+        text = c.create_text(0, 0, text=label, anchor="w", font=font, fill=mix(PANEL, INK, k))
+        tx1, ty1, tx2, ty2 = c.bbox(text)
+        tw, th = tx2 - tx1, ty2 - ty1
+        gap, padx, pady = 12 * S, 9 * S, 4 * S
+        cy = (y1 + y2) / 2
+        right = x2 + gap + tw + 2 * padx < c.winfo_width() - 4
+        slide = (1 - k) * 10 * S
+        bx1 = (x2 + gap + slide) if right else (x1 - gap - tw - 2 * padx - slide)
+        bx2, by1, by2 = bx1 + tw + 2 * padx, cy - th / 2 - pady, cy + th / 2 + pady
+        edge_x = x2 if right else x1
+        c.create_line(edge_x, cy, bx1 if right else bx2, cy, fill=mix(PANEL, DEEP, k), width=max(1, S))
+        pill = c.create_polygon(rounded(bx1, by1, bx2, by2, (by2 - by1) / 2), smooth=True,
+                                fill=PANEL, outline=mix(PANEL, DEEP, k), width=max(1, S))
+        dot = c.create_oval(bx1 + 4 * S, cy - 2 * S, bx1 + 8 * S, cy + 2 * S, fill=mix(PANEL, CYAN, k), outline="")
+        c.coords(text, bx1 + padx + 2 * S, cy)
+        c.tag_raise(pill)
+        c.tag_raise(dot)
+        c.tag_raise(text)
 
 
 def _read_stdin(q):
