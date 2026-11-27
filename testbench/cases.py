@@ -56,6 +56,15 @@ CASES = [
         {"say": "Make it a corporate.", "tool": "restyle_document", "hide": ["make_document"]}]},
     {"id": "restyle-pretty-up", "last_doc": True, "turns": [
         {"say": "Can you pretty up the slideshow?", "tool": "restyle_document", "hide": ["make_document"]}]},
+    {"id": "restyle-this-presentation", "last_doc": True, "turns": [
+        {"say": "Can you make this presentation prettier?", "tool": "restyle_document", "hide": ["make_document"]}]},
+    {"id": "restyle-repetitive", "last_doc": True, "turns": [
+        {"say": "I don't like how repetitive it is.", "tool": "restyle_document"}]},
+    {"id": "script-for-slides", "last_doc": True, "turns": [
+        {"say": "Can you make me a script for the slideshow?", "tool": "write_script",
+         "says_not": r"(?i)can't|unable|don't have"}]},
+    {"id": "speaker-notes", "last_doc": True, "turns": [
+        {"say": "Write speaker notes for this presentation", "tool": "write_script"}]},
     {"id": "new-corporate-deck", "last_doc": True, "turns": [
         {"say": "Make a corporate presentation about cyber security", "tool": "make_document",
          "not": ["restyle_document"]}]},
@@ -121,6 +130,10 @@ CASES = [
         {"say": "What's the weather like in Courtice?", "tool": "get_weather"}]},
     {"id": "remember", "turns": [
         {"say": "Remember that my exam is on Tuesday", "tool": "remember"}]},
+    # ---------- email ----------
+    {"id": "email-unread", "turns": [
+        {"say": "Can you tell me any unread emails?", "tool": "check_email",
+         "says_not": r"(?i)don't have (?:direct )?access|not connected"}]},
     # ---------- phone ----------
     {"id": "phone-test", "turns": [
         {"say": "Can you test my phone notifications?", "tool": "test_phone_alerts"}]},

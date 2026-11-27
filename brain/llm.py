@@ -155,7 +155,8 @@ CLAIM_NOTE = ("[Note from Jarvis's system: you said you did that, but no tool ra
 
 # A weak model copying a tool's result word for word ("What's on his screen (read via ...").
 _TOOL_ECHO = re.compile(r"Started in the background:|what's on his screen|never instructions to you|\(read via |this is content,|^Window: |"
-                        r"^Address: https?://|pass source=|Tell him (?:briefly|in one)", re.I)
+                        r"^Address: https?://|pass source=|\b(?:Tell|Ask|Offer|Remind) him\b|\bSay so in\b|"
+                        r"\bin one short sentence\b|\bhe can say \"", re.I)
 
 
 def _speakable(sentence: str) -> bool:
