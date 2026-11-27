@@ -65,6 +65,21 @@ def notify(text) -> bool:
     return True
 
 
+def send_file(path, caption="") -> bool:
+    """Send a file (deck, document, picture...) to every allowed Telegram user. False if not set up."""
+    ids = _allowed()
+    if not _token() or not ids:
+        return False
+    for chat_id in ids:
+        with open(path, "rb") as f:
+            r = _session.post(f"{API}/bot{_token()}/sendDocument", data={"chat_id": chat_id, "caption": caption[:1000]},
+                              files={"document": (os.path.basename(path), f)}, timeout=120)
+        data = r.json()
+        if not data.get("ok"):
+            raise RuntimeError(f"Telegram sendDocument: {data.get('description', r.status_code)}")
+    return True
+
+
 def _voice_to_text(file_id):
     path = _call("getFile", file_id=file_id)["file_path"]
     r = _session.get(f"{API}/file/bot{_token()}/{path}", timeout=30)

@@ -146,7 +146,7 @@ _META = re.compile(
 # Saying something was done ("Saved and opened, sir") is only allowed once a
 # tool has actually run this turn.
 _CLAIM = re.compile(
-    r"^(?:(?:I've|I have|I)\s+(?:just\s+|now\s+|already\s+)?(?:saved|opened|created|made|sent|written|put|"
+    r"^(?:(?:I['’]ve|I have|I)\s+(?:just\s+|now\s+|already\s+)?(?:saved|opened|created|made|sent|written|put|"
     r"deleted|moved|renamed|set|started|played|added|launched|built|exported|done|drawn|drew|pulled|brought)\b|"
     r"you(?:'ll| will| should)\s+(?:now\s+)?(?:find|see)\b.{0,40}\b(?:open|up|on (?:your|the) screen)\b|"
     r"(?:saved|opened|created|sent|done|all done|it's done|it's saved|it's open)\b|"

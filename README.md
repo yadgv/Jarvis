@@ -518,6 +518,10 @@ message **@CallMeBot_txtbot** in Telegram once to authorize it, then add your Te
 **Test it:** say "test my phone alerts". You get an Approve/Deny message (and a call, if set up), and the
 startup log shows a `[phone]` line saying whether the bot and calls are set up.
 
+**Send things to your phone:** "send this link to my phone" (the page you're on), "send the slides to my
+phone" (the deck open in PowerPoint, or the last one Jarvis made), "put the brief on my phone", or "send my
+shopping list to my phone: milk, eggs". They arrive in your Jarvis Telegram chat; files up to 50 MB.
+
 ## Raspberry Pi
 Use a Pi 4 (4 GB) or Pi 5 with Raspberry Pi OS 64-bit, a USB mic and a speaker.
 ```

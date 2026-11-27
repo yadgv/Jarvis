@@ -329,6 +329,9 @@ def route(text: str) -> dict:
     if phone_test_intent(text):
         plan["direct"].append(("test_phone_alerts", {}))
         plan["exclude"].add("test_phone_alerts")
+    elif phone_send_intent(text):
+        plan["direct"].append(("send_to_phone", {"request": text or ""}))
+        plan["exclude"] |= {"send_to_phone", "test_phone_alerts"}
     if restyle_intent(text):
         plan["exclude"] |= {"make_document", "restyle_document"}   # a new look, never a new deck
         plan["direct"].append(("restyle_document", {"style": text or ""}))
@@ -363,6 +366,21 @@ def route(text: str) -> dict:
         plan["followup"] = True                   # "now make slides on it": the page he just had read
         plan["exclude"].add("web_search")
     return plan
+
+
+PHONE_SEND = re.compile(r"\b(?:send|forward|text|put|share)\b.{0,60}\b(?:to|on) my (?:phone|telegram|cell|mobile)\b|"
+                        r"\b(?:text|message) me\b.{0,40}\b(?:link|it|that|this|the)\b", re.I)
+
+
+def phone_send_intent(text: str) -> bool:
+    """ "Send this link to my phone", "text me the link", "put the slides on my phone". Not a test."""
+    if re.search(r"\bsend (?:me )?(?:a |an )?(?:message|text|something|notification)\s+(?:to|on) my \w+\W*$",
+                 text or "", re.I):
+        return False      # nothing named to send: the model asks what (or what to write)
+    if not re.search(r"\b(?:link|url|address|page|site|tab|slides?|deck|presentation|powerpoint|script|document|"
+                     r"doc|brief|summary|file|pdf|screen|this|that|it)\b", text or "", re.I):
+        return False      # "send my shopping list...": the model writes the words itself
+    return bool(PHONE_SEND.search(text or "")) and not phone_test_intent(text)
 
 
 def phone_test_intent(text: str) -> bool:
