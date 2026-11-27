@@ -166,3 +166,14 @@ def test_overlay_talks_back(tmp_path):
     cmds = '{"cmd": "ping"}\n{"cmd": "point", "x": "bad"}\n{"cmd": "quit"}\n'
     out = subprocess.run([py, "-u", script], input=cmds, capture_output=True, text=True, timeout=20).stdout
     assert out.startswith("ready:") and "pong" in out and "error:" in out
+
+
+def test_overlay_drawing_helpers():
+    import pointer_overlay as ov
+    assert ov.mix("#000000", "#ffffff", 0) == "#000000" and ov.mix("#000000", "#ffffff", 1) == "#ffffff"
+    assert ov.mix("#000000", "#ffffff", 0.5) == "#808080"
+    assert ov.perimeter(0, 0, 10, 10, 1)[-1] == (0, 0)                   # all the way round
+    assert ov.perimeter(0, 0, 10, 10, 0.25)[-1] == (10, 0)               # the top edge
+    assert ov.perimeter(0, 0, 10, 10, 0.375)[-1] == (10, 5)
+    assert len(ov.rounded(0, 0, 40, 20, 10)) == 24
+    assert max(y for _, y in ov.ARROW) < 25                              # small, not clunky
