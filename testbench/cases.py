@@ -179,6 +179,9 @@ CASES = [
         {"say": "I don't even see a mouse", "tool": "test_pointer"}]},
     {"id": "pointer-design-tab", "last_doc": True, "turns": [
         {"say": "Where's the Design tab?", "tool": "point_at", "not": ["restyle_document", "make_document"]}]},
+    {"id": "pointer-guide-new-file", "turns": [
+        {"say": "Show me how to make a new file in this project", "tool": "show_me_how",
+         "not": ["make_file", "use_computer", "show_diagram"]}]},
     {"id": "pointer-no-guide-go-back", "turns": [
         {"say": "Go back to your own.", "tool": "none", "hide": ["guide_back", "guide_next"]}]},
     {"id": "pointer-where-search-bar", "turns": [

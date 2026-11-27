@@ -440,7 +440,7 @@ The text goes to the free models. Only for understanding an image itself does he
 
 ## Jarvis's pointer (showing you where things are)
 
-Ask "where's the export button?" or "show me how to add slide numbers" and a glowing cyan arrow glides to it, rings it and labels it. It's Jarvis's own pointer: a see-through, click-through layer on top of the screen, so your mouse is never moved and you can keep clicking through it. "Show me how to..." points at each thing to click in turn; say "next" after each step, "go back" to see one again, "got it" to put the pointer away.
+Ask "where's the export button?" or "show me how to add slide numbers" and a glowing cyan arrow glides to it, rings it and labels it. It's Jarvis's own pointer: a see-through, click-through layer on top of the screen, so your mouse is never moved and you can keep clicking through it. "Show me how to make a new file in this project" (or "walk me through...", "how do I ... in VS Code") starts a walkthrough: a free model plans the steps from the buttons it can see, the pointer glides to step 1 and Jarvis says it, then waits. When you click the thing it's ringing (or press Enter on a "type it in" step), it moves on by itself to the next step and says that one, with no model call. You can still say "next", "go back" to see one again, or "got it" to put the pointer away. If Jarvis already answered with plain steps, "can you use your pointer?" walks you through that same task.
 
 It finds things for free on your PC: the Jarvis eyes extension for web pages (reload it once in brave://extensions to get version 1.2), Windows UI Automation for apps, and Windows OCR for anything else. Turn it off with `POINTER = False` in config.py.
 

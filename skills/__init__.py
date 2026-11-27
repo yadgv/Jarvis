@@ -325,6 +325,50 @@ def point_target(text: str) -> str:
     return "" if t.lower() in ("my", "the", "your", "a", "") else t
 
 
+HOWTO = re.compile(r"\b(?:(?:can|could|would) you\s+)?(?:show me how(?: to| do i| i can| you)?|walk me through(?: how to)?|"
+                   r"guide me(?: through| on how to| to)?|teach me how to|how (?:do|can|would|should) i)"
+                   r"\s+(?P<t>.{3,120}?)\W*$", re.I)
+_UI_WORDS = re.compile(r"\b(?:vs ?code|visual studio|word|excel|power ?point|chrome|brave|edge|browser|windows|"
+                       r"settings?|file explorer|explorer|canvas|discord|spotify|steam|outlook|teams|terminal|"
+                       r"project|files?|folders?|tabs?|slides?|buttons?|menus?|windows?|apps?|extensions?|toolbar|"
+                       r"ribbon|shortcut|page numbers?|slide numbers?|themes?|fonts?|screen|desktop|taskbar|"
+                       r"bookmarks?|downloads?|wi-?fi|bluetooth|display|wallpaper|dark mode|notifications?|"
+                       r"repo(?:sitory)?|branch|commit|document|spreadsheet|cells?|columns?|rows?)\b", re.I)
+_HERE = re.compile(r"\b(?:this|these|here|on (?:my|the) screen|in (?:it|there))\b", re.I)
+_NOT_ON_SCREEN = re.compile(r"\b(?:wire|wiring|circuit|breadboard|solder|draw|diagram|whiteboard|sketch|"
+                            r"photosynthesis|works?|equation|solve|integrate|derivative|cook|recipe|tie|pronounce|"
+                            r"say|spell|write an? (?:essay|story|poem)|get to|drive)\b", re.I)
+USE_POINTER = re.compile(r"\b(?:use|with|using) (?:your|the) (?:pointer|arrow|mouse|cursor)\b|"
+                         r"\bpoint me through\b|\bshow me (?:on (?:the|my) screen|with (?:the|your) pointer)\b", re.I)
+_last_howto = {"task": "", "at": 0.0}
+
+
+def guide_intent(text: str) -> str:
+    """ "Show me how to make a new file in this project" -> "make a new file in this project": a task to walk
+    him through on screen with the pointer. "" for things that aren't on his screen ("how to wire an LED")."""
+    import time as _t
+    t = (text or "").strip()
+    m = HOWTO.search(t)
+    task = (m.group("t").strip(" .") if m else "")
+    task = re.sub(r"\s+(?:with|using) (?:your|the) (?:pointer|arrow|mouse|cursor)$", "", task, flags=re.I)
+    if re.fullmatch(r"(?:do )?(?:it|that|this|them)(?: again)?", task, re.I):
+        task = ""                             # "show me how to do it with your pointer": the last how-to
+    elif task and not _NOT_ON_SCREEN.search(task):
+        _last_howto.update(task=task, at=_t.time())
+    if USE_POINTER.search(t):
+        if task and not _NOT_ON_SCREEN.search(task):
+            return task
+        if _last_howto["task"] and _t.time() - _last_howto["at"] < 600:
+            return _last_howto["task"]        # "can you use your pointer?" after "how do I..."
+        return ""
+    if not task or _NOT_ON_SCREEN.search(task):
+        return ""
+    loose = not re.search(r"\bhow (?:do|can|would|should) i\b", m.group(0), re.I)   # "how do I" needs an app word
+    if _UI_WORDS.search(task) or (loose and _HERE.search(task)):
+        return task
+    return ""
+
+
 def pointer_test_intent(text: str) -> bool:
     """ "Show me your pointer", "I don't see a mouse", or a bare "can you point to...?" """
     return bool(POINTER_TEST.search(text or ""))
@@ -347,8 +391,14 @@ def route(text: str) -> dict:
     elif script_intent(text):
         plan["direct"].append(("write_script", {"details": text or ""}))
         plan["exclude"] |= {"write_script", "make_document", "make_file"}
-    target = point_target(text)
-    if target:
+    task = guide_intent(text)
+    target = "" if task else point_target(text)
+    if task:
+        # Walk him through it with the pointer, never just a list of steps (or doing it for him, or a new file)
+        plan["direct"].append(("show_me_how", {"task": task}))
+        plan["exclude"] |= {"test_pointer", "point_at", "show_me_how", "show_diagram", "whiteboard_step",
+                            "make_file", "use_computer"}
+    elif target:
         plan["direct"].append(("point_at", {"target": target}))
         plan["exclude"] |= {"test_pointer", "point_at", "show_me_how"}
     elif pointer_test_intent(text):
