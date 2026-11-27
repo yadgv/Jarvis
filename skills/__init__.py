@@ -179,12 +179,20 @@ _APPS = _re.compile(r"\b(claude code|(?:build|make|code|write|create) (?:me )?(?
 APP_TOOLS = ("plan_new_app", "plan_claude_code_task", "start_claude_code_task", "claude_code_status")
 # A tool used last turn that needs another one when he says yes.
 FOLLOW_UPS = {"plan_new_app": ("start_claude_code_task",), "plan_claude_code_task": ("start_claude_code_task",),
+              "canvas_download": ("canvas_sign_in",), "canvas_courses": ("canvas_sign_in",),
+              "canvas_due": ("canvas_sign_in",),
               "quiz_me": ("quiz_next",), "quiz_next": ("quiz_next",)}   # his answer needs quiz_next
 FILE_TOOLS = ("make_file", "find_files", "read_file", "open_file", "organize_folder", "file_action", "undo_files")
 
 
 def mentions_files(text) -> bool:
     return bool(_FILES.search(text or ""))
+
+
+def mentions_canvas(text) -> bool:
+    """His last reply was about Canvas ("you're not signed in; open the sign-in window?"): a "yes"
+    needs canvas_sign_in, not screen control."""
+    return bool(re.search(r"\bcanvas\b", text or "", re.I))
 
 
 def mentions_board(text) -> bool:
@@ -221,7 +229,8 @@ _BRIEF_EDIT = re.compile(r"\b(?:change|edit|add|remove|shorter|longer|save|read|
 
 
 _SCREEN_REF = re.compile(
-    r"\b(?:this|that)\s+(?:article|page|web\s?page|website|site|story|post|pdf|document|doc|paper|tab|thing\s+here)\b"
+    r"\b(?:this|that)\s+(?:article|page|web\s?page|website|site|story|post|pdf|document|doc|paper|tab|thing\s+here|"
+    r"lecture|slide\s?deck|chapter|reading|worksheet|lab|handout|textbook)\b|\bthese\s+(?:slides|lecture\s+slides|notes)\b"
     r"|\bon\s+(?:my|the)\s+screen\b|\b(?:i\s+have|i've\s+got|that's)\s+(?:up|open)\b|\barticle\s+(?:here|up)\b"
     r"|\bwhat\s+i(?:'m|\s+am)\s+(?:reading|looking\s+at)\b|\b(?:off|from)\s+(?:of\s+)?my\s+screen\b", re.I)
 _SCREEN_FOLLOWUP = re.compile(r"\b(?:it|this|that|the article|the page|on it|about it|from it)\b", re.I)

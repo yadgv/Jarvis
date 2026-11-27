@@ -159,6 +159,24 @@ _CLAIM = re.compile(
     r"[^?]{0,60}\b(?:now|right away|immediately)\b(?!.*\?))", re.I)
 CLAIM_NOTE = ("[Note from Jarvis's system: you said you did that, but no tool ran, so nothing happened. "
               "Call the tool now. If no tool can do it, tell him plainly that you haven't done it.]")
+# Once a job has only *started* in the background, "I've opened the sign-in window" is still
+# not true (it had already failed: log, 27 Nov). Saying he's on it is fine.
+_DONE = re.compile(r"^(?:(?:I['’]ve|I have|I)\s+(?:just\s+|now\s+|already\s+)?(?:saved|opened|created|made|sent|"
+                   r"written|deleted|moved|downloaded|drawn|drew|built|exported|finished|done)\b|"
+                   r"(?:it['’]s|it is)\s+(?:done|ready|saved|open|downloaded)\b|all done\b)", re.I)
+BACKGROUND_NOTE = ("[Note from Jarvis's system: that job has only started in the background; it isn't done and "
+                   "may still fail. Say you're on it and will tell him when it's done; don't say it's done.]")
+
+
+def _only_started(tools_used) -> bool:
+    return bool(tools_used) and all(" -> Started in the background" in t for t in tools_used)
+
+
+def _unbacked(sentence, tools_used) -> bool:
+    """Says something was done (or is being done right now) that no finished tool backs up."""
+    if not tools_used:
+        return bool(_CLAIM.search(sentence))
+    return _only_started(tools_used) and bool(_DONE.search(sentence))
 
 
 # A weak model copying a tool's result word for word ("What's on his screen (read via ...").
@@ -305,6 +323,8 @@ def _openai_turn(user_text, system, said, tools_used, exclude=(), history=None, 
             keep |= set(skills.FOLLOW_UPS.get(name, ()))
         if skills.mentions_board(last):  # "yes, go ahead" after he offered to draw it
             keep |= set(skills.BOARD_TOOLS)
+        if skills.mentions_canvas(last):  # "yes" to "open the Canvas sign-in window?"
+            keep |= set(skills.CANVAS_TOOLS)
         if skills.mentions_files(last):  # "yes" to a plan to sort a folder
             keep |= set(skills.FILE_TOOLS)
         exclude = tuple(exclude) + tuple(s["name"] for s in skills.SKILLS if s["name"] not in keep)
@@ -324,7 +344,7 @@ def _openai_turn(user_text, system, said, tools_used, exclude=(), history=None, 
         held, tail = [], []
         try:
             for sentence in _sentences(pieces(), said, tail):
-                if not tools_used and _CLAIM.search(sentence):
+                if _unbacked(sentence, tools_used):
                     said.pop()          # "Saved and opened, sir" with no tool run yet: hold it
                     held.append(sentence)
                     continue
@@ -344,7 +364,7 @@ def _openai_turn(user_text, system, said, tools_used, exclude=(), history=None, 
             if tool_calls and fragment(bit):
                 print(f"[brain] not spoken (a scrap before a tool call): {bit}")
                 continue
-            if not tools_used and _CLAIM.search(bit):
+            if _unbacked(bit, tools_used):
                 held.append(bit)   # same rule as whole sentences above
                 continue
             said.append(bit)
@@ -355,9 +375,11 @@ def _openai_turn(user_text, system, said, tools_used, exclude=(), history=None, 
                 print(f"[brain] claimed without a tool, asking again: {' '.join(held)[:120]}")
                 nudged = True
                 messages.append({"role": "assistant", "content": text or " ".join(held)})
-                messages.append({"role": "user", "content": CLAIM_NOTE})
+                messages.append({"role": "user",
+                                 "content": BACKGROUND_NOTE if _only_started(tools_used) else CLAIM_NOTE})
                 continue
-            line = "I haven't actually done that yet, sir. Ask me once more and I will."
+            line = ("I'm on it, sir. I'll tell you when it's done." if _only_started(tools_used)
+                    else "I haven't actually done that yet, sir. Ask me once more and I will.")
             said.append(line)
             yield line
         if not tool_calls:
