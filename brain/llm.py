@@ -159,6 +159,13 @@ _TOOL_ECHO = re.compile(r"Started in the background:|what's on his screen|never 
                         r"\bin one short sentence\b|\bhe can say \"", re.I)
 
 
+def _strip_ignore(sentence: str) -> str:
+    """ "Please say what to point at.[ignore]": the [ignore] marker stuck on a real reply isn't said."""
+    if sentence.lower().startswith("[ignore"):
+        return sentence
+    return re.sub(r"\s*\[ignore\]\s*", " ", sentence, flags=re.I).strip()
+
+
 def _speakable(sentence: str) -> bool:
     if re.match(r"\s*\[[a-z][^\]]* ", sentence, re.I) or re.search(r"\bwithout calling a tool\b", sentence, re.I):
         print(f"[brain] not spoken (a bracketed note): {sentence[:120]}")
@@ -195,12 +202,13 @@ def _sentences(pieces, said, tail=None):
         if _ECHO.match(head):
             continue  # might be the start of one: wait for more
         while (m := _first_break(buf, said)):
-            sentence = buf[: m.end()].strip()
+            sentence = _strip_ignore(buf[: m.end()].strip())
             buf = buf[m.end():]
             if sentence and _speakable(sentence):
                 said.append(sentence)
                 yield sentence
-    if buf.strip() and not muted and _speakable(buf.strip()):
+    buf = _strip_ignore(buf.strip())
+    if buf and not muted and _speakable(buf):
         if tail is not None:
             tail.append(buf.strip())
             return

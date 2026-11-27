@@ -425,6 +425,8 @@ The text goes to the free models. Only for understanding an image itself does he
 Ask "where's the export button?" or "show me how to add slide numbers" and a glowing cyan arrow glides to it, rings it and labels it. It's Jarvis's own pointer: a see-through, click-through layer on top of the screen, so your mouse is never moved and you can keep clicking through it. "Show me how to..." points at each thing to click in turn; say "next" after each step, "go back" to see one again, "got it" to put the pointer away.
 
 It finds things for free on your PC: the Jarvis eyes extension for web pages (reload it once in brave://extensions to get version 1.2), Windows UI Automation for apps, and Windows OCR for anything else. Turn it off with `POINTER = False` in config.py.
+
+To check it works, say "show me your pointer": the arrow appears in the middle of the screen for a few seconds. If it doesn't, the `[pointer]` lines in jarvis.log say why (the pointer window prints everything it does there).
 ## Split screen
 
 "Split the screen, the doc on one side and the slides on the other", "put the article next to my

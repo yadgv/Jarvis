@@ -132,7 +132,8 @@ def find_with_uia(what, hwnd):
     try:
         from skills import ui_automation
         ui_automation._auto()
-    except ImportError:
+    except ImportError as e:
+        print(f"[pointer] UI Automation isn't available ({e}); pip install uiautomation")
         return None
     from skills import ui_automation
     hit = ui_automation._in_thread(lambda: best_match(_uia_candidates(hwnd), what))
@@ -168,7 +169,8 @@ def find_with_ocr(what, hwnd):
     try:
         from PIL import ImageGrab
         from skills import sight
-    except ImportError:
+    except ImportError as e:
+        print(f"[pointer] on-screen text search isn't available ({e})")
         return None
     bbox, offset = None, (0, 0)
     if hwnd:
@@ -182,7 +184,8 @@ def find_with_ocr(what, hwnd):
             pass
     try:
         img = ImageGrab.grab(bbox=bbox, all_screens=True)
-    except Exception:
+    except Exception as e:
+        print(f"[pointer] couldn't capture the screen for text search: {e}")
         return None
     hit = ocr_match(sight.ocr_words(img, offset), what)
     if not hit:
@@ -228,6 +231,25 @@ def _dpi_aware():
 
 # ---------- the overlay ----------
 
+_heard = []          # the pointer window's last printed lines (for "show me your pointer")
+_pong = threading.Event()
+
+
+def _listen(proc):
+    """Everything the pointer window prints goes into Jarvis's log as [pointer] lines."""
+    for line in proc.stdout:
+        line = line.rstrip()
+        if not line:
+            continue
+        if line == "pong":
+            _pong.set()
+            continue
+        _heard.append(line)
+        del _heard[:-20]
+        print(f"[pointer] window: {line}")
+    print(f"[pointer] the pointer window closed (exit code {proc.wait()})")
+
+
 def _overlay():
     """The pointer window's process (started once, restarted if it closed)."""
     global _proc
@@ -235,9 +257,12 @@ def _overlay():
         if _proc is not None and _proc.poll() is None:
             return _proc
         script = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pointer_overlay.py")
-        exe = sys.executable
         flags = 0x08000000 if IS_WINDOWS else 0      # CREATE_NO_WINDOW
-        _proc = subprocess.Popen([exe, script], stdin=subprocess.PIPE, text=True, creationflags=flags)
+        print(f"[pointer] starting the pointer window: {sys.executable} {script}")
+        _proc = subprocess.Popen([sys.executable, "-u", script], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace",
+                                 bufsize=1, creationflags=flags)
+        threading.Thread(target=_listen, args=(_proc,), daemon=True).start()
         return _proc
 
 
@@ -246,10 +271,22 @@ def send(cmd: dict) -> bool:
         p = _overlay()
         p.stdin.write(json.dumps(cmd) + "\n")
         p.stdin.flush()
+        if cmd.get("cmd") == "point":
+            print(f"[pointer] sent: point at {int(cmd['x'])},{int(cmd['y'])} {cmd.get('label', '')!r}")
         return True
     except Exception as e:
-        print(f"[pointer] couldn't reach the pointer window: {e}")
+        print(f"[pointer] couldn't reach the pointer window: {type(e).__name__}: {e}")
         return False
+
+
+def alive(wait=6.0) -> bool:
+    """Is the pointer window up and answering? (it answers "ping" with "pong")"""
+    _pong.clear()
+    if not send({"cmd": "ping"}):
+        return False
+    ok = _pong.wait(wait)
+    print(f"[pointer] the pointer window {'answered' if ok else 'did not answer'}")
+    return ok
 
 
 def show(hit, label="", hold=HOLD):
@@ -257,20 +294,49 @@ def show(hit, label="", hold=HOLD):
                  "label": label or hit.get("name", ""), "hold": hold})
 
 
+def _screen_size():
+    if IS_WINDOWS:
+        try:
+            import ctypes
+            m = ctypes.windll.user32.GetSystemMetrics
+            return m(0), m(1)
+        except Exception:
+            pass
+    return 1920, 1080
+
+
 # ---------- tools ----------
 
 def point_at(a):
     what = str(a.get("target") or "").strip()
     if not what:
-        return "Say what to point at."
+        test_pointer()
+        return "The pointer is showing in the middle of his screen. Ask what he'd like you to point at."
     if not getattr(config, "POINTER", True):
         return "The pointer is turned off (POINTER in config.py)."
+    print(f"[pointer] looking for \"{what}\"")
     hit = locate(what)
     if not hit:
+        print(f"[pointer] couldn't find \"{what}\" (browser, UI Automation and on-screen text all tried)")
         return (f"I couldn't find \"{what}\" on his screen (it may be in a menu that isn't open, or scrolled away). "
                 "Say so and suggest where it usually is.")
     show(hit, a.get("label") or "", hold=float(a.get("seconds") or HOLD))
     return f"Pointing at \"{hit['name'][:60]}\" ({hit['how']}). Tell him what it is in a few words."
+
+
+def test_pointer(a=None):
+    """ "Show me your pointer": draws it in the middle of the screen, nothing to find."""
+    if not getattr(config, "POINTER", True):
+        return "The pointer is turned off (POINTER in config.py). Say so."
+    _dpi_aware()
+    w, h = _screen_size()
+    print(f"[pointer] test: showing the pointer in the middle of a {w}x{h} screen")
+    if not alive():
+        last = " | ".join(_heard[-4:]) or "nothing"
+        return ("The pointer window didn't start, so he can't see it. Its last words: " + last[:300] +
+                ". Say it didn't start and that the details are in the log.")
+    show({"x": w / 2 - 70, "y": h / 2 - 20, "w": 140, "h": 40, "name": "Jarvis pointer"}, hold=6)
+    return "The pointer is showing in the middle of his screen for 6 seconds. Ask if he can see it."
 
 
 def hide_pointer(a=None):
@@ -398,6 +464,13 @@ SKILLS = [
         "description": "Repeat or go back one step of the show_me_how guide ('go back', 'show me that again').",
         "parameters": {"type": "object", "properties": {}},
         "run": guide_back,
+    },
+    {
+        "name": "test_pointer",
+        "description": "Show your pointer in the middle of the screen so he can see it ('show me your pointer', "
+                       "'where's your mouse', 'test the pointer').",
+        "parameters": {"type": "object", "properties": {}},
+        "run": test_pointer,
     },
     {
         "name": "hide_pointer",

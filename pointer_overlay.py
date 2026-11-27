@@ -7,7 +7,10 @@ and sends one JSON command per line on stdin):
 
     {"cmd": "point", "x": 100, "y": 200, "w": 80, "h": 30, "label": "Save", "hold": 10}
     {"cmd": "hide"}
+    {"cmd": "ping"}      (answers "pong" on stdout)
     {"cmd": "quit"}
+
+Everything it prints goes to Jarvis's log as "[pointer] window: ...".
 
 Coordinates are real screen pixels (this process is DPI aware, like UI
 Automation and the OCR boxes). Run it alone to see a demo: python pointer_overlay.py --demo
@@ -31,16 +34,24 @@ FPS = 60
 ARROW = [(0, 0), (0, 36), (10, 28), (17, 43), (24, 40), (17, 25), (29, 25)]   # tip at (0, 0)
 
 
+def say(text):
+    print(text, flush=True)
+
+
 def _dpi_aware():
-    if IS_WINDOWS:
+    """How it became DPI aware (for the log)."""
+    if not IS_WINDOWS:
+        return "not Windows"
+    import ctypes
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        return "per-monitor"
+    except Exception:
         try:
-            import ctypes
-            ctypes.windll.shcore.SetProcessDpiAwareness(2)
-        except Exception:
-            try:
-                ctypes.windll.user32.SetProcessDPIAware()
-            except Exception:
-                pass
+            ctypes.windll.user32.SetProcessDPIAware()
+            return "system"
+        except Exception as e:
+            return f"none ({e})"
 
 
 def _virtual_screen(root):
@@ -63,6 +74,16 @@ def _click_through(root):
     LAYERED, TRANSPARENT, TOOLWINDOW, NOACTIVATE = 0x80000, 0x20, 0x80, 0x8000000
     style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
     user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style | LAYERED | TRANSPARENT | TOOLWINDOW | NOACTIVATE)
+    return hwnd
+
+
+def _to_front(hwnd):
+    """Windows: above every other window (even ones that are 'always on top' too), without taking focus."""
+    if not (IS_WINDOWS and hwnd):
+        return
+    import ctypes
+    HWND_TOPMOST, NOSIZE, NOMOVE, NOACTIVATE, SHOW = -1, 0x1, 0x2, 0x10, 0x40
+    ctypes.windll.user32.SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, NOSIZE | NOMOVE | NOACTIVATE | SHOW)
 
 
 def ease(t):
@@ -89,6 +110,7 @@ class Pointer:
     def __init__(self, root, commands):
         self.root, self.commands = root, commands
         self.ox, self.oy, sw, sh = _virtual_screen(root)
+        self.size = (sw, sh)
         root.overrideredirect(True)
         root.attributes("-topmost", True)
         root.configure(bg=KEY)
@@ -98,7 +120,8 @@ class Pointer:
         self.c = tk.Canvas(root, width=sw, height=sh, bg=KEY, highlightthickness=0, bd=0)
         self.c.pack()
         root.update_idletasks()
-        _click_through(root)
+        self.hwnd = _click_through(root)
+        self.drawn = False
         self.pos = (sw - 80.0, 60.0)       # starts near the orb's corner
         self.move = None                   # (start, end, t0, secs)
         self.target = None                 # (x, y, w, h, label) in canvas coords
@@ -114,6 +137,9 @@ class Pointer:
         if kind == "quit":
             self.root.destroy()
             sys.exit(0)
+        if kind == "ping":
+            say("pong")
+            return
         if kind == "hide":
             self.hide_at = time.time()
             return
@@ -127,7 +153,13 @@ class Pointer:
             self.root.deiconify()
             self.root.attributes("-topmost", True)
             self.root.attributes("-alpha", 1.0)
+            self.root.update_idletasks()
+            self.hwnd = _click_through(self.root) or self.hwnd   # showing again can drop the click-through style
             self.visible = True
+        _to_front(self.hwnd)
+        self.drawn = False
+        say(f"pointing at {int(x)},{int(y)} {int(w)}x{int(h)} (on a {self.size[0]}x{self.size[1]} window) "
+            f"label {self.target[4]!r}")
         dist = math.hypot(end[0] - self.pos[0], end[1] - self.pos[1])
         self.move = (self.pos, end, time.time(), max(0.5, min(1.1, dist / 1000)))
         self.shown_at = time.time()
@@ -135,6 +167,16 @@ class Pointer:
 
     # ----- drawing -----
     def tick(self):
+        try:
+            self._tick()
+        except SystemExit:
+            raise
+        except Exception:
+            import traceback
+            say("error: " + traceback.format_exc().strip().replace("\n", " | "))
+        self.root.after(1000 // FPS, self.tick)
+
+    def _tick(self):
         try:
             while True:
                 self.handle(self.commands.get_nowait())
@@ -156,10 +198,13 @@ class Pointer:
                 if fade <= 0:
                     self.root.withdraw()
                     self.visible, self.target = False, None
+                    say("hidden")
             if self.visible:
                 self.root.attributes("-alpha", fade)
                 self.draw(now, arrived)
-        self.root.after(1000 // FPS, self.tick)
+                if arrived and not self.drawn:
+                    self.drawn = True
+                    say(f"arrived and drawn at {int(self.pos[0])},{int(self.pos[1])}")
 
     def draw(self, now, arrived):
         c = self.c
@@ -203,11 +248,15 @@ def _read_stdin(q):
 
 
 def main():
-    _dpi_aware()
+    if tk is None:
+        say("error: tkinter isn't installed, so the pointer can't be drawn")
+        sys.exit(1)
+    dpi = _dpi_aware()
     q = queue.Queue()
     root = tk.Tk()
     root.title("Jarvis pointer")
-    Pointer(root, q)
+    p = Pointer(root, q)
+    say(f"ready: covers {p.size[0]}x{p.size[1]} from {p.ox},{p.oy}; DPI aware: {dpi}; Tk {tk.TkVersion}")
     if "--demo" in sys.argv:
         sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
         for i, (x, y, label) in enumerate([(sw * 0.2, sh * 0.3, "Here"), (sw * 0.6, sh * 0.6, "Then here")]):
