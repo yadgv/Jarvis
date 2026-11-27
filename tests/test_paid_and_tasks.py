@@ -191,3 +191,4 @@ def test_yes_to_claude_carries_into_the_job(bg, asking):
 def test_nothing_to_cancel(bg):
     assert "Nothing is running" in background.cancel_task({})
     assert "Nothing is running" in background.list_tasks()
+

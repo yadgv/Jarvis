@@ -208,3 +208,17 @@ def test_scrap_before_a_tool_call_isnt_spoken(brain, monkeypatch):
     brain.replies += [scrap_then_tool, says()]
     out = list(brain.llm.think_stream("remember my exam is on tuesday"))
     assert ran and out == ["Saved."]
+
+
+def test_background_job_is_not_started_again_by_the_next_brain(brain, monkeypatch):
+    """Groq started the 3D part, then hit a rate limit: the next model mustn't start it again."""
+    runs = []
+    monkeypatch.setitem(skills._BY_NAME, "make_3d_model", {
+        "run": lambda a: runs.append(a) or "Started in the background: Designing the 3D part. Tell him..."})
+    brain.replies += [calls_tool("make_3d_model", {"what": "arduino case"}),
+                      Resp(status=429, error="Rate limit reached"),
+                      says("Designing it now, sir.")]
+    out = list(brain.llm.think_stream("make me a 3D model of a case for the Arduino"))
+    assert out == ["Designing it now, sir."] and len(runs) == 1
+    names = {t["function"]["name"] for t in brain.sent[-1][1].get("tools", [])}
+    assert "make_3d_model" not in names

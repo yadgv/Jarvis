@@ -358,6 +358,14 @@ def _already_done(asked, tools_used):
             f"{'; '.join(tools_used)}]\n" + asked)
 
 
+def _started(tools_used) -> tuple:
+    """Tools that already started a background job this turn. A brain that fails
+    after starting one (a rate limit) must not leave the next brain free to start
+    it again: one 3D part asked for became three."""
+    return tuple(dict.fromkeys(t.split(" -> ", 1)[0] for t in tools_used
+                               if " -> Started in the background" in t))
+
+
 def _chain(asked, system, said, tools_used, exclude=(), history=None, can_ask=True):
     """Answer with the cheapest brain that works (providers.order()): Groq's
     free models, then OpenRouter's, then Claude. One that fails before saying
@@ -372,7 +380,7 @@ def _chain(asked, system, said, tools_used, exclude=(), history=None, can_ask=Tr
             for target in providers.free_targets(name):
                 try:
                     yield from _openai_turn(_already_done(asked, tools_used), system, said, tools_used,
-                                            exclude, history, target)
+                                            tuple(exclude) + _started(tools_used), history, target)
                     return
                 except Exception as e:
                     if said or network.is_network_error(e):
@@ -382,7 +390,7 @@ def _chain(asked, system, said, tools_used, exclude=(), history=None, can_ask=Tr
         elif name == "openrouter":
             try:
                 yield from _openai_turn(_already_done(asked, tools_used), system, said, tools_used,
-                                        exclude, history)
+                                        tuple(exclude) + _started(tools_used), history)
                 return
             except Exception as e:
                 if said or network.is_network_error(e):
@@ -404,7 +412,7 @@ def _chain(asked, system, said, tools_used, exclude=(), history=None, can_ask=Tr
                 continue
             try:
                 yield from _claude_turn(_already_done(asked, tools_used), system, said, tools_used,
-                                        exclude, **({"history": history} if history is not None else {}))
+                                        tuple(exclude) + _started(tools_used), **({"history": history} if history is not None else {}))
                 return
             except Exception as e:
                 # Only switch if nothing was spoken yet, so he never hears a reply twice.

@@ -18,6 +18,7 @@ from skills.quick_actions import log_tier
 
 IS_WINDOWS = sys.platform == "win32"
 INVOKE, VALUE, SELECTION_ITEM, TOGGLE = 10000, 10002, 10010, 10015
+ELEMENT_GONE = "-2147220992"  # UIA_E_ELEMENTNOTAVAILABLE (0x80040200): the control went away
 USEFUL = {"ButtonControl", "SplitButtonControl", "EditControl", "ComboBoxControl", "ListItemControl",
           "MenuItemControl", "HyperlinkControl", "CheckBoxControl", "RadioButtonControl", "TabItemControl",
           "TreeItemControl", "DataItemControl", "TextControl"}
@@ -265,7 +266,7 @@ def _started(win, tries=6):
     return False
 
 
-def _play_in_app(app, query, wait):
+def _play_in_app(app, query, wait, retry=True):
     def give_up(why):
         print(f"[pc] tier 2 music: {why}; falling back to screen control")
         return None
@@ -326,6 +327,11 @@ def _play_in_app(app, query, wait):
             return _name(hit)
         return give_up("picked a result but it didn't start playing")
     except Exception as e:
+        if retry and ELEMENT_GONE in str(e):
+            # The window redrew while we read it (the app was still opening): read it again once.
+            print("[pc] tier 2 music: the window changed under us; trying once more")
+            time.sleep(1.0)
+            return _play_in_app(app, query, wait, retry=False)
         print(f"[pc] tier 2 music failed ({e}); falling back to screen control")
     return None
 
