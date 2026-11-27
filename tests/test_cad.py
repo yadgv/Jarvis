@@ -175,3 +175,12 @@ def test_design_skips_chatty_models_and_falls_back_to_claude(monkeypatch):
     monkeypatch.setattr(cad, "_last", {"path": None, "code": None, "what": None})
     code = cad.design("phone stand")
     assert code.startswith("// Phone stand") and asked and asked[0]["model"] == config.LLM_MODEL
+
+
+def test_part_named_only_in_name_or_details(model, monkeypatch):
+    """A model sent {'name': 'arduino_case', 'details': ...} with no 'what'; that's still a part."""
+    monkeypatch.setattr(cad, "_exe", lambda: None)
+    out = cad.make_3d_model({"name": "arduino_case", "details": "with USB cutout"})
+    assert "Say what part to make" not in out
+    assert "arduino case" in model[0][1]
+    assert "Say what part to make" in cad.make_3d_model({})

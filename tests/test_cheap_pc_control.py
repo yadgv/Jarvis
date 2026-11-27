@@ -181,3 +181,22 @@ def test_use_computer_says_last_resort():
     desc = next(s for s in skills.SKILLS if s["name"] == "use_computer")["description"]
     assert desc.startswith("LAST RESORT") and "app_controls" in desc and "open_website" in desc
     assert config.MUSIC_APP
+
+
+def test_tier_two_reads_the_window_again_if_it_changed(desktop, monkeypatch, capsys):
+    """Apple Music still opening: UI Automation says the element went away (0x80040200)."""
+    calls = []
+    real = ui_automation._walk
+
+    def flaky(top):
+        if not calls:
+            calls.append(1)
+            raise OSError(-2147220992, None, (None, None, None, 0, None))
+        return real(top)
+    monkeypatch.setattr(ui_automation, "_walk", flaky)
+    monkeypatch.setattr(music.pc_control, "open_app", lambda a: "Opened apple music.")
+    monkeypatch.setattr(music.time, "sleep", lambda s: None)
+    monkeypatch.setattr(music.computer, "use_computer", lambda a: "Playing via screen.")
+    music.play_music({"query": "Some Unknown Song"})
+    out = capsys.readouterr().out
+    assert "trying once more" in out and "no result named like" in out

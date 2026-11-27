@@ -169,8 +169,9 @@ def _preview(exe, scad, title):
 
 def make_3d_model(a):
     from skills import files
-    what = (a.get("what") or "").strip()
+    # Some models put the part only in "name" or "details" ("arduino_case").
     change = (a.get("change") or "").strip()
+    what = (a.get("what") or ("" if change else a.get("name") or a.get("details") or "")).replace("_", " ").strip()
     if change and not _last["code"]:
         return "There's no part to change yet. Ask what to make."
     if not what and not change:
