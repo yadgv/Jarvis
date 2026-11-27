@@ -70,7 +70,11 @@ def quiz_me(a):
             from skills import files
             notes, err = files.file_text(a["file"])
             if err:
-                return err
+                # "a thermo quiz": no file called that, so quiz him on the subject instead
+                source = re.sub(r"\b(?:notes?|file|lecture|slides?|doc(?:ument)?)\b", "", str(a["file"]),
+                                flags=re.I).strip(" .-_") or source
+                print(f"[study] no notes file \"{a['file']}\" ({err[:80]}); quizzing on the topic \"{source}\"")
+                notes = ""
         if not notes and not source:
             return "Ask him which notes file or topic to be quizzed on."
         from brain import llm

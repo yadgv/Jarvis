@@ -74,7 +74,13 @@ def run_scenario(scenario, rec, delay):
     lines, used, ended = [], [], ""
     asked = False
     for turn in range(scenario.get("turns", 5)):
-        said = next_line(scenario, lines, delay)
+        try:
+            said = next_line(scenario, lines, delay)
+        except Exception as e:
+            if not lines:
+                raise                      # nothing ran: the caller marks it skipped
+            ended = f"stopped early: no free models ({str(e)[:100]})"
+            break
         if not said:
             ended = "he finished"
             break
@@ -101,7 +107,10 @@ def run_scenario(scenario, rec, delay):
         time.sleep(delay)
     else:
         ended = "ran out of turns"
-    grade = judge(scenario, lines, delay) if lines else {"goal_done": False, "score": 1, "problems": ["no talk"]}
+    try:
+        grade = judge(scenario, lines, delay) if lines else {"goal_done": False, "score": 1, "problems": ["no talk"]}
+    except Exception as e:
+        grade = {"goal_done": None, "score": None, "problems": [f"not graded: no free models ({str(e)[:100]})"]}
     missing = [t for t in scenario.get("expect", []) if t not in used]
     bad = [t for t in scenario.get("avoid", []) if t in used]
     problems = ([f"never used {', '.join(missing)}"] if missing else []) + \
@@ -109,13 +118,24 @@ def run_scenario(scenario, rec, delay):
                [p for p in grade["problems"]]
     errors = [text for who, text, _ in lines if who == "Jarvis" and text.startswith("(error")]
     ok = not missing and not bad and not errors and grade["goal_done"] is not False and (grade["score"] or 0) >= 3
-    return {"id": scenario["id"], "goal": scenario["goal"], "ok": ok, "score": grade["score"],
+    if ok is False and not (missing or bad or errors) and grade["score"] is None and (
+            "stopped early" in ended or any(p.startswith("not graded") for p in grade["problems"])):
+        ok = None                          # cut short by the free models, not by Jarvis: not a fail
+    out = "stopped early" in ended or any(p.startswith("not graded: no free models") for p in grade["problems"])
+    return {"id": scenario["id"], "goal": scenario["goal"], "ok": ok, "score": grade["score"], "out_of_models": out,
             "goal_done": grade["goal_done"], "ended": ended, "tools": used, "problems": problems,
             "transcript": [{"who": w, "said": t, "tools": tl} for w, t, tl in lines]}
 
 
+def skipped(scenario, why):
+    return {"id": scenario["id"], "goal": scenario["goal"], "ok": None, "score": None, "goal_done": None,
+            "ended": why, "tools": [], "problems": [why], "transcript": []}
+
+
 def report(results, folder=None):
-    passed = sum(r["ok"] for r in results)
+    ran = [r for r in results if r["ok"] is not None]
+    passed = sum(bool(r["ok"]) for r in ran)
+    skips = len(results) - len(ran)
     scores = [r["score"] for r in results if isinstance(r["score"], (int, float))]
     avg = f"{sum(scores) / len(scores):.1f}/5" if scores else "n/a"
     stamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
@@ -123,11 +143,15 @@ def report(results, folder=None):
     os.makedirs(folder, exist_ok=True)
     base = os.path.join(folder, f"{stamp}_talk")
     with open(base + ".json", "w", encoding="utf-8") as f:
-        json.dump({"when": stamp, "passed": passed, "total": len(results), "average": avg, "talks": results},
+        json.dump({"when": stamp, "passed": passed, "total": len(ran), "skipped": skips, "average": avg,
+                   "talks": results},
                   f, indent=1)
-    lines = [f"# Jarvis talks to Jarvis, {stamp}", "", f"**Passed {passed}/{len(results)}, average grade {avg}**", ""]
+    skip_note = f", {skips} skipped (no free models left)" if skips else ""
+    lines = [f"# Jarvis talks to Jarvis, {stamp}", "",
+             f"**Passed {passed}/{len(ran)}{skip_note}, average grade {avg}**", ""]
     for r in results:
-        lines += [f"## {'✅' if r['ok'] else '❌'} {r['id']} (grade {r['score']}, {r['ended']})", "",
+        mark = "⏭️" if r["ok"] is None else "✅" if r["ok"] else "❌"
+        lines += [f"## {mark} {r['id']} (grade {r['score']}, {r['ended']})", "",
                   f"Goal: {r['goal']}", ""]
         lines += [f"- {p}" for p in r["problems"]] + ([""] if r["problems"] else [])
         for t in r["transcript"]:
@@ -136,8 +160,8 @@ def report(results, folder=None):
         lines.append("")
     with open(base + ".md", "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
-    print(f"\nPassed {passed}/{len(results)}, average grade {avg}. Report: {base}.md")
-    return passed, len(results)
+    print(f"\nPassed {passed}/{len(ran)}{skip_note}, average grade {avg}. Report: {base}.md")
+    return passed, len(ran)
 
 
 def run(scenarios, delay):
@@ -145,10 +169,26 @@ def run(scenarios, delay):
     real = (skills.run, sight.read, documents.last)
     skills.run = rec
     results = []
+    out_of_models = ""
     try:
         for s in scenarios:
+            if out_of_models:
+                results.append(skipped(s, out_of_models))
+                continue
             print(f"\n== {s['id']}: {s['goal']}")
-            results.append(run_scenario(s, rec, delay))
+            try:
+                r = run_scenario(s, rec, delay)
+                results.append(r)
+                if r.pop("out_of_models", ""):
+                    out_of_models = "skipped: no free models left (they ran out during an earlier talk)"
+            except KeyboardInterrupt:
+                print("\nStopped: writing the report of what ran so far.")
+                break
+            except Exception as e:
+                # Every free model is resting (rate limits, used-up daily quotas): don't crash, say so.
+                out_of_models = f"skipped: no free models ({type(e).__name__}: {str(e)[:160]})"
+                print(f"  {out_of_models}")
+                results.append(skipped(s, out_of_models))
     finally:
         skills.run, sight.read, documents.last = real
         sight.last.update(title="", url="", text="", at=0.0)

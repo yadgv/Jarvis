@@ -144,12 +144,39 @@ def error_text(r) -> str:
     return str(err or j or r.text)
 
 
+_NO_STREAM = set()   # servers that answered a stream request with a bare "OK": asked without streaming instead
+
+
+def _chunks(response, who, messages, exclude, target, key):
+    """The stream's chunks. A server that answers a streamed request with a bare 200 "OK" (seen from GitHub
+    Models) is asked once more without streaming; if that works it's never streamed to again."""
+    try:
+        first = True
+        for chunk in _events(response, who):
+            first = False
+            yield chunk
+        return
+    except ProviderError as e:
+        if not (first and getattr(e, "status", None) == "empty" and target
+                and (target.get("extra") or {}).get("stream") is not False):
+            raise
+        print(f"[brain] {who} gave an empty streamed answer ({str(e)[:80]}); asking again without streaming")
+    plain = dict(target, extra=dict(target.get("extra") or {}, stream=False))
+    for chunk in _events(_post(messages, exclude, plain), who):
+        _NO_STREAM.add(key)
+        yield chunk
+
+
 def stream_round(messages, exclude=(), target=None):
     """One model call. Yields ("text", piece) while it streams, then
     ("done", (text, tool_calls, model_used)). tool_calls are OpenAI-format dicts."""
+    who = (target or {}).get("who") or "OpenRouter"
+    key = (target or {}).get("rest_key") or who
+    if target and key in _NO_STREAM:
+        target = dict(target, extra=dict(target.get("extra") or {}, stream=False))
     response = _post(messages, exclude, target)
     text, calls, model = "", {}, None
-    for chunk in _events(response, (target or {}).get("who") or "OpenRouter"):
+    for chunk in _chunks(response, who, messages, exclude, target, key):
         model = chunk.get("model") or model
         for choice in chunk.get("choices", []):
             delta = choice.get("delta") or {}

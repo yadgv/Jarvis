@@ -172,10 +172,21 @@ def _strip_ignore(sentence: str) -> str:
     out = re.sub(r"\s*\[ignore\]\s*", " ", sentence, flags=re.I)
     out = _STAGE.sub(" ", out)
     out = re.sub(r"\*\*|__|^\s*#+\s+", "", out)
+    if out.endswith("]") and "[" not in out:
+        out = out[:-1]                                           # the end of a copied "[tools used: ...]" note
     out = re.sub(r"[ \t]{2,}", " ", out).strip()
     if out != sentence.strip() and _STAGE.search(sentence):
         print(f"[brain] not spoken (a stage direction): {sentence[:120]}")
     return out
+
+
+def _repeat_label(sentence: str, said) -> bool:
+    """ "Next question: ..." twice in one reply: only the first is said."""
+    m = re.match(r"\s*([A-Za-z][\w ]{2,20}):\s", sentence)
+    if m and any(re.match(rf"\s*{re.escape(m.group(1))}:\s", s, re.I) for s in said):
+        print(f"[brain] not spoken (a second \"{m.group(1)}:\"): {sentence[:100]}")
+        return True
+    return False
 
 
 def _speakable(sentence: str) -> bool:
@@ -216,11 +227,15 @@ def _sentences(pieces, said, tail=None):
         while (m := _first_break(buf, said)):
             sentence = _strip_ignore(buf[: m.end()].strip())
             buf = buf[m.end():]
-            if sentence and _speakable(sentence):
+            if sentence.lower().startswith("[tools used:"):
+                print(f"[brain] dropped a copied tool note from the reply: {sentence[:100]}")
+                muted, buf = True, ""
+                break
+            if sentence and _speakable(sentence) and not _repeat_label(sentence, said):
                 said.append(sentence)
                 yield sentence
     buf = _strip_ignore(buf.strip())
-    if buf and not muted and _speakable(buf):
+    if buf and not muted and _speakable(buf) and not _repeat_label(buf, said):
         if tail is not None:
             tail.append(buf.strip())
             return

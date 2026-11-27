@@ -58,6 +58,7 @@ RESULTS = {
     "canvas_due": "Due this week: Thermo lab report (Thu 11:59 PM), Calculus problem set 8 (Fri 5 PM).",
     "canvas_download": "Downloaded 6 new files to Documents/School.",
     "quiz_me": "Quiz ready. First question: What does the first law of thermodynamics say about energy?",
+    "quiz_next": "Correct. Next question: What is an adiabatic process?",
     "set_reminder": "Reminder set.",
     "set_timer": "Timer set.",
     "set_alarm": "Alarm set for 7:00 AM tomorrow.",

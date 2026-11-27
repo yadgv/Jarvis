@@ -178,7 +178,8 @@ _APPS = _re.compile(r"\b(claude code|(?:build|make|code|write|create) (?:me )?(?
                     r"calculator|timer app)|my [\w -]{1,25} app)\b", _re.I)
 APP_TOOLS = ("plan_new_app", "plan_claude_code_task", "start_claude_code_task", "claude_code_status")
 # A tool used last turn that needs another one when he says yes.
-FOLLOW_UPS = {"plan_new_app": ("start_claude_code_task",), "plan_claude_code_task": ("start_claude_code_task",)}
+FOLLOW_UPS = {"plan_new_app": ("start_claude_code_task",), "plan_claude_code_task": ("start_claude_code_task",),
+              "quiz_me": ("quiz_next",), "quiz_next": ("quiz_next",)}   # his answer needs quiz_next
 FILE_TOOLS = ("make_file", "find_files", "read_file", "open_file", "organize_folder", "file_action", "undo_files")
 
 
@@ -412,6 +413,12 @@ def pick_tools(text, limit=12, exclude=()):
         keep |= {"read_clipboard", "copy_to_clipboard"}
     if _STUDY.search(text or ""):
         keep |= {"quiz_me", "quiz_next", "pomodoro", "find_files"}
+    try:
+        from skills import study
+        if study._quiz["cards"]:
+            keep.add("quiz_next")          # a quiz is running: whatever he says may be his answer
+    except Exception:
+        pass
     if _CANVAS.search(text or ""):
         keep |= set(CANVAS_TOOLS)
     if re.search(r"\b(?:test|try)\b.*\b(?:phone|call|telegram|alerts?)\b", text or "", re.I):
