@@ -83,7 +83,7 @@ def test_show_me_how_steps(monkeypatch, no_overlay):
         return json.dumps(plan)
     monkeypatch.setattr(llm, "complete", complete)
     found = {"Insert": True, "Slide Number": False, "Apply to All": True}
-    monkeypatch.setattr(pointer, "locate", lambda t: {"x": 1, "y": 2, "w": 3, "h": 4, "name": t, "how": "x"}
+    monkeypatch.setattr(pointer, "locate", lambda t, others=True: {"x": 1, "y": 2, "w": 3, "h": 4, "name": t, "how": "x"}
                         if found.get(t) else None)
     out = pointer.show_me_how({"task": "add slide numbers"})
     assert "Step 1 of 3: Click Insert" in out and "Header & Footer" in seen["user"]
@@ -279,7 +279,7 @@ def test_a_click_on_the_target_finishes_the_step(monkeypatch):
 def test_doing_a_step_moves_the_pointer_and_speaks_the_next(monkeypatch, no_overlay):
     said = []
     monkeypatch.setattr(pointer, "announce", said.append)
-    monkeypatch.setattr(pointer, "locate", lambda t: {"x": 1, "y": 2, "w": 3, "h": 4, "name": t, "how": "x"})
+    monkeypatch.setattr(pointer, "locate", lambda t, others=True: {"x": 1, "y": 2, "w": 3, "h": 4, "name": t, "how": "x"})
     pointer.guide.update(task="t", steps=[{"target": "File", "say": "Click File.", "do": "click"},
                                           {"target": "New File...", "say": "Now click New File.", "do": "click"}],
                          i=0, at=time.time(), gen=1)
@@ -287,3 +287,30 @@ def test_doing_a_step_moves_the_pointer_and_speaks_the_next(monkeypatch, no_over
     assert said == ["Now click New File."] and no_overlay[-1]["label"] == "2/2  New File..."
     pointer._auto_next()
     assert said[-1] == "That's it, sir. All done." and no_overlay[-1] == {"cmd": "hide"} and not pointer.guide_active()
+
+
+def test_ocr_skips_jarvis_own_windows():
+    words = [(0, "New", 1640, 90, 20, 10), (0, "File", 1662, 90, 20, 10),     # in his text panel
+             (1, "New", 200, 300, 20, 10), (1, "File...", 222, 300, 30, 10)]  # the real menu
+    mine = [(1500, 0, 1920, 200)]
+    kept = [w for w in words if not pointer.covered(w, mine)]
+    assert pointer.ocr_match(kept, "New File...")[:2] == (200, 300)
+
+
+def test_guide_steps_look_only_in_his_window(monkeypatch):
+    asked = []
+    monkeypatch.setattr(pointer, "locate", lambda what, others=True: asked.append(others) or None)
+    monkeypatch.setattr(pointer, "focused_box", lambda: {"x": 1, "y": 2, "w": 50, "h": 20, "name": "box", "how": "focus"})
+    assert pointer._find_step({"target": "New File...", "do": "click"}) is None
+    assert pointer._find_step({"target": "file name", "do": "type"})["how"] == "focus"   # the box he's typing in
+    assert asked == [False, False]
+
+
+def test_two_watchers_move_on_once(monkeypatch):
+    moved = []
+    monkeypatch.setattr(pointer, "SETTLE", 0)
+    monkeypatch.setattr(pointer, "_auto_next", lambda: moved.append(1))
+    pointer.guide.update(task="t", steps=[{"target": "a", "say": "", "do": "type"}], i=0, at=time.time(), gen=3)
+    pointer._done(3, pointer.guide["steps"][0])
+    pointer._done(3, pointer.guide["steps"][0])
+    assert moved == [1]

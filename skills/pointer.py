@@ -95,21 +95,43 @@ def _uia_candidates(hwnd):
             tops.append(tray)
     except Exception:
         pass
+    try:
+        menu = auto.MenuControl(searchDepth=1, ClassName="#32768")      # a native right-click menu
+        if menu.Exists(0, 0):
+            tops.insert(0, menu)
+    except Exception:
+        pass
+    import itertools
+    walks = [_menu_items(t) for t in tops] + [ui_automation._walk(t) for t in tops]   # open menus first
     out = []
-    for top in tops:
-        for c in ui_automation._walk(top):
-            name = ui_automation._name(c)
-            if not name:
-                continue
-            try:
-                r = c.BoundingRectangle
-                box = (r.left, r.top, r.right - r.left, r.bottom - r.top)
-            except Exception:
-                continue
-            if box[2] < 3 or box[3] < 3:
-                continue
-            out.append((name, ui_automation._kind(c), box))
+    for c in itertools.chain(*walks):
+        name = ui_automation._name(c)
+        if not name:
+            continue
+        try:
+            r = c.BoundingRectangle
+            box = (r.left, r.top, r.right - r.left, r.bottom - r.top)
+        except Exception:
+            continue
+        if box[2] < 3 or box[3] < 3:
+            continue
+        out.append((name, ui_automation._kind(c), box))
     return out
+
+
+def _menu_items(top):
+    """The menu items under top, found by Windows itself (fast): an open menu is often the last thing in a
+    big window like VS Code, past where walking every control stops."""
+    import uiautomation as auto
+    try:
+        ua = auto._AutomationClient.instance().IUIAutomation
+        cond = ua.CreatePropertyCondition(auto.PropertyId.ControlTypeProperty, auto.ControlType.MenuItemControl)
+        found = top.Element.FindAll(auto.TreeScope.Descendants, cond)
+        items = [auto.Control.CreateControlFromElement(found.GetElement(i)) for i in range(min(found.Length, 200))]
+        return [c for c in items if c is not None and not getattr(c, "IsOffscreen", False)]
+    except Exception as e:
+        print(f"[pointer] couldn't list menu items: {type(e).__name__}: {e}")
+        return []
 
 
 def best_match(candidates, what):
@@ -190,21 +212,78 @@ def find_with_ocr(what, hwnd):
     except Exception as e:
         print(f"[pointer] couldn't capture the screen for text search: {e}")
         return None
-    hit = ocr_match(sight.ocr_words(img, offset), what)
+    mine = own_rects()
+    hit = ocr_match([w for w in sight.ocr_words(img, offset) if not covered(w, mine)], what)
     if not hit:
         return None
     x, y, w, h, text = hit
     return {"x": x, "y": y, "w": w, "h": h, "name": text, "how": "text on screen"}
 
 
-def locate(what):
+def covered(word, rects):
+    """Is this OCR word (line, text, x, y, w, h) inside one of the rects (x1, y1, x2, y2)?"""
+    cx, cy = word[2] + word[4] / 2, word[3] + word[5] / 2
+    return any(x1 <= cx <= x2 and y1 <= cy <= y2 for x1, y1, x2, y2 in rects)
+
+
+def own_rects():
+    """Where Jarvis's own windows are (the orb, its text panel, the whiteboard...): what he says there
+    ("click New File") must never be mistaken for the real button."""
+    if not IS_WINDOWS:
+        return []
+    try:
+        import ctypes
+        from ctypes import wintypes
+        user32 = ctypes.windll.user32
+        me = os.getpid()
+        out = []
+
+        @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+        def each(hwnd, _):
+            pid = wintypes.DWORD()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            if pid.value == me and user32.IsWindowVisible(hwnd):
+                r = wintypes.RECT()
+                user32.GetWindowRect(hwnd, ctypes.byref(r))
+                out.append((r.left, r.top, r.right, r.bottom))
+            return True
+        user32.EnumWindows(each, 0)
+        return out
+    except Exception as e:
+        print(f"[pointer] couldn't find Jarvis's own windows: {e}")
+        return []
+
+
+def focused_box():
+    """The text box he's typing in right now (for "type the name" steps): {x, y, w, h, name, how} or None."""
+    if not IS_WINDOWS:
+        return None
+    try:
+        from skills import ui_automation
+        import uiautomation as auto
+
+        def get():
+            c = auto.GetFocusedControl()
+            if c is None or ui_automation._kind(c) not in ("EditControl", "ComboBoxControl", "DocumentControl"):
+                return None
+            r = c.BoundingRectangle
+            w, h = r.right - r.left, r.bottom - r.top
+            if w < 4 or h < 4 or h > 200:
+                return None
+            return {"x": r.left, "y": r.top, "w": w, "h": h, "name": "the box you're typing in", "how": "focus"}
+        return ui_automation._in_thread(get)
+    except Exception:
+        return None
+
+
+def locate(what, others=True):
     """Where the thing he means is on screen: {x, y, w, h, name, how} or None."""
     _dpi_aware()
     from skills import sight
     hwnd, title = sight.front_window()
     print(f"[pointer] searching the window \"{title[:60]}\"")
     finders = [lambda: find_in_browser(what), lambda: find_with_uia(what, hwnd), lambda: find_with_ocr(what, hwnd)]
-    for other, other_title in _other_windows(hwnd):      # then the windows behind it (Brave behind VS Code)
+    for other, other_title in (_other_windows(hwnd) if others else []):      # then the windows behind it (Brave behind VS Code)
         finders.append(lambda o=other, t=other_title: (print(f"[pointer] trying \"{t[:60]}\"")
                                                         or find_with_uia(what, o)))
     for finder in finders:
@@ -467,7 +546,7 @@ def _do_step():
         step = steps[i]
         guide["at"] = time.time()
         guide["gen"] = gen = guide.get("gen", 0) + 1
-    hit = locate(step["target"])
+    hit = _find_step(step)
     where = ""
     if hit:
         _show_step(hit, i, len(steps), step)
@@ -483,6 +562,14 @@ def _do_step():
     else:
         tail = "; he says \"next\" when he's done it. Don't list the later steps."
     return f"Step {i + 1} of {len(steps)}: {step['say'] or step['target']}{where}. Say that instruction to him{tail}"
+
+
+def _find_step(step):
+    """A step's target, in the window he's working in only (never Claude or a browser behind it)."""
+    hit = locate(step["target"], others=False)
+    if hit is None and step["do"] == "type":
+        hit = focused_box()
+    return hit
 
 
 def _show_step(hit, i, n, step):
@@ -540,12 +627,16 @@ def wait_for_step(gen, step, hit, poll=0.04):
 
 def _watch(gen, step, hit):
     try:
+        if hit is None and step["do"] == "type":      # can't see the box: pressing Enter still finishes it
+            enter = threading.Thread(target=lambda: wait_for_step(gen, step, None) and _done(gen, step),
+                                     daemon=True)
+            enter.start()
         if hit is None:                        # it may appear later (a menu opening): keep looking a while
             until = time.time() + FIND_FOR
             while _current(gen) and time.time() < until and hit is None:
                 time.sleep(1.5)
                 if _current(gen):
-                    hit = locate(step["target"])
+                    hit = _find_step(step)
             if hit is None or not _current(gen):
                 return
             with _glock:
@@ -554,16 +645,24 @@ def _watch(gen, step, hit):
                 i, n = guide["i"], len(guide["steps"])
             _show_step(hit, i, n, step)
         if wait_for_step(gen, step, hit):
-            print(f"[pointer] he did step {guide['i'] + 1} ({step['do']} {step['target']!r}): moving on")
-            time.sleep(SETTLE)
-            if _current(gen):
-                _auto_next()
+            _done(gen, step)
     except Exception as e:
         print(f"[pointer] the step watcher failed: {type(e).__name__}: {e}")
 
 
+def _done(gen, step):
+    with _glock:
+        if guide.get("gen") != gen or guide.get("done") == gen:
+            return                             # already moved on (two watchers, or he said "next")
+        guide["done"] = gen
+    print(f"[pointer] he did step {guide['i'] + 1} ({step['do']} {step['target']!r}): moving on")
+    time.sleep(SETTLE)
+    if _current(gen):
+        _auto_next()
+
+
 def _start_watch(gen, step, hit):
-    if not IS_WINDOWS or step["do"] == "look" and hit is not None:
+    if not IS_WINDOWS or (step["do"] == "look" and hit is not None):
         return
     threading.Thread(target=_watch, args=(gen, step, hit), daemon=True, name="guide-watch").start()
 
