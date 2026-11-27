@@ -7,6 +7,8 @@
   CALLMEBOT_USER is set), so he doesn't miss it.
 Needs the Telegram bot set up (telegram_bot.py).
 """
+import os
+import re
 import time
 from urllib.parse import quote
 
@@ -108,7 +110,105 @@ def test_phone(a=None):
             + " He has 2 minutes to tap; the result shows on Telegram and in the log.")
 
 
+TELEGRAM_FILE_LIMIT = 50 * 1024 * 1024    # a bot can send files up to 50 MB
+_URL = re.compile(r"https?://\S+")
+
+
+def _what(request: str, a: dict) -> str:
+    """What he wants sent: link, file, deck, brief, screen or text."""
+    kind = str(a.get("what") or "").lower().strip()
+    if kind:
+        return kind
+    r = request.lower()
+    if re.search(r"\b(?:link|url|address|website|page|site|tab)\b", r):
+        return "link"
+    if re.search(r"\b(?:slides?|deck|presentation|powerpoint|script|document|doc|essay|report)\b", r):
+        return "deck"
+    if re.search(r"\bbrief|summary|key points\b", r):
+        return "brief"
+    if re.search(r"\b(?:file|pdf|picture|photo|image)\b", r):
+        return "file"
+    return "text" if a.get("text") else "screen"
+
+
+def _send_path(path: str, caption: str) -> str:
+    import telegram_bot
+    size = os.path.getsize(path)
+    if size > TELEGRAM_FILE_LIMIT:
+        return f"{os.path.basename(path)} is {size // (1024 * 1024)} MB, too big for Telegram (50 MB). Say so."
+    telegram_bot.send_file(path, caption)
+    print(f"[phone] sent the file {path} to Telegram")
+    return f"Sent {os.path.basename(path)} to his phone (Telegram)."
+
+
+def send_to_phone(a=None):
+    """ "Send this link to my phone", "send me the slides", "text me that": a Telegram message or file now."""
+    import telegram_bot
+    a = a or {}
+    if not (telegram_bot._token() and telegram_bot._allowed()):
+        return ("I can't send to his phone: the Telegram bot isn't set up (TELEGRAM_BOT_TOKEN and "
+                "TELEGRAM_ALLOWED_IDS in .env). Say so.")
+    request = str(a.get("request") or "")
+    text = str(a.get("text") or "").strip()
+    kind = _what(request, a)
+    try:
+        if a.get("file"):
+            from skills import files
+            path, err = files._find_one(str(a["file"]))
+            return _send_path(path, str(a.get("caption") or "")) if path else err
+        if text and kind == "text":
+            telegram_bot.notify(text)
+            print(f"[phone] sent a message to Telegram: {text[:80]}")
+            return "Sent it to his phone (Telegram)."
+        if kind == "deck":
+            from skills import documents
+            doc, err = documents.find_doc(str(a.get("name") or ""))   # open in PowerPoint/Word, else the last made
+            if doc and doc.get("path"):
+                return _send_path(doc["path"], (doc.get("spec") or {}).get("title", ""))
+            return err or "There's no deck or document of his to send yet. Ask which file."
+        if kind == "brief":
+            from skills import workspace
+            if workspace._ws.get("file") and os.path.exists(workspace._ws["file"]):
+                return _send_path(workspace._ws["file"], workspace._ws.get("title", ""))
+            if workspace._ws.get("doc"):
+                telegram_bot.notify(re.sub(r"<[^>]+>", "", workspace._ws["doc"])[:3900])
+                return "Sent the brief to his phone (Telegram)."
+            return "There's no brief to send. Offer to brief what's on his screen first."
+        from skills import sight
+        seen = sight.read()
+        url = seen.get("url") or ""
+        if not url:
+            m = _URL.search(text or seen.get("text") or "")
+            url = m.group(0) if m else ""
+        if kind == "link" or (kind == "screen" and url):
+            if not url:
+                return "I couldn't see a web address on his screen. Ask him to open the page in his browser."
+            telegram_bot.notify(f"{seen.get('title') or 'Link'}\n{url}")
+            print(f"[phone] sent the link to Telegram: {url}")
+            return f"Sent the link to his phone (Telegram): {seen.get('title') or url}."
+        body = text or (seen.get("selection") or seen.get("text") or "").strip()
+        if not body:
+            return "There's nothing to send. Ask what he'd like on his phone."
+        telegram_bot.notify(((seen.get("title") + "\n\n") if seen.get("title") and not text else "") + body[:3900])
+        return "Sent it to his phone (Telegram)."
+    except Exception as e:
+        print(f"[phone] couldn't send to Telegram: {type(e).__name__}: {e}")
+        return f"Sending to his phone failed ({type(e).__name__}: {str(e)[:120]}). Say so; don't say it was sent."
+
+
 SKILLS = [
+    {
+        "name": "send_to_phone",
+        "description": ("Send something to his phone now on Telegram: the link of the page he's on, a file, his "
+                        "slides or document, the brief, or any text (a list, an address, a note). Use for 'send "
+                        "this to my phone', 'text me the link', 'send me the slides', 'put that on my phone'. "
+                        "Never say something was sent unless this tool said so."),
+        "parameters": {"type": "object", "properties": {
+            "what": {"type": "string", "enum": ["link", "text", "file", "deck", "brief", "screen"]},
+            "text": {"type": "string", "description": "the words to send, when he wants a note or list"},
+            "file": {"type": "string", "description": "a file name or path, when he names a file"}}},
+        "run": send_to_phone,
+    },
     {
         "name": "test_phone_alerts",
         "description": ("Send a test phone alert now: an Approve/Deny message on Telegram, plus a phone call "

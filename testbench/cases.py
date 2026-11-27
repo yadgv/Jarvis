@@ -184,4 +184,11 @@ CASES = [
     {"id": "pointer-where-search-bar", "turns": [
         {"say": "Can you show me where the search bar is?", "tool": "point_at"},
         {"say": "Can you point to it?", "tool": "point_at", "not": ["test_pointer"]}]},
+    # ---------- sending to his phone ----------
+    {"id": "phone-send-link", "screen": "cbc", "turns": [
+        {"say": "Can you send this link to my phone?", "tool": "send_to_phone"}]},
+    {"id": "phone-send-slides", "last_doc": True, "turns": [
+        {"say": "Send the slides to my phone", "tool": "send_to_phone", "not": ["test_phone_alerts"]}]},
+    {"id": "phone-send-list", "turns": [
+        {"say": "Send my shopping list to my phone: milk, eggs and bread", "tool": "send_to_phone"}]},
 ]

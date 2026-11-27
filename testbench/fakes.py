@@ -59,6 +59,7 @@ RESULTS = {
     "canvas_download": "Downloaded 6 new files to Documents/School.",
     "quiz_me": "Quiz ready. First question: What does the first law of thermodynamics say about energy?",
     "quiz_next": "Correct. Next question: What is an adiabatic process?",
+    "send_to_phone": "Sent it to his phone (Telegram).",
     "set_reminder": "Reminder set.",
     "set_timer": "Timer set.",
     "set_alarm": "Alarm set for 7:00 AM tomorrow.",
