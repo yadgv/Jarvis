@@ -7,6 +7,7 @@ bought $10 of OpenRouter credits at any point). One spoken reply that uses a
 tool counts as two requests.
 """
 import json
+import threading
 
 import requests
 
@@ -77,6 +78,7 @@ def _post(messages, exclude=(), target=None):
                     t["function"].pop("parameters", None)
     body.update(target.get("extra") or {})
     who = target.get("who", "Local model")
+    _sent[threading.get_ident()] = (who, len(json.dumps(body, ensure_ascii=False)))
     r = requests.post(target["url"], headers=target.get("headers") or {}, json=body, stream=True,
                       timeout=target.get("timeout") or (CONNECT_TIMEOUT, 60))
     if r.status_code != 200:
@@ -144,6 +146,9 @@ def error_text(r) -> str:
     return str(err or j or r.text)
 
 
+_sent = {}         # thread -> (who, characters sent) of its last request, for the token count
+
+
 _NO_STREAM = set()   # servers that answered a stream request with a bare "OK": asked without streaming instead
 
 
@@ -198,6 +203,11 @@ def stream_round(messages, exclude=(), target=None):
     tool_calls = [calls[i] for i in sorted(calls)]
     for i, c in enumerate(tool_calls):
         c["id"] = c["id"] or f"call_{i}"
+    sent = _sent.pop(threading.get_ident(), None)
+    if sent:
+        from brain import usage
+        out = len(text) + sum(len(c["function"]["name"]) + len(c["function"]["arguments"]) for c in tool_calls)
+        usage.add(sent[0], usage.estimate(sent[1]), usage.estimate(out))
     yield "done", (text, tool_calls, model)
 
 

@@ -116,8 +116,28 @@ def design(what: str, details: str = "", change: str = "") -> str:
         prompt = f"Design this part: {what}." + (f" Details: {details}" if details else "")
     # A model that answers with chat instead of code is skipped for the next
     # one, and Claude (Haiku) writes it if none of the free ones can.
-    return clean(llm.complete(SYSTEM, prompt, max_tokens=MAX_TOKENS, small=False,
-                              models=getattr(config, "WHITEBOARD_MODELS", None), check=clean))
+    # The same part asked for again (built fine last time) reuses the saved code: see _keep.
+    from brain import cache
+    return clean(cache.reuse(SYSTEM, "" if change and _last["code"] else _cache_words(what, details),
+                             lambda: llm.complete(SYSTEM, prompt, max_tokens=MAX_TOKENS, small=False,
+                                                  models=getattr(config, "WHITEBOARD_MODELS", None), check=clean),
+                             check=clean))
+
+
+def _cache_words(what, details=""):
+    return f"{what} {details}".strip()
+
+
+def _keep(what, details, code, built: bool):
+    """Only code that built is worth reusing: a fixed version replaces the first try, a broken one is dropped."""
+    from brain import cache
+    key = _cache_words(what, details)
+    if not key:
+        return
+    if built:
+        cache.put_job(SYSTEM, key, code)
+    else:
+        cache.forget(cache.job_key(SYSTEM, key))
 
 
 def _render(exe, scad, out, extra=()):
@@ -217,6 +237,8 @@ def make_3d_model(a):
             except Exception as e:
                 print(f"[3d] the fix didn't work: {e}")
                 break
+        if not change:
+            _keep(what, a.get("details") or "", code, built=not err)
         if err:
             files._log("make", made)
             return (f"Saved {files._show(scad)}, but OpenSCAD couldn't build it: {err}. The full error is in "

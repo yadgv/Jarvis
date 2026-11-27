@@ -409,6 +409,11 @@ def brief_intent(text: str) -> bool:
     return True
 
 
+_CONTROL = re.compile(r"\b(?:click|double.click|right.click|press|tap|type (?:in|into)|fill (?:in|out)|form|button|scroll|"
+                      r"drag|cart|checkout|log ?in|sign ?in|go to|navigate|select|tick|uncheck|submit|use my (?:computer|pc)|"
+                      r"for me on (?:the|my) (?:computer|pc|screen))\b", re.I)
+
+
 def pick_tools(text, limit=12, exclude=()):
     """Names of the tools that look relevant to what he said (plus CORE_TOOLS),
     so a model with a small token budget isn't sent all of them. Scores each
@@ -465,6 +470,8 @@ def pick_tools(text, limit=12, exclude=()):
         keep |= {"read_screen", "make_document", "quiz_me"}
     if _SCREEN.search(text or "") or _BRIEF.search(text or ""):
         keep.add("read_screen")
+    if _CONTROL.search(text or ""):
+        keep.add("use_computer")      # clicking and typing for him (cheap tiers first, Claude only if needed)
     if _VISUAL.search(text or ""):
         keep.add("look_at_screen")    # paid: only for pictures and looks, never plain text
     else:

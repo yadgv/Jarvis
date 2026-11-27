@@ -8,12 +8,15 @@ and it never raises. Turn off with AUTO_MEMORY = False in config.py."""
 import json
 import re
 import threading
+import time
 
 import config
 
 MAX_FACTS_PER_TURN = 3
 MAX_FACT_CHARS = 200
 MIN_WORDS = 5  # "what time is it" style turns are skipped
+KNOWN_IN_PROMPT = 15
+_checked = {}  # what he said -> when it was last checked (the same sentence twice can't hold a new fact)
 SYSTEM = (
     "You extract durable, long-term facts about the user from a single conversation exchange with "
     "his voice assistant. A good fact is stable over time and useful in future conversations: "
@@ -56,7 +59,11 @@ def extract(user_text: str, reply: str, known: list) -> list:
     """Facts worth keeping from one exchange. Never raises."""
     try:
         from brain import llm
-        known_text = "\n".join(f"- {f}" for f in known[-60:]) or "(none)"
+        from brain import memory
+        # Only the known facts that share words with what he said (not all of them every time): enough
+        # for the model to see it already knows "he's enrolled in Thermodynamics", at a fraction of the tokens.
+        known_text = "\n".join(f"- {f}" for f in memory.relevant_facts(known, user_text, KNOWN_IN_PROMPT, newest=3)) \
+            or "(none)"
         text = llm.complete(SYSTEM, f"Known facts:\n{known_text}\n\nExchange:\nUser: {user_text}\n"
                                     f"Assistant: {reply}", max_tokens=300, small=True)
         return parse(text)
@@ -86,7 +93,15 @@ def worth_checking(user_text: str, tools_used: list) -> bool:
     if len(user_text.split()) < MIN_WORDS or not _PERSONAL.search(user_text):
         return False
     # He asked to remember/forget explicitly: the tool already handled it.
-    return not any(t.startswith(("remember", "forget")) for t in tools_used)
+    if any(t.startswith(("remember", "forget")) for t in tools_used):
+        return False
+    said = " ".join(re.findall(r"[a-z0-9']+", user_text.lower()))
+    if time.time() - _checked.get(said, 0) < 7 * 86400:
+        return False       # "can you sort my files" again: already checked, nothing new in it
+    _checked[said] = time.time()
+    if len(_checked) > 500:
+        _checked.pop(next(iter(_checked)))
+    return True
 
 
 def run_in_background(user_text: str, reply: str, tools_used: list):

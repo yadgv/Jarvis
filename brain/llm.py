@@ -7,7 +7,7 @@ from datetime import datetime
 import anthropic
 
 import config
-from brain import auto_memory, backup, local_llm, memory, network, offline, paid, providers, settings
+from brain import auto_memory, backup, cache, local_llm, memory, network, offline, paid, providers, settings, usage
 import skills
 
 # The SDK's defaults (10 minute timeout, 2 retries) let one stuck request
@@ -277,7 +277,12 @@ def fragment(text: str) -> bool:
 def _claude_turn(user_text, system, said, tools_used, exclude=(), history=None):
     # Tool calls live only in this turn's working copy; the saved history
     # keeps just what was said, so it stays simple user/assistant pairs.
-    messages = (_history if history is None else history) + [{"role": "user", "content": user_text}]
+    past = _history if history is None else history
+    messages = past + [{"role": "user", "content": user_text}]
+    if not getattr(config, "CLAUDE_ALL_TOOLS", False):
+        # Claude is the paid one: every tool sent costs money on every round, so it gets the relevant ones too
+        # (a few more than the free models, as it's only asked once they've failed).
+        exclude = _only_relevant(user_text, past, exclude, getattr(config, "CLAUDE_TOOL_LIMIT", 16))
     stop_reason = None
     for _ in range(MAX_TOOL_ROUNDS + 1):
         with _client.messages.stream(
@@ -290,6 +295,7 @@ def _claude_turn(user_text, system, said, tools_used, exclude=(), history=None):
         ) as stream:
             yield from _sentences(stream.text_stream, said)
             final = stream.get_final_message()
+        _count_claude(final)
 
         stop_reason = final.stop_reason
         tool_uses = [b for b in final.content if b.type == "tool_use"]
@@ -306,6 +312,33 @@ def _claude_turn(user_text, system, said, tools_used, exclude=(), history=None):
         print(f"[brain] Claude finished without saying anything (stop: {stop_reason})")
 
 
+def _only_relevant(user_text, past, exclude, limit) -> tuple:
+    """exclude plus every tool that doesn't look relevant to this request (skills.pick_tools), so a
+    model is sent a dozen tool descriptions instead of all hundred (about 1,200 tokens instead of 11,700)."""
+    keep = skills.pick_tools(user_text, limit=limit, exclude=exclude)
+    # "Yes" to a question about a draft or a click needs the tool from the last turn.
+    last = past[-1]["content"] if past and past[-1]["role"] == "assistant" else ""
+    used = set(re.findall(r"(?:\[tools used: |; )([a-z_]+) ->", last))
+    keep |= used
+    for name in used:
+        keep |= set(skills.FOLLOW_UPS.get(name, ()))
+    if skills.mentions_board(last):  # "yes, go ahead" after he offered to draw it
+        keep |= set(skills.BOARD_TOOLS)
+    if skills.mentions_canvas(last):  # "yes" to "open the Canvas sign-in window?"
+        keep |= set(skills.CANVAS_TOOLS)
+    if skills.mentions_files(last):  # "yes" to a plan to sort a folder
+        keep |= set(skills.FILE_TOOLS)
+    return tuple(exclude) + tuple(s["name"] for s in skills.SKILLS if s["name"] not in keep)
+
+
+def _count_claude(msg):
+    u = getattr(msg, "usage", None)
+    if u is not None:
+        tokens_in = sum(getattr(u, k, 0) or 0 for k in ("input_tokens", "cache_read_input_tokens",
+                                                         "cache_creation_input_tokens"))
+        usage.add(f"Claude {config.LLM_MODEL}", int(tokens_in), int(getattr(u, "output_tokens", 0) or 0), exact=True)
+
+
 def _openai_turn(user_text, system, said, tools_used, exclude=(), history=None, target=None):
     """The same turn on an OpenAI-style model: Groq, or OpenRouter when target is None."""
     target = target or backup.openrouter_target()
@@ -314,20 +347,7 @@ def _openai_turn(user_text, system, said, tools_used, exclude=(), history=None, 
         # Small free token budgets: the last few turns and only the tools that look relevant.
         lean = target.get("lean")
         past = past[-2 * (2 if lean else getattr(config, "GROQ_HISTORY_TURNS", 4)):]
-        keep = skills.pick_tools(user_text, limit=6 if lean else 10, exclude=exclude)
-        # "Yes" to a question about a draft or a click needs the tool from the last turn.
-        last = past[-1]["content"] if past and past[-1]["role"] == "assistant" else ""
-        used = set(re.findall(r"(?:\[tools used: |; )([a-z_]+) ->", last))
-        keep |= used
-        for name in used:
-            keep |= set(skills.FOLLOW_UPS.get(name, ()))
-        if skills.mentions_board(last):  # "yes, go ahead" after he offered to draw it
-            keep |= set(skills.BOARD_TOOLS)
-        if skills.mentions_canvas(last):  # "yes" to "open the Canvas sign-in window?"
-            keep |= set(skills.CANVAS_TOOLS)
-        if skills.mentions_files(last):  # "yes" to a plan to sort a folder
-            keep |= set(skills.FILE_TOOLS)
-        exclude = tuple(exclude) + tuple(s["name"] for s in skills.SKILLS if s["name"] not in keep)
+        exclude = _only_relevant(user_text, past, exclude, 6 if lean else 10)
     messages = [{"role": "system", "content": system}] + past + [{"role": "user", "content": user_text}]
     t0 = time.perf_counter()
     model = None
@@ -509,7 +529,8 @@ def complete(system: str, user: str, max_tokens: int = 400, small: bool = True, 
     from the cheapest brain that works. Raises if none does.
     models: Groq models to try first (e.g. a bigger one for drawing diagrams).
     check: a function that raises ValueError if an answer isn't usable (say,
-    no OpenSCAD in it); the next model is tried then, Claude last of all."""
+    no OpenSCAD in it); the next model is tried then, Claude last of all.
+    To reuse the answer when the same job comes up again, wrap the call in cache.reuse()."""
     if not network.online():
         raise RuntimeError("offline: no internet for the cloud models")
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
@@ -557,12 +578,67 @@ def complete(system: str, user: str, max_tokens: int = 400, small: bool = True, 
                 errors.append(e)
                 continue
             print(f"[brain] Claude ({config.LLM_MODEL}) answered the one-off job")
+            _count_claude(msg)
             out = usable("".join(b.text for b in msg.content if getattr(b, "type", "") == "text"), "Claude")
             if out is not None:
                 return out
     if errors:
         raise errors[-1]
     raise RuntimeError("No brain available")
+
+
+# Results of simple commands that are fine to say as they are; anything else (a failure, a
+# question back) goes to the model, which is told the command already ran.
+_QUICK_FAILED = re.compile(r"^(?:couldn't|could not|i don't know|no |say |give |what |that time|"
+                           r"the duration|nothing has been)", re.I)
+_QUICK_NOT_OVERHEARD = {"open_app", "lock_screen"}
+
+
+def _media_ambiguous(request, args) -> bool:
+    """ "Next" / "go back" with a guide or a whiteboard drawing up means its steps, not the song;
+    a bare "stop" may mean a job or his voice. Those go through the usual routes and the model."""
+    if re.fullmatch(r"\W*stop\W*", request or "", re.I):
+        return True
+    if args.get("action") in ("next", "previous"):
+        try:
+            return skills.pointer.guide_active() or bool(skills.whiteboard._board.get("steps"))
+        except Exception:
+            return True
+    return False
+
+
+def _no_model_turn(request, followup, said, tools_used):
+    """Answers with no model when it can (a generator; returns True if it did):
+    1. a simple command understood here (brain/offline.py: timers, alarms, reminders, the time
+       and date, volume, play/pause/next, opening apps, locking the PC, clearing the whiteboard);
+    2. the same standalone question answered in the last week (brain/cache.py)."""
+    found = offline._command(offline._clean(request)) if getattr(config, "QUICK_COMMANDS", True) else None
+    if found and found[0] == "media" and _media_ambiguous(request, found[1]):
+        found = None
+    if found and not (followup and found[0] in _QUICK_NOT_OVERHEARD):
+        name, args = found
+        if name == "say":
+            reply = args
+        else:
+            print(f"[brain] {name} request: running it directly, no model needed")
+            out = str(skills.run(name, args))
+            tools_used.append(f"{name} -> {out[:300]}")
+            reply = out.strip()
+            if (not reply or len(reply) > 200 or _QUICK_FAILED.match(reply) or reply.startswith("[")
+                    or re.search(r"\b(?:he|him|his)\b", reply, re.I) or not _speakable(reply)):
+                return False   # the model words it (and can try something else), told it already ran
+        usage.saved(name if name != "say" else "the time or date")
+        said.append(reply)
+        yield reply
+        return True
+    if not followup:
+        hit = cache.get_answer(request)
+        if hit:
+            usage.saved("answered this question before")
+            said.append(hit)
+            yield hit
+            return True
+    return False
 
 
 def _offline_turn(user_text, asked, said, tools_used, exclude=(), followup=False):
@@ -715,6 +791,7 @@ def _think_stream(user_text: str, followup: bool = False, note: str = "", exclud
     # API rejected the second round ("Invalid signature in thinking block").
     system = _system_prompt(user_text)
     said, tools_used = [], []
+    source = {"kind": "model"}
 
     def turn():
         global _claude_off_until
@@ -722,9 +799,16 @@ def _think_stream(user_text: str, followup: bool = False, note: str = "", exclud
         if not network.online():
             yield from _offline_turn(user_text, asked, said, tools_used, exclude, followup)
             return
+        if not paid.straight_to_claude() and not note:
+            # Simple commands (timers, the time, volume, media keys, opening apps, clearing the board)
+            # and questions answered before: no model at all.
+            if (yield from _no_model_turn(request, followup, said, tools_used)):
+                source["kind"] = "no model"
+                return
         if not paid.straight_to_claude() and local_llm.should_use(request, followup, note):
             try:
                 yield from _local_turn(request, said)
+                source["kind"] = "local"
                 return
             except _HandOff:
                 print("[brain] local model passed it on")
@@ -742,7 +826,7 @@ def _think_stream(user_text: str, followup: bool = False, note: str = "", exclud
         elif plan.get("followup") and (prev := skills.sight.recent()):
             asked = (f"[Earlier you read his screen: \"{prev['title']}\". If he means it, pass source=\"screen\" "
                      "to the tool, or call read_screen again.]\n" + asked)
-        brief_now = False
+        brief_now = bool(tools_used)      # a simple command ran, but its result needs the model's words
         for name, args in plan["direct"]:
             print(f"[brain] {name} request: running it directly")
             tools_used.append(f"{name} -> {str(skills.run(name, args))[:300]}")
@@ -778,6 +862,10 @@ def _think_stream(user_text: str, followup: bool = False, note: str = "", exclud
             _history.append({"role": "assistant", "content": reply})
             memory.save_history(_history)
             auto_memory.run_in_background(user_text, spoken_reply, tools_used)
+            if (source["kind"] == "model" and not tools_used and not followup and not note
+                    and request == user_text and _pending_clip is None and "?" not in spoken_reply
+                    and spoken_reply != paid.QUESTION):
+                cache.put_answer(user_text, spoken_reply)
 
 
 def run_job(prompt: str, exclude_tools=()) -> str:

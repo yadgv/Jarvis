@@ -360,6 +360,24 @@ When a job finishes he tells you at the next quiet moment. Ask "what are you wor
 or "cancel that" / "cancel the screen task" / "cancel everything". Screen jobs need the mouse and keyboard,
 so they take turns; the rest run side by side. Turn it off with `BACKGROUND_TASKS = False` in config.py.
 
+## Saving tokens
+
+Jarvis asks a model as rarely as he can, so the free daily limits last longer and Claude is needed less:
+
+- **No model at all** for simple commands: timers, alarms, reminders, the time and date, volume, play/pause/next,
+  opening apps, locking the PC, clearing or closing the whiteboard (`QUICK_COMMANDS`).
+- **Saved answers** (`memory/answer_cache.json`, `ANSWER_CACHE`): the same standalone question within a week
+  ("how many ounces in a pound") is answered from memory; a whiteboard topic or 3D part he's had before (any
+  word order) reuses the saved plan or code. Anything about now, about him, or about earlier talk is never reused,
+  and "draw it again" makes a fresh one.
+- **Only the tools that fit** the request go to every model, Claude included (`CLAUDE_TOOL_LIMIT`): about 1,500
+  tokens instead of 11,000 a round.
+- **Easy chit-chat on this PC** with Ollama (tick *Local model* in Settings; needs `ollama pull llama3.2:3b`).
+- **Smaller memory checks**: only related known facts are sent, and the same sentence is checked once a week.
+
+Every model call prints a `[tokens]` line in the log, and the daily totals (with how many requests needed no model)
+are in `memory/token_use.json` and printed at startup.
+
 ## Asking before the paid AI
 
 The free models do almost everything. When only Claude can (the free ones failed, or he needs to see or use
