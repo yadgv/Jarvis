@@ -80,6 +80,10 @@ def _click_through(root):
     LAYERED, TRANSPARENT, TOOLWINDOW, NOACTIVATE = 0x80000, 0x20, 0x80, 0x8000000
     style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
     user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style | LAYERED | TRANSPARENT | TOOLWINDOW | NOACTIVATE)
+    try:   # left out of screen captures (Windows 10 2004+): Jarvis's on-screen text search never reads its label
+        user32.SetWindowDisplayAffinity(hwnd, 0x11)
+    except Exception:
+        pass
     return hwnd
 
 
