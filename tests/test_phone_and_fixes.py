@@ -522,3 +522,16 @@ def test_cad_shows_the_bad_line():
     hint = cad._bad_line(code, "ERROR: Parser error: syntax error in file x.scad, line 3")
     assert "3: cube([a,b,]);" in hint
     assert "Arduino Uno" in cad.SYSTEM and "68.6" in cad.SYSTEM
+
+
+def test_gemini_quota_429_is_a_rate_limit_not_billing(capsys):
+    """Gemini's free-tier 429 mentions 'plan and billing details': not a day-long 402 rest."""
+    from brain import backup, providers
+    providers._resting.clear()
+    providers._told.clear()
+    providers.rest("gemini:gemini-flash-latest", backup.ProviderError(
+        "Gemini error 429: You exceeded your current quota, please check your plan and billing details.", 429))
+    assert providers._resting["gemini:gemini-flash-latest"] - time.monotonic() < 3700
+    out = capsys.readouterr().out
+    assert "no plan" not in out and "Mistral" not in out
+    providers._resting.clear()
