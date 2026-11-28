@@ -314,3 +314,28 @@ def test_two_watchers_move_on_once(monkeypatch):
     pointer._done(3, pointer.guide["steps"][0])
     pointer._done(3, pointer.guide["steps"][0])
     assert moved == [1]
+
+
+def test_menu_items_finds_the_client_in_the_inner_module(monkeypatch, capsys):
+    """'module uiautomation has no attribute _AutomationClient' (33 times in one evening):
+    the class lives in uiautomation.uiautomation, which 'import *' doesn't re-export."""
+    import sys
+    import types
+    from skills import pointer
+    item = types.SimpleNamespace(IsOffscreen=False)
+    found = types.SimpleNamespace(Length=1, GetElement=lambda i: "el")
+    ua = types.SimpleNamespace(CreatePropertyCondition=lambda prop, kind: "cond")
+    inner = types.SimpleNamespace(_AutomationClient=types.SimpleNamespace(
+        instance=lambda: types.SimpleNamespace(IUIAutomation=ua)))
+    fake = types.SimpleNamespace(
+        uiautomation=inner, PropertyId=types.SimpleNamespace(ControlTypeProperty=1),
+        ControlType=types.SimpleNamespace(MenuItemControl=2), TreeScope=types.SimpleNamespace(Descendants=4),
+        Control=types.SimpleNamespace(CreateControlFromElement=lambda el: item))
+    monkeypatch.setitem(sys.modules, "uiautomation", fake)
+    top = types.SimpleNamespace(Element=types.SimpleNamespace(FindAll=lambda scope, cond: found))
+    assert pointer._menu_items(top) == [item]
+    # No client at all: one log line, not one per request.
+    monkeypatch.setitem(sys.modules, "uiautomation", types.SimpleNamespace())
+    monkeypatch.setattr(pointer, "_menu_warned", False)
+    assert pointer._menu_items(top) == [] and pointer._menu_items(top) == []
+    assert capsys.readouterr().out.count("couldn't list menu items") == 1
