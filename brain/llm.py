@@ -641,6 +641,34 @@ def _no_model_turn(request, followup, said, tools_used):
     return False
 
 
+def _music_offer_turn(request, said, tools_used):
+    """ "Play some music" -> "Want one of your playlists? The Playlist, Performative, or Quran?", then plays
+    the one he picks. No model either way (a generator; returns True if it answered). Naming something
+    else ("play some Drake") goes the usual way."""
+    from skills import music
+    reply = None
+    answer = music.answer_offer(request)
+    if answer and answer[0] == "playlist":
+        print(f"[brain] playlist '{answer[1]}': playing it directly, no model needed")
+        out = str(skills.run("play_music", {"query": answer[1], "kind": "playlist"}))
+        tools_used.append(f"play_music -> {out[:300]}")
+        if not _speakable(out) or re.search(r"\b(?:he|him|his)\b", out, re.I) or len(out) > 200:
+            return False     # e.g. it went to YouTube: the model words it, told it already ran
+        reply = out.strip()
+    elif answer:
+        out = str(skills.run("media", {"action": "play"}))
+        tools_used.append(f"media -> {out[:300]}")
+        reply = "Okay, carrying on with what you had on."
+    elif music.offer_intent(request):
+        reply = music.offer_question()
+    if not reply:
+        return False
+    usage.saved("music request")
+    said.append(reply)
+    yield reply
+    return True
+
+
 def _offline_turn(user_text, asked, said, tools_used, exclude=(), followup=False):
     """No internet: simple commands are done right here (brain/offline.py),
     the rest goes to the local Ollama model with only the offline tools."""
@@ -796,6 +824,9 @@ def _think_stream(user_text: str, followup: bool = False, note: str = "", exclud
     def turn():
         global _claude_off_until
         nonlocal asked, exclude
+        if not note and (yield from _music_offer_turn(request, said, tools_used)):
+            source["kind"] = "no model"
+            return
         if not network.online():
             yield from _offline_turn(user_text, asked, said, tools_used, exclude, followup)
             return

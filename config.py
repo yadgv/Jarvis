@@ -195,6 +195,10 @@ GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
 # Playing songs by name: Jarvis opens this app and uses screen control to search and press play.
 MUSIC_APP = "apple music"
 MUSIC_OPEN_WAIT = 3                      # seconds to let the app open before searching
+# His own saved Apple Music playlists. "Play some music" (nothing named) makes Jarvis ask which
+# of these first. Edit the list here, or set JARVIS_PLAYLISTS=Name 1, Name 2 in .env. Empty = don't ask.
+MY_PLAYLISTS = [p.strip() for p in os.getenv("JARVIS_PLAYLISTS", "The Playlist, Performative, Quran").split(",")
+                if p.strip()]
 # Apps Jarvis can open by name. Anything in the Windows Start menu works too
 # ("open Spotify"), so only add ones it can't find. Values are run as-is.
 APPS = {

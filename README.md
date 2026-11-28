@@ -272,6 +272,9 @@ Jarvis can use tools (all free, no extra API keys):
   "change it to..." rewrites it and "no" or "cancel" drops it.
 - **Play music**: "play Blinding Lights", "play some Drake", "put on my workout playlist". Jarvis opens Apple Music
   and uses screen control to search and press play (takes several seconds and needs Claude). Pause/next use the media keys.
+  "Play some music" with nothing named makes Jarvis ask first: "Want one of your playlists? The Playlist, Performative,
+  or Quran?" Say a name ("Performative", "the first one") and it opens that playlist from your Library; "no" resumes
+  what was on; naming something else plays that. Edit the list in `MY_PLAYLISTS` (config.py) or `JARVIS_PLAYLISTS` in .env.
 - **Quick PC actions (no screenshots)**: "open Bluetooth settings", "turn on dark mode", "search YouTube for lo-fi",
   "open my Downloads", "brightness 40". These run directly, so they're instant and cost nothing extra.
 - **App buttons by name**: Jarvis can read an open app's buttons and boxes as text (Windows UI Automation) and

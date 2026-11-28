@@ -233,6 +233,75 @@ def play_in_app(app, query, wait=1.5):
     return _in_thread(lambda: _play_in_app(app, query, wait))
 
 
+_NAV = ("ListItemControl", "TreeItemControl", "HyperlinkControl", "ButtonControl", "TabItemControl",
+        "DataItemControl")
+
+
+def play_library_playlist(app, name, wait=1.5):
+    """Open one of his own playlists from the app's sidebar (Library > Playlists) by its exact name and press
+    Play, so "The Playlist" is his, not the first Apple Music result for the words. Returns the name on
+    success, None when it couldn't (the caller then searches)."""
+    if not IS_WINDOWS:
+        return None
+    try:
+        _auto()
+    except ImportError:
+        return None
+    return _in_thread(lambda: _play_library_playlist(app, name, wait))
+
+
+def _exact(win, name, types=_NAV):
+    want = name.lower().strip()
+    return next((c for c in _walk(win) if _kind(c) in types and _name(c).lower() == want), None)
+
+
+def _play_library_playlist(app, name, wait):
+    win = None
+    for _ in range(10):
+        win = find_window(app)
+        if win is not None:
+            break
+        time.sleep(0.5)
+    if win is None:
+        print(f"[pc] playlist '{name}': no '{app}' window found")
+        return None
+    try:
+        _front(win)
+        item = _exact(win, name)
+        if item is None:
+            # The Playlists group may be folded away in the sidebar: open it, then look again.
+            group = _exact(win, "playlists") or _exact(win, "all playlists")
+            if group is not None:
+                _press(group)
+                time.sleep(wait)
+                item = _exact(win, name)
+        if item is None:
+            print(f"[pc] playlist '{name}': not in the sidebar; searching instead")
+            return None
+        was_playing = _has_pause(win)
+        _press(item)
+        time.sleep(wait)
+        play = next((c for c in _walk(win) if _kind(c) == "ButtonControl"
+                     and _name(c).lower() in ("play", "play all", "play playlist")), None)
+        if play is not None:
+            _press(play)
+        else:
+            try:
+                item.DoubleClick()
+            except Exception:
+                pass
+        if not was_playing and not _started(win):
+            _media_play()
+        if _started(win, tries=2) or was_playing:
+            log_tier(2, f"played his playlist '{name}' in {app}")
+            return name
+        print(f"[pc] playlist '{name}': opened it but it didn't start playing")
+        return None
+    except Exception as e:
+        print(f"[pc] playlist '{name}' failed: {e}")
+        return None
+
+
 def _front(win):
     """Bring the window forward; a minimised Apple Music ignores SetActive alone."""
     for method in ("ShowWindow", "SetActive", "SetTopmost"):

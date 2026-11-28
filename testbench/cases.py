@@ -93,6 +93,9 @@ CASES = [
          "not": ["use_computer"]}]},
     {"id": "music-play", "turns": [
         {"say": "Play Blinding Lights", "tool": "play_music", "not": ["use_computer"]}]},
+    {"id": "music-offer-playlists", "turns": [
+        {"say": "Play some music", "tool": "none"},
+        {"say": "Performative", "tool": "play_music", "answering": True}]},
     {"id": "music-pause", "turns": [
         {"say": "Pause the music", "tool": "media"}]},
     {"id": "brave-open", "turns": [
