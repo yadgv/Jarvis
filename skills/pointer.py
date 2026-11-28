@@ -119,18 +119,30 @@ def _uia_candidates(hwnd):
     return out
 
 
+_menu_warned = False
+
+
 def _menu_items(top):
     """The menu items under top, found by Windows itself (fast): an open menu is often the last thing in a
     big window like VS Code, past where walking every control stops."""
+    global _menu_warned
     import uiautomation as auto
     try:
-        ua = auto._AutomationClient.instance().IUIAutomation
+        # The package's top level re-exports with "import *", which leaves out _AutomationClient:
+        # it lives in the inner uiautomation.uiautomation module.
+        client = getattr(auto, "_AutomationClient", None) or getattr(
+            getattr(auto, "uiautomation", None), "_AutomationClient", None)
+        if client is None:
+            raise AttributeError("uiautomation has no _AutomationClient")
+        ua = client.instance().IUIAutomation
         cond = ua.CreatePropertyCondition(auto.PropertyId.ControlTypeProperty, auto.ControlType.MenuItemControl)
         found = top.Element.FindAll(auto.TreeScope.Descendants, cond)
         items = [auto.Control.CreateControlFromElement(found.GetElement(i)) for i in range(min(found.Length, 200))]
         return [c for c in items if c is not None and not getattr(c, "IsOffscreen", False)]
     except Exception as e:
-        print(f"[pointer] couldn't list menu items: {type(e).__name__}: {e}")
+        if not _menu_warned:   # once per run, not on every pointer request
+            _menu_warned = True
+            print(f"[pointer] couldn't list menu items: {type(e).__name__}: {e}")
         return []
 
 
